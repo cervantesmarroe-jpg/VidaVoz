@@ -1,0 +1,41 @@
+Actúa como un desarrollador Senior Full-Stack experto en accesibilidad (A11y) y salud digital. Crea una aplicación web progresiva (PWA) optimizada para tablets, diseñada para la comunicación de pacientes en UCI que no pueden hablar. La estética debe ser "Modo Oscuro" de alto contraste, con botones táctiles muy grandes y bordes redondeados.
+
+TECNOLOGÍAS:
+
+React con Tailwind CSS.
+
+Lucide-React para iconos.
+
+Web Speech API para síntesis de voz (Text-to-Speech).
+
+WebGazer.js para la implementación de Eye-Tracking (control por mirada).
+
+ESTRUCTURA DE LA INTERFAZ (Tabs de navegación superior):
+
+Pestaña URGENTE (Color Rojo): - Botones gigantes: "TENGO DOLOR", "ME FALTA EL AIRE", "TENGO SED", "NECESITO ASPIRACIÓN", "ME PICA/ ME ROZA ALGO", "TENGO NAUSEAS".
+
+Al pulsar, la tablet debe decir la frase en voz alta con volumen máximo.
+
+Pestaña MENSAJES (Color Azul/Verde): - Grid de botones con los mensajes: "Tengo sed / Boca seca", "Tengo hambre", "Tengo frío / Tengo calor", "Necesito ir al baño / Orinar", "Cámbiame de posición", "Luz: encender / apagar", "¿Qué hora es? / ¿Es de día o de noche?", "¿Cuándo viene el médico?", "¿Cómo voy? / ¿Estoy mejor?", "Quiero saber los resultados de la prueba", "Bájame el ruido", "Quiero ver a mi familia", "¿Cuándo pueden entrar mis hijos/nietos?", "Tengo miedo / Estoy nervioso", "No entiendo qué me pasa", "Quiero música / mi radio", "Dame la mano / No me dejes solo".
+
+Pestaña ESCALAS (Color Amarillo): - Implementa una escala EVA visual (0 al 10) con deslizador grande y caras de dolor asociadas.
+
+Añade una escala de disnea simple.
+
+Pestaña TECLADO (Color Morado): - Teclado QWERTY adaptado con botones grandes.
+
+Área de texto que prediga frases comunes y un botón de "HABLAR" para reproducir lo escrito.
+
+Pestaña LENGUA DE SIGNOS (Color Turquesa): - Una galería de iconos/imágenes que representen conceptos básicos en lengua de signos para situaciones especiales.
+
+FUNCIONALIDAD DE EYE-TRACKING:
+
+Integra WebGazer.js. Añade un interruptor en la esquina superior que diga "ACTIVAR MIRADA".
+
+Cuando esté activo, debe aparecer un cursor rojo que siga el movimiento de los ojos.
+
+Implementa 'Dwell Time': Si el usuario mira fijamente un botón durante 2 segundos, ese botón debe ejecutarse automáticamente (clic visual) y emitir el sonido.
+
+Incluye un pequeño recuadro de previsualización de la cámara para que la enfermera pueda calibrar la posición de la tablet frente al paciente.
+
+IMPORTANTE: La app debe ser extremadamente limpia, sin menús complicados, diseñada para alguien con movilidad reducida y fatiga extrema.
