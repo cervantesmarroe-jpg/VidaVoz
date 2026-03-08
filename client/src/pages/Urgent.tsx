@@ -3,18 +3,14 @@ import { GazeButton } from "@/components/GazeButton";
 import { 
   AlertOctagon, 
   Wind, 
-  Droplet, 
   Stethoscope, 
-  Bug, 
   Vibrate
 } from "lucide-react";
 
 const URGENT_MESSAGES = [
   { text: "TENGO DOLOR", icon: AlertOctagon, phrase: "Tengo mucho dolor. Necesito ayuda." },
   { text: "ME FALTA EL AIRE", icon: Wind, phrase: "Me falta el aire. Me ahogo." },
-  { text: "TENGO SED", icon: Droplet, phrase: "Tengo sed. Por favor, deme agua." },
   { text: "NECESITO ASPIRACIÓN", icon: Stethoscope, phrase: "Necesito aspiración de secreciones." },
-  { text: "ME PICA O ME ROZA ALGO", icon: Bug, phrase: "Me pica o me roza algo. Incomodidad." },
   { text: "TENGO NÁUSEAS", icon: Vibrate, phrase: "Tengo náuseas. Ganas de vomitar." },
 ];
 
