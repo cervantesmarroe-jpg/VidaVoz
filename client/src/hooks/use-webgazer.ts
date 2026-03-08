@@ -81,7 +81,8 @@ export function useWebGazer() {
     if (!isScriptLoaded || !window.webgazer) return;
 
     if (isActive) {
-      document.getElementById('gaze-cursor')!.style.display = 'block';
+      const cursorElement = document.getElementById('gaze-cursor');
+      if (cursorElement) cursorElement.style.display = 'block';
       
       window.webgazer.setGazeListener((data: any, elapsedTime: number) => {
         if (!data) return;
@@ -139,9 +140,12 @@ export function useWebGazer() {
 
     } else {
       // Deactivate
-      document.getElementById('gaze-cursor')!.style.display = 'none';
-      window.webgazer.pause();
-      window.webgazer.showVideoPreview(false);
+      const cursorElement = document.getElementById('gaze-cursor');
+      if (cursorElement) cursorElement.style.display = 'none';
+      if (window.webgazer && typeof window.webgazer.pause === 'function') {
+        window.webgazer.pause();
+        window.webgazer.showVideoPreview(false);
+      }
       
       if (targetRef.current) {
         resetProgress(targetRef.current);

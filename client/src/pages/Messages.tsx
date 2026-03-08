@@ -56,7 +56,7 @@ export default function Messages() {
                 AÑADIR MENSAJE
               </button>
             </DialogTrigger>
-            <DialogContent className="bg-slate-900 border-slate-700 text-white p-8 max-w-2xl rounded-3xl">
+            <DialogContent aria-describedby={undefined} className="bg-slate-900 border-slate-700 text-white p-8 max-w-2xl rounded-3xl">
               <DialogHeader>
                 <DialogTitle className="text-3xl mb-4">Añadir Nuevo Mensaje</DialogTitle>
               </DialogHeader>
