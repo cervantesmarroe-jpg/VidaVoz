@@ -17,12 +17,12 @@ const URGENT_MESSAGES = [
 export default function Urgent() {
   return (
     <Layout>
-      <div className="h-full p-6 md:p-8 flex flex-col">
-        <h2 className="text-3xl md:text-5xl font-bold text-red-500 mb-8 uppercase tracking-widest text-center md:text-left">
+      <div className="h-full p-4 md:p-6 flex flex-col">
+        <h2 className="text-2xl md:text-4xl font-bold text-red-500 mb-6 uppercase tracking-widest text-center">
           Necesidades Urgentes
         </h2>
         
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+        <div className="flex-1 grid grid-cols-2 gap-4 md:gap-6">
           {URGENT_MESSAGES.map((msg, i) => {
             const Icon = msg.icon;
             return (
@@ -30,10 +30,10 @@ export default function Urgent() {
                 key={i} 
                 theme="red" 
                 speakText={msg.phrase}
-                className="min-h-[160px]"
+                className="min-h-[200px] md:min-h-[280px]"
               >
-                <Icon className="w-20 h-20 md:w-24 md:h-24 mb-2 drop-shadow-lg" />
-                <span className="text-3xl md:text-4xl font-black uppercase tracking-wide leading-tight">
+                <Icon className="w-32 h-32 md:w-48 md:h-48 mb-4 drop-shadow-lg" />
+                <span className="text-2xl md:text-5xl font-black uppercase tracking-wide leading-tight text-center">
                   {msg.text}
                 </span>
               </GazeButton>
