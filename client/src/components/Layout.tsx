@@ -5,7 +5,6 @@ import {
   MessageSquareText, 
   ActivitySquare, 
   Keyboard as KeyboardIcon, 
-  HandMetal,
   Eye,
   EyeOff
 } from "lucide-react";
@@ -16,7 +15,6 @@ const NAV_ITEMS = [
   { path: "/mensajes", label: "MENSAJES", icon: MessageSquareText, color: "text-blue-400", activeBg: "bg-blue-500/20" },
   { path: "/escalas", label: "ESCALAS", icon: ActivitySquare, color: "text-yellow-400", activeBg: "bg-yellow-500/20" },
   { path: "/teclado", label: "TECLADO", icon: KeyboardIcon, color: "text-purple-400", activeBg: "bg-purple-500/20" },
-  { path: "/signos", label: "SIGNOS", icon: HandMetal, color: "text-teal-400", activeBg: "bg-teal-500/20" },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

@@ -10,7 +10,6 @@ import Urgent from "./pages/Urgent";
 import Messages from "./pages/Messages";
 import Scales from "./pages/Scales";
 import Keyboard from "./pages/Keyboard";
-import Signs from "./pages/Signs";
 
 function Router() {
   return (
@@ -19,7 +18,6 @@ function Router() {
       <Route path="/mensajes" component={Messages} />
       <Route path="/escalas" component={Scales} />
       <Route path="/teclado" component={Keyboard} />
-      <Route path="/signos" component={Signs} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
