@@ -45,11 +45,19 @@ export function useWebGazer() {
     script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
     script.async = true;
     script.onload = () => {
-      setIsScriptLoaded(true);
-      // Setup webgazer options
-      window.webgazer.params.showVideoPreview = true;
-      window.webgazer.params.showFaceOverlay = false;
-      window.webgazer.params.showFaceFeedbackBox = true;
+      try {
+        setIsScriptLoaded(true);
+        if (window.webgazer && window.webgazer.params) {
+          window.webgazer.params.showVideoPreview = true;
+          window.webgazer.params.showFaceOverlay = false;
+          window.webgazer.params.showFaceFeedbackBox = true;
+        }
+      } catch (e) {
+        console.warn("WebGazer init error (non-fatal):", e);
+      }
+    };
+    script.onerror = () => {
+      console.warn("WebGazer script failed to load.");
     };
     document.body.appendChild(script);
 
@@ -84,6 +92,7 @@ export function useWebGazer() {
       const cursorElement = document.getElementById('gaze-cursor');
       if (cursorElement) cursorElement.style.display = 'block';
       
+      try { window.webgazer.resume(); } catch(_) {}
       window.webgazer.setGazeListener((data: any, elapsedTime: number) => {
         if (!data) return;
 
@@ -134,9 +143,9 @@ export function useWebGazer() {
             targetRef.current = null;
           }
         }
-      }).begin();
-
-      window.webgazer.showVideoPreview(true);
+      });
+      try { window.webgazer.begin(); } catch(e) { console.warn("WebGazer begin error (non-fatal):", e); }
+      try { window.webgazer.showVideoPreview(true); } catch(_) {}
 
     } else {
       // Deactivate

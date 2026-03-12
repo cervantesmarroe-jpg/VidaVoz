@@ -1,4 +1,5 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Component, ReactNode } from "react";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,6 +12,40 @@ import Messages from "./pages/Messages";
 import Scales from "./pages/Scales";
 import Keyboard from "./pages/Keyboard";
 
+// Error boundary to prevent white screen crashes
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("VozUCI caught an error:", error.message);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-amber-50 text-stone-700 p-8 gap-6">
+          <p className="text-3xl font-bold text-center">Algo salió mal</p>
+          <p className="text-xl text-center text-stone-500">Por favor, recargue la página.</p>
+          <button
+            onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+            className="bg-teal-500 text-white font-bold text-2xl px-10 py-5 rounded-2xl shadow-md"
+          >
+            Recargar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function Router() {
   return (
     <Switch>
@@ -18,7 +53,6 @@ function Router() {
       <Route path="/mensajes" component={Messages} />
       <Route path="/escalas" component={Scales} />
       <Route path="/teclado" component={Keyboard} />
-      {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
   );
@@ -26,12 +60,14 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
