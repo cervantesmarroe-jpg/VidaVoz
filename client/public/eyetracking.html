@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EyeTracking Clínico Pro</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f172a;
+      color: #f1f5f9;
+      font-family: system-ui, sans-serif;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 16px 20px 12px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    header h1 { font-size: 1.25rem; font-weight: 700; }
+
+    #status {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      flex: 1;
+      text-align: right;
+    }
+
+    #status.ok     { color: #34d399; }
+    #status.warn   { color: #fbbf24; }
+    #status.error  { color: #f87171; }
+
+    #video-wrapper {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #webcam {
+      position: absolute;
+      width: 220px;
+      height: 165px;
+      bottom: 16px;
+      right: 16px;
+      border: 2px solid #334155;
+      border-radius: 12px;
+      object-fit: cover;
+      transform: scaleX(-1);
+      z-index: 10;
+    }
+
+    #output_canvas {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      width: 220px;
+      height: 165px;
+      border-radius: 12px;
+      transform: scaleX(-1);
+      z-index: 11;
+      pointer-events: none;
+    }
+
+    #gaze-dot {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, 0.85);
+      border: 3px solid #c7d2fe;
+      box-shadow: 0 0 18px 6px rgba(99, 102, 241, 0.5);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 20;
+      display: none;
+      transition: left 0.06s linear, top 0.06s linear;
+    }
+
+    #ui-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      z-index: 30;
+    }
+
+    #ui-overlay.hidden { display: none; }
+
+    .medical-btn {
+      background: #6366f1;
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 800;
+      padding: 18px 40px;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      box-shadow: 0 4px 24px rgba(99, 102, 241, 0.5);
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .medical-btn:hover  { background: #818cf8; }
+    .medical-btn:active { transform: scale(0.96); }
+
+    #data-panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px 28px;
+      font-size: 1rem;
+      display: flex;
+      gap: 24px;
+      display: none;
+    }
+
+    #data-panel.visible { display: flex; }
+
+    #data-panel span { font-weight: 700; color: #818cf8; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Asistente de Mirada Pro</h1>
+    <p id="status">Iniciando IA Médica…</p>
+  </header>
+
+  <div id="video-wrapper">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="output_canvas"></canvas>
+    <div id="gaze-dot"></div>
+
+    <div id="ui-overlay">
+      <button id="btn-start" class="medical-btn">ACTIVAR CÁMARA</button>
+      <div id="data-panel">
+        <p>X: <span id="val-x">0</span></p>
+        <p>Y: <span id="val-y">0</span></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/eyetracking-script.js"></script>
+</body>
+</html>
