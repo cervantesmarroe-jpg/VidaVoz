@@ -7,24 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <!-- Prevent WebGazer from restoring old session data -->
-    <script>window.saveDataAcrossSessions = false;</script>
-
-    <!-- WebGazer.js library (served locally) -->
-    <script src="/webgazer.js" type="text/javascript"></script>
-
-    <!-- Configure immediately: ridge regression, no auto-preview, paused until user activates -->
-    <script>
-      if (window.webgazer) {
-        webgazer.setRegression('ridge');
-        webgazer.showPredictionPoints(false);
-        webgazer.showVideoPreview(false);
-        webgazer.params.showFaceOverlay = false;
-        webgazer.params.showFaceFeedbackBox = false;
-        webgazer.params.saveDataAcrossSessions = false;
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>

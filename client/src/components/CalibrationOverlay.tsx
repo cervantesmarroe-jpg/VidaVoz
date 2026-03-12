@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { CheckCircle, Eye, Camera, CameraOff } from "lucide-react";
-import { useWebGazerStore } from "@/hooks/use-webgazer";
+import { CheckCircle, Eye, Camera, CameraOff, Loader2 } from "lucide-react";
+import { useWebGazerStore, gazeTracker } from "@/hooks/use-webgazer";
 
 const CLICKS_NEEDED = 5;
 
@@ -16,36 +16,28 @@ const CALIBRATION_POINTS = [
   { id: 8, x: 90, y: 85 },
 ];
 
-type CameraStatus = 'starting' | 'active' | 'denied';
+type CameraStatus = 'loading' | 'active' | 'denied';
 
 export function CalibrationOverlay() {
   const { finishCalibration, deactivate } = useWebGazerStore();
-  const [clicks, setClicks]       = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
+  const [clicks, setClicks]     = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
   const [lastClicked, setLastClicked] = useState<number | null>(null);
-  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('starting');
+  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
 
-  // Poll for the WebGazer video element to confirm camera is active
+  // Wire up GazeTracker camera status callbacks
   useEffect(() => {
-    let attempts = 0;
-    const id = setInterval(() => {
-      attempts++;
-      const video = document.querySelector<HTMLVideoElement>('#webgazerVideoContainer video');
-      if (video && video.readyState >= 2 && video.videoWidth > 0) {
-        setCameraStatus('active');
-        clearInterval(id);
-      } else if (attempts > 20) {
-        // 3 seconds passed with no video — camera was denied or unavailable
-        setCameraStatus('denied');
-        clearInterval(id);
-      }
-    }, 150);
-    return () => clearInterval(id);
+    gazeTracker.onCameraReady = () => setCameraStatus('active');
+    gazeTracker.onCameraError = () => setCameraStatus('denied');
+    return () => {
+      gazeTracker.onCameraReady = null;
+      gazeTracker.onCameraError = null;
+    };
   }, []);
 
-  const totalClicks  = clicks.reduce((a, b) => a + b, 0);
-  const totalNeeded  = CALIBRATION_POINTS.length * CLICKS_NEEDED;
-  const allDone      = clicks.every((c) => c >= CLICKS_NEEDED);
-  const progress     = Math.round((totalClicks / totalNeeded) * 100);
+  const totalClicks = clicks.reduce((a, b) => a + b, 0);
+  const totalNeeded = CALIBRATION_POINTS.length * CLICKS_NEEDED;
+  const allDone     = clicks.every((c) => c >= CLICKS_NEEDED);
+  const progress    = Math.round((totalClicks / totalNeeded) * 100);
 
   const handlePointClick = useCallback((index: number, clientX: number, clientY: number) => {
     setLastClicked(index);
@@ -58,16 +50,31 @@ export function CalibrationOverlay() {
       return next;
     });
 
-    // Feed this click to WebGazer so it learns where you're looking
-    try {
-      window.webgazer?.recordScreenPosition?.(clientX, clientY, 'click');
-    } catch (_) {}
+    // Record current iris position for this screen coordinate
+    gazeTracker.recordCalibrationSample(clientX, clientY);
   }, []);
 
+  const handleFinish = useCallback(() => {
+    gazeTracker.computeCalibration();
+    finishCalibration();
+  }, [finishCalibration]);
+
   const statusBadge = {
-    starting: { label: 'Iniciando cámara…',            icon: <Camera className="w-4 h-4 animate-pulse" />, cls: 'bg-stone-800 text-stone-300' },
-    active:   { label: 'Cámara activa — eye tracking', icon: <Camera className="w-4 h-4" />,              cls: 'bg-teal-900/60 text-teal-300' },
-    denied:   { label: 'Cámara no disponible',          icon: <CameraOff className="w-4 h-4" />,           cls: 'bg-rose-900/50 text-rose-300' },
+    loading: {
+      label: 'Iniciando IA de mirada…',
+      icon:  <Loader2 className="w-4 h-4 animate-spin" />,
+      cls:   'bg-stone-800 text-stone-300',
+    },
+    active: {
+      label: 'Cámara activa — MediaPipe AI',
+      icon:  <Camera className="w-4 h-4" />,
+      cls:   'bg-teal-900/60 text-teal-300',
+    },
+    denied: {
+      label: 'Cámara no disponible',
+      icon:  <CameraOff className="w-4 h-4" />,
+      cls:   'bg-rose-900/50 text-rose-300',
+    },
   }[cameraStatus];
 
   return (
@@ -96,7 +103,7 @@ export function CalibrationOverlay() {
         </button>
       </div>
 
-      {/* Status + progress bar */}
+      {/* Status badge + progress bar */}
       <div className="px-6 pb-3 shrink-0 flex items-center gap-3">
         <span className={`flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-full shrink-0 ${statusBadge.cls}`}>
           {statusBadge.icon} {statusBadge.label}
@@ -129,13 +136,13 @@ export function CalibrationOverlay() {
                 handlePointClick(
                   idx,
                   rect.left + rect.width / 2,
-                  rect.top + rect.height / 2
+                  rect.top  + rect.height / 2
                 );
               }}
               style={{
-                position: 'absolute',
-                left: `${pt.x}%`,
-                top: `${pt.y}%`,
+                position:  'absolute',
+                left:      `${pt.x}%`,
+                top:       `${pt.y}%`,
                 transform: `translate(-50%, -50%) scale(${popped ? 0.78 : done ? 1.15 : 1})`,
                 transition: 'transform 0.15s ease, box-shadow 0.15s',
               }}
@@ -170,7 +177,7 @@ export function CalibrationOverlay() {
       <div className="px-6 pb-8 shrink-0 text-center">
         {allDone ? (
           <button
-            onClick={finishCalibration}
+            onClick={handleFinish}
             data-testid="button-finish-calibration"
             className="bg-teal-500 hover:bg-teal-400 text-white font-black text-2xl md:text-3xl px-12 py-5 rounded-3xl shadow-2xl flex items-center gap-4 mx-auto transition-all active:scale-95"
           >
