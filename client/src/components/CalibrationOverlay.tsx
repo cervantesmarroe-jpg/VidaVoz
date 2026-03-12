@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { CheckCircle, Eye } from "lucide-react";
+import { CheckCircle, Eye, Camera, CameraOff, AlertTriangle } from "lucide-react";
 import { useWebGazerStore } from "@/hooks/use-webgazer";
 
 const CLICKS_NEEDED = 5;
@@ -16,12 +16,198 @@ const CALIBRATION_POINTS = [
   { id: 8, x: 90, y: 85 },
 ];
 
-// Attempt to load and start WebGazer silently in the background.
-// All errors are swallowed — the UI works regardless.
-async function tryStartWebGazer() {
+type CameraStatus = 'loading' | 'ok' | 'denied' | 'unavailable';
+
+export function CalibrationOverlay() {
+  const { finishCalibration, deactivate } = useWebGazerStore();
+  const [clicks, setClicks] = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
+  const [lastClicked, setLastClicked] = useState<number | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
+
+  // Request camera permission directly to give user feedback
+  useEffect(() => {
+    let cancelled = false;
+    navigator.mediaDevices?.getUserMedia({ video: true })
+      .then((stream) => {
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        setCameraStatus('ok');
+        stream.getTracks().forEach(t => t.stop()); // release immediately, WebGazer will open its own
+
+        // Now try starting WebGazer since camera is available
+        startWebGazer();
+      })
+      .catch(() => {
+        if (!cancelled) setCameraStatus('denied');
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const totalClicks = clicks.reduce((a, b) => a + b, 0);
+  const totalNeeded = CALIBRATION_POINTS.length * CLICKS_NEEDED;
+  const allDone = clicks.every((c) => c >= CLICKS_NEEDED);
+  const overallProgress = Math.round((totalClicks / totalNeeded) * 100);
+
+  const handlePointClick = useCallback(
+    (index: number, screenX: number, screenY: number) => {
+      setLastClicked(index);
+      setTimeout(() => setLastClicked(null), 300);
+
+      setClicks((prev) => {
+        if (prev[index] >= CLICKS_NEEDED) return prev;
+        const next = [...prev];
+        next[index] = next[index] + 1;
+        return next;
+      });
+
+      try { window.webgazer?.recordScreenPosition?.(screenX, screenY, 'click'); } catch (_) {}
+    },
+    []
+  );
+
+  const cameraLabel = {
+    loading: 'Solicitando cámara…',
+    ok: 'Cámara activa',
+    denied: 'Sin acceso a cámara — solo táctil',
+    unavailable: 'Cámara no disponible',
+  }[cameraStatus];
+
+  const cameraIcon = cameraStatus === 'ok'
+    ? <Camera className="w-5 h-5" />
+    : cameraStatus === 'loading'
+    ? <Camera className="w-5 h-5 animate-pulse" />
+    : <CameraOff className="w-5 h-5" />;
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-stone-900/95 flex flex-col select-none">
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <Eye className="w-9 h-9 text-teal-400 shrink-0" />
+          <div>
+            <h2 className="text-2xl md:text-3xl font-black text-white">
+              Calibración de Mirada
+            </h2>
+            <p className="text-lg text-stone-300">
+              Pulse cada punto <strong className="text-teal-300">{CLICKS_NEEDED} veces</strong> hasta que se ponga verde
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={deactivate}
+          className="text-stone-400 hover:text-white font-bold px-5 py-3 rounded-2xl border-2 border-stone-600 hover:border-stone-400 transition-colors text-lg shrink-0 ml-4"
+        >
+          CANCELAR
+        </button>
+      </div>
+
+      {/* Camera status + progress bar */}
+      <div className="px-6 pb-3 shrink-0 flex items-center gap-4">
+        <span className={`flex items-center gap-2 text-sm font-semibold px-3 py-1 rounded-full ${
+          cameraStatus === 'ok' ? 'bg-teal-900/60 text-teal-300' :
+          cameraStatus === 'loading' ? 'bg-stone-800 text-stone-300' :
+          'bg-amber-900/60 text-amber-300'
+        }`}>
+          {cameraIcon} {cameraLabel}
+        </span>
+        <div className="flex-1 h-3 bg-stone-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-teal-400 rounded-full transition-all duration-300"
+            style={{ width: `${overallProgress}%` }}
+          />
+        </div>
+        <span className="text-xl font-bold text-teal-300 w-14 text-right">
+          {overallProgress}%
+        </span>
+      </div>
+
+      {/* Camera denied warning */}
+      {(cameraStatus === 'denied' || cameraStatus === 'unavailable') && (
+        <div className="mx-6 mb-3 bg-amber-900/40 border border-amber-500/50 rounded-2xl px-4 py-3 flex items-start gap-3 shrink-0">
+          <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-amber-200 text-base leading-snug">
+            Sin acceso a la cámara. Puede completar la calibración pulsando los puntos, pero el seguimiento de mirada no estará disponible. Abra la app en un navegador real con permiso de cámara para activar el eye-tracking.
+          </p>
+        </div>
+      )}
+
+      {/* Calibration dot area */}
+      <div className="flex-1 relative">
+        {CALIBRATION_POINTS.map((point, index) => {
+          const count = clicks[index];
+          const done = count >= CLICKS_NEEDED;
+          const progress = count / CLICKS_NEEDED;
+          const justClicked = lastClicked === index;
+
+          return (
+            <button
+              key={point.id}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const rect = e.currentTarget.getBoundingClientRect();
+                handlePointClick(index, rect.left + rect.width / 2, rect.top + rect.height / 2);
+              }}
+              style={{
+                position: 'absolute',
+                left: `${point.x}%`,
+                top: `${point.y}%`,
+                transform: `translate(-50%, -50%) scale(${justClicked ? 0.82 : done ? 1.12 : 1})`,
+                transition: 'transform 0.15s ease, background-color 0.2s',
+              }}
+              className={`
+                w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center
+                focus:outline-none border-4 shadow-2xl touch-manipulation
+                ${done
+                  ? 'bg-teal-500 border-teal-300'
+                  : 'bg-stone-700 border-amber-400 hover:border-amber-200 active:bg-stone-600'
+                }
+              `}
+            >
+              {done ? (
+                <CheckCircle className="w-10 h-10 text-white" />
+              ) : (
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center"
+                  style={{
+                    background: `conic-gradient(#f59e0b ${progress * 360}deg, #44403c ${progress * 360}deg)`,
+                  }}
+                >
+                  <div className="w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center text-base font-black text-amber-400">
+                    {CLICKS_NEEDED - count}
+                  </div>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 pb-8 shrink-0 text-center">
+        {allDone ? (
+          <button
+            onClick={finishCalibration}
+            className="bg-teal-500 hover:bg-teal-400 text-white font-black text-2xl md:text-3xl px-12 py-5 rounded-3xl shadow-2xl flex items-center gap-4 mx-auto transition-all active:scale-95"
+          >
+            <Eye className="w-8 h-8" />
+            ACTIVAR SEGUIMIENTO DE MIRADA
+          </button>
+        ) : (
+          <p className="text-stone-400 text-lg">
+            Quedan{" "}
+            <span className="text-amber-400 font-bold text-xl">{totalNeeded - totalClicks}</span>
+            {" "}pulsaciones para completar
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+async function startWebGazer() {
   try {
     if (document.getElementById('webgazer-script')) return;
-    // Clear any stale WebGazer data from localStorage to avoid auto-start errors
     Object.keys(localStorage)
       .filter((k) => k.toLowerCase().includes('webgazer'))
       .forEach((k) => localStorage.removeItem(k));
@@ -43,154 +229,5 @@ async function tryStartWebGazer() {
     }
     window.webgazer.showVideoPreview(true);
     window.webgazer.begin();
-  } catch (_) {
-    // WebGazer unavailable — silent degradation
-  }
-}
-
-export function CalibrationOverlay() {
-  const { finishCalibration, deactivate } = useWebGazerStore();
-  const [clicks, setClicks] = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
-
-  // Start WebGazer in background when overlay mounts (errors silently swallowed)
-  useEffect(() => {
-    tryStartWebGazer();
-  }, []);
-
-  const totalClicks = clicks.reduce((a, b) => a + b, 0);
-  const totalNeeded = CALIBRATION_POINTS.length * CLICKS_NEEDED;
-  const allDone = clicks.every((c) => c >= CLICKS_NEEDED);
-  const overallProgress = Math.round((totalClicks / totalNeeded) * 100);
-
-  const handlePointClick = useCallback(
-    (index: number, screenX: number, screenY: number) => {
-      if (clicks[index] >= CLICKS_NEEDED) return;
-
-      // Record position in WebGazer if available
-      try {
-        window.webgazer?.recordScreenPosition?.(screenX, screenY, 'click');
-      } catch (_) {}
-
-      setClicks((prev) => {
-        const next = [...prev];
-        next[index] = Math.min(next[index] + 1, CLICKS_NEEDED);
-        return next;
-      });
-    },
-    [clicks]
-  );
-
-  return (
-    <div className="fixed inset-0 z-[9999] bg-stone-900/95 flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-8 pt-8 pb-4">
-        <div className="flex items-center gap-4">
-          <Eye className="w-10 h-10 text-teal-400" />
-          <div>
-            <h2 className="text-3xl font-black text-white tracking-wide">
-              Calibración de Mirada
-            </h2>
-            <p className="text-xl text-stone-300 mt-1">
-              Mire cada punto y púlselo{" "}
-              <strong className="text-teal-300">{CLICKS_NEEDED} veces</strong>{" "}
-              hasta que se vuelva verde
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={deactivate}
-          className="text-stone-400 hover:text-white text-xl font-bold px-6 py-3 rounded-2xl border-2 border-stone-600 hover:border-stone-400 transition-colors"
-        >
-          CANCELAR
-        </button>
-      </div>
-
-      {/* Progress bar */}
-      <div className="px-8 pb-4">
-        <div className="flex items-center gap-4">
-          <div className="flex-1 h-4 bg-stone-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-teal-400 rounded-full transition-all duration-300"
-              style={{ width: `${overallProgress}%` }}
-            />
-          </div>
-          <span className="text-2xl font-bold text-teal-300 w-20 text-right">
-            {overallProgress}%
-          </span>
-        </div>
-      </div>
-
-      {/* Calibration point area */}
-      <div className="flex-1 relative">
-        {CALIBRATION_POINTS.map((point, index) => {
-          const count = clicks[index];
-          const done = count >= CLICKS_NEEDED;
-          const progress = count / CLICKS_NEEDED;
-
-          return (
-            <button
-              key={point.id}
-              onClick={(e) => {
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                handlePointClick(index, rect.left + rect.width / 2, rect.top + rect.height / 2);
-              }}
-              style={{
-                position: 'absolute',
-                left: `${point.x}%`,
-                top: `${point.y}%`,
-                transform: 'translate(-50%, -50%)',
-              }}
-              className={`
-                w-24 h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center
-                transition-all duration-200 active:scale-90 focus:outline-none
-                border-4 shadow-2xl
-                ${done
-                  ? 'bg-teal-500 border-teal-300 scale-110'
-                  : 'bg-stone-700 border-amber-400 hover:border-amber-300 hover:bg-stone-600'
-                }
-              `}
-            >
-              {done ? (
-                <CheckCircle className="w-12 h-12 text-white" />
-              ) : (
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center"
-                  style={{
-                    background: `conic-gradient(#f59e0b ${progress * 360}deg, #44403c ${progress * 360}deg)`,
-                  }}
-                >
-                  <div className="w-9 h-9 rounded-full bg-stone-700 flex items-center justify-center text-lg font-black text-amber-400">
-                    {CLICKS_NEEDED - count}
-                  </div>
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Footer */}
-      {allDone ? (
-        <div className="px-8 pb-10 flex justify-center">
-          <button
-            onClick={finishCalibration}
-            className="bg-teal-500 hover:bg-teal-400 text-white font-black text-3xl md:text-4xl px-16 py-6 rounded-3xl shadow-2xl flex items-center gap-4 transition-all active:scale-95"
-          >
-            <Eye className="w-10 h-10" />
-            ACTIVAR SEGUIMIENTO DE MIRADA
-          </button>
-        </div>
-      ) : (
-        <div className="px-8 pb-8 text-center">
-          <p className="text-stone-400 text-xl">
-            Quedan{" "}
-            <span className="text-amber-400 font-bold text-2xl">
-              {totalNeeded - totalClicks}
-            </span>{" "}
-            pulsaciones para completar la calibración
-          </p>
-        </div>
-      )}
-    </div>
-  );
+  } catch (_) {}
 }
