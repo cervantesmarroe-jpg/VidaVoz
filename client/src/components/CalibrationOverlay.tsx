@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { CheckCircle, Eye, Camera, CameraOff, MousePointer2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { CheckCircle, Eye, Camera, CameraOff } from "lucide-react";
 import { useWebGazerStore } from "@/hooks/use-webgazer";
 
 const CLICKS_NEEDED = 5;
@@ -16,62 +16,58 @@ const CALIBRATION_POINTS = [
   { id: 8, x: 90, y: 85 },
 ];
 
-type CameraStatus = 'checking' | 'active' | 'denied' | 'unavailable';
+type CameraStatus = 'starting' | 'active' | 'denied';
 
 export function CalibrationOverlay() {
   const { finishCalibration, deactivate } = useWebGazerStore();
-  const [clicks, setClicks] = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
+  const [clicks, setClicks]       = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
   const [lastClicked, setLastClicked] = useState<number | null>(null);
-  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('checking');
+  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('starting');
 
-  // Detect whether WebGazer + camera is working
+  // Poll for the WebGazer video element to confirm camera is active
   useEffect(() => {
-    const wg = window.webgazer;
-    if (!wg) { setCameraStatus('unavailable'); return; }
-
-    // WebGazer was already started by the calibration effect in use-webgazer.
-    // Poll briefly to see if camera stream was obtained.
-    const timer = setTimeout(() => {
-      try {
-        const video = document.querySelector('#webgazerVideoContainer video') as HTMLVideoElement;
-        if (video && video.readyState >= 2) {
-          setCameraStatus('active');
-        } else {
-          setCameraStatus('denied');
-        }
-      } catch (_) {
+    let attempts = 0;
+    const id = setInterval(() => {
+      attempts++;
+      const video = document.querySelector<HTMLVideoElement>('#webgazerVideoContainer video');
+      if (video && video.readyState >= 2 && video.videoWidth > 0) {
+        setCameraStatus('active');
+        clearInterval(id);
+      } else if (attempts > 20) {
+        // 3 seconds passed with no video — camera was denied or unavailable
         setCameraStatus('denied');
+        clearInterval(id);
       }
-    }, 1500);
-
-    return () => clearTimeout(timer);
+    }, 150);
+    return () => clearInterval(id);
   }, []);
 
-  const totalClicks = clicks.reduce((a, b) => a + b, 0);
-  const totalNeeded = CALIBRATION_POINTS.length * CLICKS_NEEDED;
-  const allDone = clicks.every((c) => c >= CLICKS_NEEDED);
-  const overallProgress = Math.round((totalClicks / totalNeeded) * 100);
+  const totalClicks  = clicks.reduce((a, b) => a + b, 0);
+  const totalNeeded  = CALIBRATION_POINTS.length * CLICKS_NEEDED;
+  const allDone      = clicks.every((c) => c >= CLICKS_NEEDED);
+  const progress     = Math.round((totalClicks / totalNeeded) * 100);
 
-  const handlePointClick = (index: number, screenX: number, screenY: number) => {
+  const handlePointClick = useCallback((index: number, clientX: number, clientY: number) => {
     setLastClicked(index);
-    setTimeout(() => setLastClicked(null), 250);
+    setTimeout(() => setLastClicked(null), 220);
 
     setClicks((prev) => {
       if (prev[index] >= CLICKS_NEEDED) return prev;
       const next = [...prev];
-      next[index] = next[index] + 1;
+      next[index]++;
       return next;
     });
 
-    // Record calibration data in WebGazer
-    try { window.webgazer?.recordScreenPosition?.(screenX, screenY, 'click'); } catch (_) {}
-  };
+    // Feed this click to WebGazer so it learns where you're looking
+    try {
+      window.webgazer?.recordScreenPosition?.(clientX, clientY, 'click');
+    } catch (_) {}
+  }, []);
 
-  const statusConfig = {
-    checking:    { label: 'Iniciando cámara…',         icon: <Camera className="w-4 h-4 animate-pulse" />, color: 'bg-stone-800 text-stone-300' },
-    active:      { label: 'Cámara activa — eye tracking ON', icon: <Camera className="w-4 h-4" />, color: 'bg-teal-900/60 text-teal-300' },
-    denied:      { label: 'Cámara no disponible — modo puntero', icon: <CameraOff className="w-4 h-4" />, color: 'bg-amber-900/50 text-amber-300' },
-    unavailable: { label: 'Modo puntero (sin cámara)',  icon: <MousePointer2 className="w-4 h-4" />, color: 'bg-stone-800 text-stone-300' },
+  const statusBadge = {
+    starting: { label: 'Iniciando cámara…',            icon: <Camera className="w-4 h-4 animate-pulse" />, cls: 'bg-stone-800 text-stone-300' },
+    active:   { label: 'Cámara activa — eye tracking', icon: <Camera className="w-4 h-4" />,              cls: 'bg-teal-900/60 text-teal-300' },
+    denied:   { label: 'Cámara no disponible',          icon: <CameraOff className="w-4 h-4" />,           cls: 'bg-rose-900/50 text-rose-300' },
   }[cameraStatus];
 
   return (
@@ -100,56 +96,56 @@ export function CalibrationOverlay() {
         </button>
       </div>
 
-      {/* Camera status + progress */}
+      {/* Status + progress bar */}
       <div className="px-6 pb-3 shrink-0 flex items-center gap-3">
-        <span className={`flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-full shrink-0 ${statusConfig.color}`}>
-          {statusConfig.icon} {statusConfig.label}
+        <span className={`flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-full shrink-0 ${statusBadge.cls}`}>
+          {statusBadge.icon} {statusBadge.label}
         </span>
         <div className="flex-1 h-3 bg-stone-700 rounded-full overflow-hidden">
           <div
             className="h-full bg-teal-400 rounded-full transition-all duration-300"
-            style={{ width: `${overallProgress}%` }}
+            style={{ width: `${progress}%` }}
           />
         </div>
         <span className="text-lg font-bold text-teal-300 w-12 text-right shrink-0">
-          {overallProgress}%
+          {progress}%
         </span>
       </div>
 
-      {/* Calibration dot area */}
+      {/* 9 calibration dots */}
       <div className="flex-1 relative">
-        {CALIBRATION_POINTS.map((point, index) => {
-          const count = clicks[index];
-          const done = count >= CLICKS_NEEDED;
-          const progress = count / CLICKS_NEEDED;
-          const justClicked = lastClicked === index;
+        {CALIBRATION_POINTS.map((pt, idx) => {
+          const count    = clicks[idx];
+          const done     = count >= CLICKS_NEEDED;
+          const fraction = count / CLICKS_NEEDED;
+          const popped   = lastClicked === idx;
 
           return (
             <button
-              key={point.id}
+              key={pt.id}
+              data-testid={`calibration-dot-${idx}`}
               onPointerDown={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 handlePointClick(
-                  index,
+                  idx,
                   rect.left + rect.width / 2,
                   rect.top + rect.height / 2
                 );
               }}
               style={{
                 position: 'absolute',
-                left: `${point.x}%`,
-                top: `${point.y}%`,
-                transform: `translate(-50%, -50%) scale(${justClicked ? 0.8 : done ? 1.15 : 1})`,
-                transition: 'transform 0.15s ease',
+                left: `${pt.x}%`,
+                top: `${pt.y}%`,
+                transform: `translate(-50%, -50%) scale(${popped ? 0.78 : done ? 1.15 : 1})`,
+                transition: 'transform 0.15s ease, box-shadow 0.15s',
               }}
-              className={`
-                w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center
-                focus:outline-none border-4 shadow-2xl touch-manipulation
-                ${done
+              className={[
+                'w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center',
+                'focus:outline-none border-4 shadow-2xl touch-manipulation',
+                done
                   ? 'bg-teal-500 border-teal-300'
-                  : 'bg-stone-700 border-amber-400 hover:bg-stone-600 active:bg-stone-500'
-                }
-              `}
+                  : 'bg-stone-700 border-amber-400 hover:bg-stone-600 active:bg-stone-500',
+              ].join(' ')}
             >
               {done ? (
                 <CheckCircle className="w-10 h-10 text-white" />
@@ -157,7 +153,7 @@ export function CalibrationOverlay() {
                 <div
                   className="w-11 h-11 rounded-full flex items-center justify-center"
                   style={{
-                    background: `conic-gradient(#f59e0b ${progress * 360}deg, #44403c ${progress * 360}deg)`,
+                    background: `conic-gradient(#f59e0b ${fraction * 360}deg, #44403c ${fraction * 360}deg)`,
                   }}
                 >
                   <div className="w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center text-base font-black text-amber-400">
@@ -175,6 +171,7 @@ export function CalibrationOverlay() {
         {allDone ? (
           <button
             onClick={finishCalibration}
+            data-testid="button-finish-calibration"
             className="bg-teal-500 hover:bg-teal-400 text-white font-black text-2xl md:text-3xl px-12 py-5 rounded-3xl shadow-2xl flex items-center gap-4 mx-auto transition-all active:scale-95"
           >
             <Eye className="w-8 h-8" />

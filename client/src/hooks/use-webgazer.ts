@@ -22,87 +22,8 @@ declare global {
 }
 
 const DWELL_MS = 2000;
-// Served locally so no CDN dependency and no cross-origin worker restrictions
-const WG_URL = '/webgazer.js';
 
-// ─── WebGazer bootstrap helpers ────────────────────────────────────────────
-
-/** Delete WebGazer's IndexedDB databases so it starts fresh with no TF.js model data. */
-async function purgeWebGazerStorage() {
-  for (const name of ['WebGazerGazeData', 'webgazer', 'localforage']) {
-    await new Promise<void>((res) => {
-      try {
-        const r = indexedDB.deleteDatabase(name);
-        r.onsuccess = r.onerror = r.onblocked = () => res();
-      } catch (_) { res(); }
-    });
-  }
-}
-
-/**
- * Wrap window.Worker with a Proxy so errors inside workers (e.g. TF.js workers
- * whose CDN URLs return HTML in restricted envs) are caught on the instance
- * and don't bubble to window.onerror / the runtime-error overlay.
- */
-function installWorkerGuard() {
-  if ((window as any).__workerGuardInstalled) return;
-  (window as any).__workerGuardInstalled = true;
-
-  const NativeWorker = window.Worker;
-  (window as any).Worker = new Proxy(NativeWorker, {
-    construct(Target, args: [string | URL, WorkerOptions?]) {
-      const worker = new Target(...args);
-      worker.addEventListener('error', (e: ErrorEvent) => {
-        e.preventDefault?.();
-        e.stopImmediatePropagation?.();
-      });
-      return worker;
-    },
-  });
-}
-
-/** Load the WebGazer script, configure it, and call begin(). */
-async function loadAndBeginWebGazer(): Promise<void> {
-  // Install Worker guard before anything so TF.js worker errors are swallowed
-  installWorkerGuard();
-
-  if (window.webgazer?.begin) {
-    // Already loaded — just (re)configure and begin
-    configureAndBegin();
-    return;
-  }
-
-  // Purge stored calibration data to prevent TF.js model restore on init
-  await purgeWebGazerStorage();
-
-  return new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = WG_URL;
-    script.async = true;
-    script.onload = () => { configureAndBegin(); resolve(); };
-    script.onerror = () => {
-      console.warn('WebGazer CDN load failed — pointer dwell-time will be used');
-      resolve();
-    };
-    document.head.appendChild(script);
-  });
-}
-
-function configureAndBegin() {
-  try {
-    const wg = window.webgazer;
-    if (!wg) return;
-    // 'ridge' = lightweight regression, NO TF.js workers for gaze prediction
-    wg.setRegression('ridge');
-    wg.params.saveDataAcrossSessions = false;
-    wg.params.showFaceOverlay        = false;
-    wg.params.showFaceFeedbackBox    = true;
-    wg.showVideoPreview(true);
-    wg.begin().catch?.(() => {});   // .catch ensures promise rejection is handled
-  } catch (e) {
-    console.warn('WebGazer begin (non-fatal):', e);
-  }
-}
+const wg = () => window.webgazer;
 
 // ─── React hook ─────────────────────────────────────────────────────────────
 
@@ -112,11 +33,10 @@ export function useWebGazer() {
 
   const targetRef    = useRef<HTMLElement | null>(null);
   const enterTimeRef = useRef<number>(0);
-  const rafRef       = useRef<number>(0);
-  const posRef       = useRef<{ x: number; y: number } | null>(null);
   const cooldownRef  = useRef<boolean>(false);
+  const rafRef       = useRef<number>(0);
 
-  // Create gaze cursor element once
+  // Gaze cursor element
   useEffect(() => {
     if (!document.getElementById('gaze-cursor')) {
       const el = document.createElement('div');
@@ -126,88 +46,69 @@ export function useWebGazer() {
     return () => { document.getElementById('gaze-cursor')?.remove(); };
   }, []);
 
-  // Load + start WebGazer when calibration begins
+  // When calibration starts: open camera, show video preview
   useEffect(() => {
     if (!isCalibrating) return;
-    loadAndBeginWebGazer().catch(() => {});
+    try {
+      wg()?.showVideoPreview(true);
+      wg()?.params && (wg().params.showFaceFeedbackBox = true);
+      wg()?.begin();
+    } catch (e) {
+      console.warn('webgazer.begin():', e);
+    }
   }, [isCalibrating]);
 
-  // Pause camera when neither calibrating nor active
+  // When neither calibrating nor active: pause camera, hide preview
   useEffect(() => {
     if (isCalibrating || isActive) return;
     try {
-      window.webgazer?.showVideoPreview?.(false);
-      window.webgazer?.pause?.();
+      wg()?.showVideoPreview(false);
+      wg()?.pause();
+      wg()?.setGazeListener(null);
     } catch (_) {}
   }, [isCalibrating, isActive]);
 
-  // Dwell tracking when active
+  // When active: attach gaze listener → dwell tracking
   useEffect(() => {
     const cursor = document.getElementById('gaze-cursor');
-
     if (!isActive) {
       if (cursor) cursor.style.display = 'none';
       cancelAnimationFrame(rafRef.current);
-      try { window.webgazer?.setGazeListener?.(null); } catch (_) {}
+      try { wg()?.setGazeListener(null); } catch (_) {}
       if (targetRef.current) { resetProgress(targetRef.current); targetRef.current = null; }
       return;
     }
 
     if (cursor) cursor.style.display = 'block';
+    // Video preview off once active (prediction runs in background)
+    try { wg()?.showVideoPreview(false); } catch (_) {}
 
-    if (window.webgazer?.setGazeListener) {
-      // ── WebGazer eye-tracking ─────────────────────────────────────────────
-      try {
-        window.webgazer.setGazeListener((data: any, elapsed: number) => {
-          if (!data) return;
-          const { x, y } = data as { x: number; y: number };
+    try {
+      wg()?.setGazeListener((data: any, elapsed: number) => {
+        if (!data) return;
+        const { x, y } = data as { x: number; y: number };
 
-          const c = document.getElementById('gaze-cursor');
-          if (c) c.style.transform =
-            `translate(calc(${x}px - 50%), calc(${y}px - 50%)) rotate(45deg)`;
+        // Move cursor
+        const c = document.getElementById('gaze-cursor');
+        if (c) c.style.transform = `translate(calc(${x}px - 50%), calc(${y}px - 50%)) rotate(45deg)`;
 
-          // Temporarily hide cursor so hit-test finds the element underneath
-          if (c) c.style.visibility = 'hidden';
-          const el = document.elementFromPoint(x, y) as HTMLElement | null;
-          if (c) c.style.visibility = '';
+        // Hit-test: hide cursor momentarily so elementFromPoint finds what's underneath
+        if (c) c.style.visibility = 'hidden';
+        const el  = document.elementFromPoint(x, y) as HTMLElement | null;
+        if (c) c.style.visibility = '';
 
-          const tgt = el?.closest('[data-gaze-target="true"]') as HTMLElement | null;
-          dwellTick(tgt, elapsed);
-        });
-      } catch (e) {
-        console.warn('setGazeListener (non-fatal):', e);
-      }
-
-      return () => {
-        try { window.webgazer?.setGazeListener?.(null); } catch (_) {}
-      };
-    } else {
-      // ── Pointer / touch fallback ──────────────────────────────────────────
-      const onMove = (e: PointerEvent) => {
-        posRef.current = { x: e.clientX, y: e.clientY };
-      };
-      window.addEventListener('pointermove', onMove);
-
-      const tick = () => {
-        if (posRef.current) {
-          const { x, y } = posRef.current;
-          const el  = document.elementFromPoint(x, y) as HTMLElement | null;
-          const tgt = el?.closest('[data-gaze-target="true"]') as HTMLElement | null;
-          dwellTick(tgt, performance.now());
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-
-      return () => {
-        cancelAnimationFrame(rafRef.current);
-        window.removeEventListener('pointermove', onMove);
-        if (targetRef.current) { resetProgress(targetRef.current); targetRef.current = null; }
-      };
+        const target = el?.closest('[data-gaze-target="true"]') as HTMLElement | null;
+        dwellTick(target, elapsed);
+      });
+    } catch (e) {
+      console.warn('setGazeListener:', e);
     }
+
+    return () => {
+      try { wg()?.setGazeListener(null); } catch (_) {}
+    };
   }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Shared dwell logic for both WebGazer and pointer paths */
   function dwellTick(target: HTMLElement | null, now: number) {
     if (target) {
       if (target !== targetRef.current) {
@@ -234,8 +135,6 @@ export function useWebGazer() {
 
   return { isActive, isCalibrating, startCalibration, finishCalibration, deactivate };
 }
-
-// ─── DOM helpers ────────────────────────────────────────────────────────────
 
 function resetProgress(el: HTMLElement) {
   const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
