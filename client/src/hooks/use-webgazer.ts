@@ -45,14 +45,19 @@ export function useWebGazer() {
     script.async = true;
     script.onload = () => {
       try {
-        setIsScriptLoaded(true);
-        if (window.webgazer?.params) {
-          window.webgazer.params.showVideoPreview = true;
-          window.webgazer.params.showFaceOverlay = false;
-          window.webgazer.params.showFaceFeedbackBox = true;
+        // Immediately pause WebGazer to stop it auto-starting from stored localStorage data
+        if (window.webgazer) {
+          window.webgazer.pause();
+          window.webgazer.showVideoPreview(false);
+          if (window.webgazer.params) {
+            window.webgazer.params.showFaceOverlay = false;
+            window.webgazer.params.showFaceFeedbackBox = true;
+          }
         }
+        setIsScriptLoaded(true);
       } catch (e) {
         console.warn('WebGazer init error (non-fatal):', e);
+        setIsScriptLoaded(true);
       }
     };
     script.onerror = () => console.warn('WebGazer script failed to load.');

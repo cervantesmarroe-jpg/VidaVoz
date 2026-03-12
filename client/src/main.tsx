@@ -2,27 +2,27 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// Suppress unhandled errors from WebGazer's internal resource loading
-// WebGazer fetches TF.js model files that may return HTML (404) in some environments,
-// causing a SyntaxError: "Unexpected token '<'" that would otherwise crash the app.
+// Suppress errors from WebGazer's internal resource loading.
+// WebGazer auto-starts from localStorage and tries to fetch TF.js workers/models
+// that may return HTML (404) in some environments, throwing SyntaxError
+// "Unexpected token '<'" — this would otherwise crash the whole app.
+const suppressWebGazerError = (msg: string) =>
+  msg.includes("Unexpected token '<'") ||
+  msg.includes('webgazer') ||
+  msg.includes('No stream') ||
+  msg.includes('TensorFlow') ||
+  msg.includes('tfjs');
+
 window.addEventListener('error', (event) => {
-  if (
-    event.message?.includes("Unexpected token '<'") ||
-    event.message?.includes('webgazer') ||
-    event.filename?.includes('webgazer')
-  ) {
+  if (suppressWebGazerError(event.message || '')) {
     event.preventDefault();
-    return;
+    event.stopImmediatePropagation();
   }
-});
+}, true); // capture phase — runs before anything else
 
 window.addEventListener('unhandledrejection', (event) => {
   const msg = event.reason?.message || String(event.reason || '');
-  if (
-    msg.includes("Unexpected token '<'") ||
-    msg.includes('webgazer') ||
-    msg.includes('No stream')
-  ) {
+  if (suppressWebGazerError(msg)) {
     event.preventDefault();
   }
 });
