@@ -1,10 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { CheckCircle, Eye } from "lucide-react";
 import { useWebGazerStore } from "@/hooks/use-webgazer";
 
 const CLICKS_NEEDED = 5;
 
-// 9 calibration points as percentages of screen (col%, row%)
 const CALIBRATION_POINTS = [
   { id: 0, x: 10, y: 15 },
   { id: 1, x: 50, y: 15 },
@@ -17,9 +16,46 @@ const CALIBRATION_POINTS = [
   { id: 8, x: 90, y: 85 },
 ];
 
+// Attempt to load and start WebGazer silently in the background.
+// All errors are swallowed — the UI works regardless.
+async function tryStartWebGazer() {
+  try {
+    if (document.getElementById('webgazer-script')) return;
+    // Clear any stale WebGazer data from localStorage to avoid auto-start errors
+    Object.keys(localStorage)
+      .filter((k) => k.toLowerCase().includes('webgazer'))
+      .forEach((k) => localStorage.removeItem(k));
+
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script');
+      s.id = 'webgazer-script';
+      s.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject();
+      document.body.appendChild(s);
+    });
+
+    if (!window.webgazer) return;
+    if (window.webgazer.params) {
+      window.webgazer.params.showFaceOverlay = false;
+      window.webgazer.params.showFaceFeedbackBox = true;
+    }
+    window.webgazer.showVideoPreview(true);
+    window.webgazer.begin();
+  } catch (_) {
+    // WebGazer unavailable — silent degradation
+  }
+}
+
 export function CalibrationOverlay() {
   const { finishCalibration, deactivate } = useWebGazerStore();
   const [clicks, setClicks] = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
+
+  // Start WebGazer in background when overlay mounts (errors silently swallowed)
+  useEffect(() => {
+    tryStartWebGazer();
+  }, []);
 
   const totalClicks = clicks.reduce((a, b) => a + b, 0);
   const totalNeeded = CALIBRATION_POINTS.length * CLICKS_NEEDED;
@@ -30,11 +66,9 @@ export function CalibrationOverlay() {
     (index: number, screenX: number, screenY: number) => {
       if (clicks[index] >= CLICKS_NEEDED) return;
 
-      // Record this click position in WebGazer as calibration data
+      // Record position in WebGazer if available
       try {
-        if (window.webgazer) {
-          window.webgazer.recordScreenPosition(screenX, screenY, 'click');
-        }
+        window.webgazer?.recordScreenPosition?.(screenX, screenY, 'click');
       } catch (_) {}
 
       setClicks((prev) => {
@@ -57,7 +91,9 @@ export function CalibrationOverlay() {
               Calibración de Mirada
             </h2>
             <p className="text-xl text-stone-300 mt-1">
-              Mire cada punto y púlselo <strong className="text-teal-300">{CLICKS_NEEDED} veces</strong> hasta que se vuelva verde
+              Mire cada punto y púlselo{" "}
+              <strong className="text-teal-300">{CLICKS_NEEDED} veces</strong>{" "}
+              hasta que se vuelva verde
             </p>
           </div>
         </div>
@@ -84,7 +120,7 @@ export function CalibrationOverlay() {
         </div>
       </div>
 
-      {/* Calibration area */}
+      {/* Calibration point area */}
       <div className="flex-1 relative">
         {CALIBRATION_POINTS.map((point, index) => {
           const count = clicks[index];
@@ -95,10 +131,8 @@ export function CalibrationOverlay() {
             <button
               key={point.id}
               onClick={(e) => {
-                const rect = (e.target as HTMLElement).getBoundingClientRect();
-                const cx = rect.left + rect.width / 2;
-                const cy = rect.top + rect.height / 2;
-                handlePointClick(index, cx, cy);
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                handlePointClick(index, rect.left + rect.width / 2, rect.top + rect.height / 2);
               }}
               style={{
                 position: 'absolute',
@@ -119,17 +153,14 @@ export function CalibrationOverlay() {
               {done ? (
                 <CheckCircle className="w-12 h-12 text-white" />
               ) : (
-                <div className="flex flex-col items-center gap-1">
-                  {/* Mini progress ring using conic-gradient */}
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-black text-xl"
-                    style={{
-                      background: `conic-gradient(#f59e0b ${progress * 360}deg, #44403c ${progress * 360}deg)`,
-                    }}
-                  >
-                    <div className="w-9 h-9 rounded-full bg-stone-700 flex items-center justify-center text-lg font-black text-amber-400">
-                      {CLICKS_NEEDED - count}
-                    </div>
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center"
+                  style={{
+                    background: `conic-gradient(#f59e0b ${progress * 360}deg, #44403c ${progress * 360}deg)`,
+                  }}
+                >
+                  <div className="w-9 h-9 rounded-full bg-stone-700 flex items-center justify-center text-lg font-black text-amber-400">
+                    {CLICKS_NEEDED - count}
                   </div>
                 </div>
               )}
@@ -138,8 +169,8 @@ export function CalibrationOverlay() {
         })}
       </div>
 
-      {/* Footer: Finish button */}
-      {allDone && (
+      {/* Footer */}
+      {allDone ? (
         <div className="px-8 pb-10 flex justify-center">
           <button
             onClick={finishCalibration}
@@ -149,9 +180,7 @@ export function CalibrationOverlay() {
             ACTIVAR SEGUIMIENTO DE MIRADA
           </button>
         </div>
-      )}
-
-      {!allDone && (
+      ) : (
         <div className="px-8 pb-8 text-center">
           <p className="text-stone-400 text-xl">
             Quedan{" "}
