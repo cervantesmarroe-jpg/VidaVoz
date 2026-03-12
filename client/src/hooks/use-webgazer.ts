@@ -39,26 +39,25 @@ async function purgeWebGazerStorage() {
 }
 
 /**
- * Wrap window.Worker so that errors thrown inside workers (e.g. TF.js workers
- * loading from URLs that return HTML) are caught on the Worker instance and
- * never bubble up to window.onerror / React's error boundary.
+ * Wrap window.Worker with a Proxy so errors inside workers (e.g. TF.js workers
+ * whose CDN URLs return HTML in restricted envs) are caught on the instance
+ * and don't bubble to window.onerror / the runtime-error overlay.
  */
 function installWorkerGuard() {
   if ((window as any).__workerGuardInstalled) return;
   (window as any).__workerGuardInstalled = true;
 
   const NativeWorker = window.Worker;
-  function GuardedWorker(this: Worker, url: string | URL, opts?: WorkerOptions) {
-    const worker: Worker = new NativeWorker(url, opts);
-    worker.addEventListener('error', (e) => {
-      // Suppress parse/runtime errors from bad worker scripts (e.g. HTML 404)
-      e.preventDefault?.();
-      e.stopImmediatePropagation?.();
-    });
-    return worker;
-  }
-  GuardedWorker.prototype = NativeWorker.prototype;
-  (window as any).Worker = GuardedWorker;
+  (window as any).Worker = new Proxy(NativeWorker, {
+    construct(Target, args: [string | URL, WorkerOptions?]) {
+      const worker = new Target(...args);
+      worker.addEventListener('error', (e: ErrorEvent) => {
+        e.preventDefault?.();
+        e.stopImmediatePropagation?.();
+      });
+      return worker;
+    },
+  });
 }
 
 /** Load the WebGazer script, configure it, and call begin(). */
