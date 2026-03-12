@@ -6,84 +6,142 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-const DWELL_MS  = 2000;
+const DWELL_MS = 2000;
+const ALPHA    = 0.22;  // suavizado EWA
 
-// Sensibilidad: cuántos píxeles de desplazamiento por unidad de blendshape (0-1)
-// Ajustable — valores más altos = más rango de movimiento ocular cubre la pantalla
-const SCALE_H = 0.8;   // horizontal: multiplica window.innerWidth
-const SCALE_V = 0.8;   // vertical:   multiplica window.innerHeight
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+interface EyeData {
+  eyeLookInLeft:   number;
+  eyeLookOutLeft:  number;
+  eyeLookUpLeft:   number;
+  eyeLookDownLeft: number;
+  bx: number;   // eyeLookOutLeft - eyeLookInLeft  (horizontal)
+  by: number;   // -(eyeLookUpLeft - eyeLookDownLeft) (vertical)
+}
 
-// Suavizado exponencial (0 = sin movimiento, 1 = sin suavizado)
-const ALPHA = 0.22;
+interface TrainingPoint {
+  eyeData:      EyeData;
+  screenCoords: { x: number; y: number };
+}
 
-// ─── Gaze desde blendshapes ──────────────────────────────────────────────────
-// Devuelve la posición de pantalla estimada a partir de cuánto se mueven los ojos.
-// eyeLookOutLeft / eyeLookInLeft → movimiento horizontal
-// eyeLookUpLeft  / eyeLookDownLeft → movimiento vertical
-// Sin calibración: el "centro" es cuando todos los scores son ≈ 0 (mirada al frente).
-type Blendshape = { categoryName: string; score: number };
+interface CalibrationModel {
+  x: { a: number; b: number };  // screenX = a·bx + b
+  y: { a: number; b: number };  // screenY = a·by + b
+}
 
-function gazeFromBlendshapes(
-  shapes: Blendshape[],
-  offsetX = 0,
-  offsetY = 0,
-): { x: number; y: number } | null {
-  const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+type GazeCallback = (x: number, y: number) => void;
 
-  const bx =  (find('eyeLookOutLeft') - find('eyeLookInLeft'));
-  const by = -(find('eyeLookUpLeft')  - find('eyeLookDownLeft'));
+// ─── getEyeFeatures: captura blendshapes en el frame actual ──────────────────
+function getEyeFeatures(
+  landmarker: FaceLandmarker,
+  video: HTMLVideoElement,
+): EyeData | null {
+  if (video.readyState < 2) return null;
+  try {
+    const results = landmarker.detectForVideo(video, performance.now());
+    const shapes  = results.faceBlendshapes?.[0]?.categories;
+    if (!shapes) return null;
+    const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+    const inL   = find('eyeLookInLeft');
+    const outL  = find('eyeLookOutLeft');
+    const upL   = find('eyeLookUpLeft');
+    const downL = find('eyeLookDownLeft');
+    return {
+      eyeLookInLeft:   inL,
+      eyeLookOutLeft:  outL,
+      eyeLookUpLeft:   upL,
+      eyeLookDownLeft: downL,
+      bx:  outL - inL,
+      by: -(upL - downL),
+    };
+  } catch (_) { return null; }
+}
 
-  const W = window.innerWidth;
-  const H = window.innerHeight;
+// ─── computeCalibrationModel: regresión lineal sobre trainingData ─────────────
+// Ajusta: screenX = ax·bx + cx   y   screenY = ay·by + cy
+function computeCalibrationModel(data: TrainingPoint[]): CalibrationModel | null {
+  if (data.length < 4) return null;
 
+  const regress = (xs: number[], ys: number[]) => {
+    const n   = xs.length;
+    const xm  = xs.reduce((s, v) => s + v, 0) / n;
+    const ym  = ys.reduce((s, v) => s + v, 0) / n;
+    const num = xs.reduce((s, x, i) => s + (x - xm) * (ys[i] - ym), 0);
+    const den = xs.reduce((s, x) => s + (x - xm) ** 2, 0) || 0.001;
+    const a   = num / den;
+    return { a, b: ym - a * xm };
+  };
+
+  const bxArr = data.map(d => d.eyeData.bx);
+  const byArr = data.map(d => d.eyeData.by);
+  const sxArr = data.map(d => d.screenCoords.x);
+  const syArr = data.map(d => d.screenCoords.y);
+
+  const model: CalibrationModel = {
+    x: regress(bxArr, sxArr),
+    y: regress(byArr, syArr),
+  };
+
+  console.log(
+    `GazeTracker: modelo calibrado con ${data.length} muestras —`,
+    `X a=${model.x.a.toFixed(1)} b=${model.x.b.toFixed(1)}`,
+    `Y a=${model.y.a.toFixed(1)} b=${model.y.b.toFixed(1)}`,
+  );
+  return model;
+}
+
+// ─── predictGaze: aplica el modelo (o fórmula por defecto si no hay calibración)
+function predictGaze(eyeData: EyeData, model: CalibrationModel | null): { rawX: number; rawY: number } {
+  if (model) {
+    return {
+      rawX: model.x.a * eyeData.bx + model.x.b,
+      rawY: model.y.a * eyeData.by + model.y.b,
+    };
+  }
+  const W = window.innerWidth, H = window.innerHeight;
   return {
-    x: W / 2 + bx * W * SCALE_H + offsetX,
-    y: H / 2 + by * H * SCALE_V + offsetY,
+    rawX: W / 2 + eyeData.bx * W * 0.8,
+    rawY: H / 2 + eyeData.by * H * 0.8,
   };
 }
 
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
-type GazeCallback = (x: number, y: number) => void;
-
 class GazeTracker {
-  private landmarker:    FaceLandmarker | null = null;
-  private video:         HTMLVideoElement | null = null;
-  private stream:        MediaStream | null = null;
-  private rafId:         number = 0;
-  private lastTime:      number = -1;
+  private landmarker: FaceLandmarker | null = null;
+  private video:      HTMLVideoElement | null = null;
+  private stream:     MediaStream | null = null;
+  private rafId:      number = 0;
+  private lastTime:   number = -1;
 
-  // Suavizado
   private smoothX = window.innerWidth  / 2;
   private smoothY = window.innerHeight / 2;
 
-  // Calibración: offset de pantalla para centrar el punto de mirada
-  private offsetX = 0;
-  private offsetY = 0;
+  // Caché del último EyeData — evita llamar detectForVideo dos veces en el mismo frame
+  private lastEyeData: EyeData | null = null;
 
-  // Muestras de calibración: blendshape_gaze → screen_target
-  private calibSamples: { rawX: number; rawY: number; sx: number; sy: number }[] = [];
-  private calibrated = false;
+  // trainingData: almacena pares (eyeData → screenCoords) durante la calibración
+  private trainingData: TrainingPoint[] = [];
+  private calibrationModel: CalibrationModel | null = null;
 
   private gazeListeners: Set<GazeCallback> = new Set();
 
-  // Callbacks de estado
   onCameraReady: (() => void) | null = null;
   onCameraError: (() => void) | null = null;
   onInit:        (() => void) | null = null;
 
   async init() {
     try {
-      const filesetResolver = await FilesetResolver.forVisionTasks(WASM_PATH);
-      this.landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+      const resolver = await FilesetResolver.forVisionTasks(WASM_PATH);
+      this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-        runningMode:          'VIDEO',
-        numFaces:             1,
+        runningMode:           'VIDEO',
+        numFaces:              1,
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: false,
       });
       this.onInit?.();
     } catch (err) {
-      console.warn('GazeTracker: FaceLandmarker init failed', err);
+      console.warn('GazeTracker: init failed', err);
     }
   }
 
@@ -109,7 +167,7 @@ class GazeTracker {
       v = document.createElement('video');
       v.id = 'gaze-video';
       v.setAttribute('playsinline', '');
-      v.setAttribute('autoplay',   '');
+      v.setAttribute('autoplay', '');
       v.muted = true;
       v.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1';
       document.body.appendChild(v);
@@ -123,18 +181,29 @@ class GazeTracker {
       if (this.video && this.video.readyState >= 2 && this.video.currentTime !== this.lastTime) {
         this.lastTime = this.video.currentTime;
         try {
-          const res = this.landmarker!.detectForVideo(this.video!, ts);
-          const shapes = res.faceBlendshapes?.[0]?.categories;
+          const results = this.landmarker!.detectForVideo(this.video!, ts);
+          const shapes  = results.faceBlendshapes?.[0]?.categories;
           if (shapes) {
-            const pos = gazeFromBlendshapes(shapes, this.offsetX, this.offsetY);
-            if (pos) {
-              // Suavizado EWA
-              this.smoothX = ALPHA * pos.x + (1 - ALPHA) * this.smoothX;
-              this.smoothY = ALPHA * pos.y + (1 - ALPHA) * this.smoothY;
-              const gx = Math.max(0, Math.min(window.innerWidth,  this.smoothX));
-              const gy = Math.max(0, Math.min(window.innerHeight, this.smoothY));
-              this.gazeListeners.forEach(cb => cb(gx, gy));
-            }
+            const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+            const inL = find('eyeLookInLeft'), outL = find('eyeLookOutLeft');
+            const upL = find('eyeLookUpLeft'), downL = find('eyeLookDownLeft');
+            const eyeData: EyeData = {
+              eyeLookInLeft:   inL,
+              eyeLookOutLeft:  outL,
+              eyeLookUpLeft:   upL,
+              eyeLookDownLeft: downL,
+              bx:  outL - inL,
+              by: -(upL - downL),
+            };
+            // Actualizar caché — recordCalibrationSample lo leerá desde aquí
+            this.lastEyeData = eyeData;
+
+            const { rawX, rawY } = predictGaze(eyeData, this.calibrationModel);
+            this.smoothX = ALPHA * rawX + (1 - ALPHA) * this.smoothX;
+            this.smoothY = ALPHA * rawY + (1 - ALPHA) * this.smoothY;
+            const gx = Math.max(0, Math.min(window.innerWidth,  this.smoothX));
+            const gy = Math.max(0, Math.min(window.innerHeight, this.smoothY));
+            this.gazeListeners.forEach(cb => cb(gx, gy));
           }
         } catch (_) {}
       }
@@ -153,43 +222,37 @@ class GazeTracker {
     this.stream?.getTracks().forEach(t => t.stop());
     this.stream = null;
     document.getElementById('gaze-video')?.remove();
-    this.video     = null;
-    this.lastTime  = -1;
-    this.smoothX   = window.innerWidth  / 2;
-    this.smoothY   = window.innerHeight / 2;
+    this.video    = null;
+    this.lastTime = -1;
+    this.smoothX  = window.innerWidth  / 2;
+    this.smoothY  = window.innerHeight / 2;
   }
 
-  // Llamar durante cada click de calibración con las coordenadas de pantalla del punto
+  // Llamar en cada clic de calibración: lee el EyeData cacheado del último frame
   recordCalibrationSample(screenX: number, screenY: number) {
-    if (!this.landmarker || !this.video || this.video.readyState < 2) return;
-    try {
-      const res    = this.landmarker.detectForVideo(this.video, performance.now());
-      const shapes = res.faceBlendshapes?.[0]?.categories;
-      if (!shapes) return;
-      const pos = gazeFromBlendshapes(shapes, 0, 0);
-      if (pos) {
-        this.calibSamples.push({ rawX: pos.x, rawY: pos.y, sx: screenX, sy: screenY });
-      }
-    } catch (_) {}
+    // 1. Obtenemos lo que la IA vio en el frame más reciente (sin rellamar detectForVideo)
+    const currentEyeData = this.lastEyeData;
+    if (!currentEyeData) return;
+
+    // 2. Guardamos la relación: "Esta posición de ojos = Esta coordenada X,Y"
+    this.trainingData.push({
+      eyeData:      currentEyeData,
+      screenCoords: { x: screenX, y: screenY },
+    });
+
+    console.log(`Punto calibrado en: ${Math.round(screenX)}, ${Math.round(screenY)}. Total muestras: ${this.trainingData.length}`);
   }
 
-  // Calcula el offset medio: diferencia entre dónde predijo la mirada vs. dónde era el punto
+  // Calcula el modelo de calibración a partir de todos los trainingData recogidos
   computeCalibration() {
-    if (this.calibSamples.length === 0) return;
-    const meanDx = this.calibSamples.reduce((s, p) => s + (p.sx - p.rawX), 0) / this.calibSamples.length;
-    const meanDy = this.calibSamples.reduce((s, p) => s + (p.sy - p.rawY), 0) / this.calibSamples.length;
-    this.offsetX    = meanDx;
-    this.offsetY    = meanDy;
-    this.calibrated = true;
-    console.log(`GazeTracker: calibración OK — offset (${Math.round(meanDx)}, ${Math.round(meanDy)}) px`);
-    this.calibSamples = [];
+    this.calibrationModel = computeCalibrationModel(this.trainingData);
+    this.trainingData     = [];
   }
 
   clearCalibration() {
-    this.calibSamples = [];
-    this.calibrated   = false;
-    this.offsetX      = 0;
-    this.offsetY      = 0;
+    this.trainingData     = [];
+    this.calibrationModel = null;
+    this.lastEyeData      = null;
   }
 
   addGazeListener(cb: GazeCallback)    { this.gazeListeners.add(cb); }
@@ -223,7 +286,6 @@ export function useWebGazer() {
   const { isActive, isCalibrating, startCalibration, finishCalibration, deactivate } =
     useWebGazerStore();
 
-  // Crear el cursor de mirada una vez
   useEffect(() => {
     if (!document.getElementById('gaze-cursor')) {
       const el = document.createElement('div');
@@ -233,7 +295,6 @@ export function useWebGazer() {
     return () => { document.getElementById('gaze-cursor')?.remove(); };
   }, []);
 
-  // Calibrando → abrir cámara e iniciar detección (para recoger muestras)
   useEffect(() => {
     if (!isCalibrating) return;
     gazeTracker.clearCalibration();
@@ -244,7 +305,6 @@ export function useWebGazer() {
     })();
   }, [isCalibrating]);
 
-  // Activo → gaze listener + dwell tracking
   useEffect(() => {
     const cursor = document.getElementById('gaze-cursor');
     if (!isActive) {
@@ -255,9 +315,9 @@ export function useWebGazer() {
     if (cursor) cursor.style.display = 'block';
     gazeTracker.startDetection();
 
-    let targetEl:  HTMLElement | null = null;
-    let enterTime  = 0;
-    let cooldown   = false;
+    let targetEl: HTMLElement | null = null;
+    let enterTime = 0;
+    let cooldown  = false;
 
     const onGaze = (x: number, y: number) => {
       const c = document.getElementById('gaze-cursor');
@@ -300,17 +360,14 @@ export function useWebGazer() {
     };
   }, [isActive]);
 
-  // Ni calibrando ni activo → apagar cámara
   useEffect(() => {
-    if (!isCalibrating && !isActive) {
-      gazeTracker.stopCamera();
-    }
+    if (!isCalibrating && !isActive) gazeTracker.stopCamera();
   }, [isCalibrating, isActive]);
 
   return { isActive, isCalibrating, startCalibration, finishCalibration, deactivate };
 }
 
-// ─── Dwell progress helpers ───────────────────────────────────────────────────
+// ─── Dwell helpers ────────────────────────────────────────────────────────────
 function resetProgress(el: HTMLElement) {
   const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
   if (bar) bar.style.width = '0%';
