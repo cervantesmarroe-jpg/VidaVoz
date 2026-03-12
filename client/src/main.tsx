@@ -2,29 +2,44 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// Suppress errors from WebGazer's internal resource loading.
-// WebGazer auto-starts from localStorage and tries to fetch TF.js workers/models
-// that may return HTML (404) in some environments, throwing SyntaxError
-// "Unexpected token '<'" — this would otherwise crash the whole app.
-const suppressWebGazerError = (msg: string) =>
+// Suppress residual WebGazer internal errors (TF.js workers, stream issues)
+// so they never crash the React tree.
+const isWebGazerNoise = (msg: string) =>
   msg.includes("Unexpected token '<'") ||
-  msg.includes('webgazer') ||
   msg.includes('No stream') ||
-  msg.includes('TensorFlow') ||
-  msg.includes('tfjs');
+  msg.includes('webgazer') ||
+  msg.includes('tfjs') ||
+  msg.includes('TensorFlow');
 
-window.addEventListener('error', (event) => {
-  if (suppressWebGazerError(event.message || '')) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  }
-}, true); // capture phase — runs before anything else
+window.addEventListener('error', (e) => {
+  if (isWebGazerNoise(e.message || '')) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 
-window.addEventListener('unhandledrejection', (event) => {
-  const msg = event.reason?.message || String(event.reason || '');
-  if (suppressWebGazerError(msg)) {
-    event.preventDefault();
-  }
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || String(e.reason || '');
+  if (isWebGazerNoise(msg)) e.preventDefault();
 });
+
+// Configure WebGazer as soon as it is available on window:
+// - Use ridge regression (no TF.js workers, no external CDN fetches)
+// - Pause immediately so it doesn't auto-start the camera
+function configureWebGazer() {
+  try {
+    const wg = (window as any).webgazer;
+    if (!wg) return;
+    wg.setRegression('ridge');       // lightweight, no workers
+    wg.showVideoPreview(false);
+    wg.params.showFaceOverlay = false;
+    wg.params.showFaceFeedbackBox = false;
+    // Pause — will be resumed only when user activates calibration
+    wg.pause();
+  } catch (_) {}
+}
+
+if ((window as any).webgazer) {
+  configureWebGazer();
+} else {
+  window.addEventListener('load', configureWebGazer);
+}
 
 createRoot(document.getElementById("root")!).render(<App />);
