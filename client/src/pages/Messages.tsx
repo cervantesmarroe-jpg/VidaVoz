@@ -45,33 +45,33 @@ export default function Messages() {
     <Layout>
       <div className="h-full p-6 md:p-8 flex flex-col">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl md:text-5xl font-bold text-blue-400 uppercase tracking-widest">
+          <h2 className="text-3xl md:text-5xl font-bold text-sky-600 uppercase tracking-widest">
             Mensajes
           </h2>
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <button className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-2xl font-bold text-xl flex items-center gap-3 transition-colors">
+              <button className="bg-sky-500 hover:bg-sky-400 text-white px-6 py-4 rounded-2xl font-bold text-xl flex items-center gap-3 transition-colors shadow-md">
                 <Plus className="w-8 h-8" />
                 AÑADIR MENSAJE
               </button>
             </DialogTrigger>
-            <DialogContent aria-describedby={undefined} className="bg-slate-900 border-slate-700 text-white p-8 max-w-2xl rounded-3xl">
+            <DialogContent aria-describedby={undefined} className="bg-white border-2 border-stone-200 text-stone-800 p-8 max-w-2xl rounded-3xl shadow-2xl">
               <DialogHeader>
-                <DialogTitle className="text-3xl mb-4">Añadir Nuevo Mensaje</DialogTitle>
+                <DialogTitle className="text-3xl mb-4 text-stone-800">Añadir Nuevo Mensaje</DialogTitle>
               </DialogHeader>
               <div className="space-y-6">
                 <Input 
                   value={newMsg}
                   onChange={(e) => setNewMsg(e.target.value)}
                   placeholder="Escriba el mensaje aquí..."
-                  className="bg-slate-800 border-slate-600 text-2xl p-6 h-20 rounded-2xl"
+                  className="bg-stone-50 border-stone-300 text-stone-800 text-2xl p-6 h-20 rounded-2xl"
                 />
                 <DialogFooter>
                   <Button 
                     onClick={handleAdd} 
                     disabled={createMutation.isPending}
-                    className="w-full h-20 text-2xl font-bold rounded-2xl bg-blue-600 hover:bg-blue-500"
+                    className="w-full h-20 text-2xl font-bold rounded-2xl bg-sky-500 hover:bg-sky-400 text-white"
                   >
                     {createMutation.isPending ? <Loader2 className="w-8 h-8 animate-spin" /> : "GUARDAR"}
                   </Button>
@@ -91,7 +91,7 @@ export default function Messages() {
                 speakText={msg.phrase}
                 className="min-h-[140px]"
               >
-                <Icon className="w-12 h-12 mb-2 opacity-80" />
+                <Icon className="w-12 h-12 mb-2 opacity-90" />
                 <span className="text-xl md:text-2xl font-bold tracking-wide">
                   {msg.text}
                 </span>
@@ -101,7 +101,7 @@ export default function Messages() {
 
           {isLoading ? (
             <div className="col-span-full flex justify-center py-12">
-              <Loader2 className="w-16 h-16 animate-spin text-blue-500" />
+              <Loader2 className="w-16 h-16 animate-spin text-sky-400" />
             </div>
           ) : (
             customMessages?.map((msg) => (
@@ -109,7 +109,7 @@ export default function Messages() {
                 <GazeButton 
                   theme="slate" 
                   speakText={msg.text}
-                  className="min-h-[140px] border-blue-900/50"
+                  className="min-h-[140px] border-sky-200/60"
                 >
                   <span className="text-xl md:text-2xl font-bold tracking-wide">
                     {msg.text}
@@ -117,7 +117,7 @@ export default function Messages() {
                 </GazeButton>
                 <button
                   onClick={() => deleteMutation.mutate(msg.id)}
-                  className="absolute top-2 right-2 bg-red-500/20 text-red-400 p-3 rounded-full hover:bg-red-500 hover:text-white transition-colors"
+                  className="absolute top-2 right-2 bg-rose-100 text-rose-500 p-3 rounded-full hover:bg-rose-500 hover:text-white transition-colors"
                 >
                   <Trash2 className="w-6 h-6" />
                 </button>

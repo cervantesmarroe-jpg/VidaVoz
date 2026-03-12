@@ -18,7 +18,7 @@ export default function Urgent() {
   return (
     <Layout>
       <div className="h-full p-4 md:p-6 flex flex-col">
-        <h2 className="text-2xl md:text-4xl font-bold text-red-500 mb-6 uppercase tracking-widest text-center">
+        <h2 className="text-2xl md:text-4xl font-bold text-rose-600 mb-6 uppercase tracking-widest text-center">
           Necesidades Urgentes
         </h2>
         

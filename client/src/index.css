@@ -6,42 +6,40 @@
 
 @layer base {
   :root {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+    --background: 40 60% 97%;
+    --foreground: 20 10% 15%;
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
+    --card: 36 40% 99%;
+    --card-foreground: 20 10% 15%;
 
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 36 40% 99%;
+    --popover-foreground: 20 10% 15%;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 195 65% 38%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 38 30% 92%;
+    --secondary-foreground: 20 10% 20%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 38 20% 94%;
+    --muted-foreground: 20 10% 45%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 38 30% 92%;
+    --accent-foreground: 20 10% 20%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 5 75% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --border: 38 20% 85%;
+    --input: 38 20% 88%;
+    --ring: 195 65% 38%;
 
     --radius: 1rem;
   }
 
   body {
-    @apply bg-slate-950 text-slate-50 antialiased overflow-hidden selection:bg-primary/30;
+    @apply bg-amber-50 text-stone-800 antialiased overflow-hidden selection:bg-teal-200;
     font-family: 'Lexend', sans-serif;
-    /* Force dark mode */
-    color-scheme: dark;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -55,8 +53,8 @@
     display: none;
   }
   .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -67,15 +65,15 @@
   left: 0;
   width: 40px;
   height: 40px;
-  background-color: rgba(239, 68, 68, 0.6); /* Red */
-  border: 4px solid rgba(239, 68, 68, 1);
+  background-color: rgba(20, 184, 166, 0.5);
+  border: 4px solid rgba(15, 118, 110, 1);
   border-radius: 50%;
-  border-bottom-right-radius: 0; /* Gives it a slight pointer shape */
+  border-bottom-right-radius: 0;
   transform: translate(-50%, -50%) rotate(45deg);
   pointer-events: none;
   z-index: 999999;
   transition: opacity 0.3s;
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.6);
   display: none;
 }
 
@@ -83,7 +81,7 @@
 .gaze-target {
   position: relative;
   overflow: hidden;
-  transform: translateZ(0); /* Force GPU acceleration */
+  transform: translateZ(0);
 }
 
 .gaze-progress-bar {
@@ -91,7 +89,7 @@
   bottom: 0;
   left: 0;
   height: 8px;
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.7);
   width: 0%;
   pointer-events: none;
   z-index: 10;
@@ -105,15 +103,15 @@
 /* Custom large slider styling */
 input[type=range].gaze-slider {
   -webkit-appearance: none;
-  @apply w-full h-12 bg-slate-800 rounded-full outline-none border-4 border-slate-700;
+  @apply w-full h-12 bg-stone-200 rounded-full outline-none border-4 border-stone-300;
 }
 
 input[type=range].gaze-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  @apply w-20 h-20 bg-yellow-400 rounded-full cursor-pointer border-4 border-slate-900 shadow-xl;
+  @apply w-20 h-20 bg-amber-400 rounded-full cursor-pointer border-4 border-white shadow-xl;
 }
 
 input[type=range].gaze-slider::-moz-range-thumb {
-  @apply w-20 h-20 bg-yellow-400 rounded-full cursor-pointer border-4 border-slate-900 shadow-xl;
+  @apply w-20 h-20 bg-amber-400 rounded-full cursor-pointer border-4 border-white shadow-xl;
 }
