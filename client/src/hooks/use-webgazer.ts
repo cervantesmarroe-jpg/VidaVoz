@@ -22,7 +22,8 @@ declare global {
 }
 
 const DWELL_MS = 2000;
-const WG_URL   = 'https://webgazer.cs.brown.edu/webgazer.js';
+// Served locally so no CDN dependency and no cross-origin worker restrictions
+const WG_URL = '/webgazer.js';
 
 // ─── WebGazer bootstrap helpers ────────────────────────────────────────────
 
