@@ -20,7 +20,7 @@ const NAV_ITEMS = [
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { isActive, isCalibrating, startCalibration, deactivate, isScriptLoaded } = useWebGazer();
+  const { isActive, isCalibrating, startCalibration, deactivate } = useWebGazer();
 
   const handleToggle = () => {
     if (isActive || isCalibrating) {
@@ -50,7 +50,6 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Eye Tracking Toggle */}
         <button
           onClick={handleToggle}
-          disabled={!isScriptLoaded}
           data-testid="button-toggle-eyetracking"
           className={`
             flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-xl transition-all border-2

@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { create } from 'zustand';
 
 interface WebGazerState {
-  isActive: boolean;        // gaze listener controlling the UI
-  isCalibrating: boolean;   // calibration overlay is visible
+  isActive: boolean;
+  isCalibrating: boolean;
   startCalibration: () => void;
   finishCalibration: () => void;
   deactivate: () => void;
@@ -22,71 +22,87 @@ declare global {
 }
 
 const DWELL_TIME_MS = 2000;
+const WEBGAZER_SCRIPT_ID = 'webgazer-script';
+
+// Remove WebGazer's stored data from localStorage to prevent auto-start
+function clearWebGazerStorage() {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.toLowerCase().includes('webgazer'))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
+}
+
+// Load the WebGazer script on demand and resolve when ready
+function loadWebGazerScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.getElementById(WEBGAZER_SCRIPT_ID)) {
+      resolve();
+      return;
+    }
+    clearWebGazerStorage();
+    const script = document.createElement('script');
+    script.id = WEBGAZER_SCRIPT_ID;
+    script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('WebGazer script failed to load'));
+    document.body.appendChild(script);
+  });
+}
 
 export function useWebGazer() {
   const { isActive, isCalibrating, startCalibration, finishCalibration, deactivate } =
     useWebGazerStore();
-  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+
+  const [isScriptLoaded, setIsScriptLoaded] = useState(
+    () => !!document.getElementById(WEBGAZER_SCRIPT_ID)
+  );
 
   const targetRef = useRef<HTMLElement | null>(null);
   const startTimeRef = useRef<number>(0);
   const clickCooldownRef = useRef<boolean>(false);
 
-  // 1. Inject WebGazer script once
+  // Create gaze cursor element once
   useEffect(() => {
-    if (document.getElementById('webgazer-script')) {
-      setIsScriptLoaded(true);
-      return;
+    if (!document.getElementById('gaze-cursor')) {
+      const cursor = document.createElement('div');
+      cursor.id = 'gaze-cursor';
+      document.body.appendChild(cursor);
     }
-
-    const script = document.createElement('script');
-    script.id = 'webgazer-script';
-    script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
-    script.async = true;
-    script.onload = () => {
-      try {
-        // Immediately pause WebGazer to stop it auto-starting from stored localStorage data
-        if (window.webgazer) {
-          window.webgazer.pause();
-          window.webgazer.showVideoPreview(false);
-          if (window.webgazer.params) {
-            window.webgazer.params.showFaceOverlay = false;
-            window.webgazer.params.showFaceFeedbackBox = true;
-          }
-        }
-        setIsScriptLoaded(true);
-      } catch (e) {
-        console.warn('WebGazer init error (non-fatal):', e);
-        setIsScriptLoaded(true);
-      }
-    };
-    script.onerror = () => console.warn('WebGazer script failed to load.');
-    document.body.appendChild(script);
-
-    const cursor = document.createElement('div');
-    cursor.id = 'gaze-cursor';
-    document.body.appendChild(cursor);
-
     return () => {
       document.getElementById('gaze-cursor')?.remove();
     };
   }, []);
 
-  // 2. Start WebGazer camera when calibration begins
+  // When calibration begins: load script (if not yet), then start WebGazer
   useEffect(() => {
-    if (!isScriptLoaded || !window.webgazer) return;
     if (!isCalibrating) return;
 
-    try { window.webgazer.resume(); } catch (_) {}
-    try { window.webgazer.begin(); } catch (e) {
-      console.warn('WebGazer begin error (non-fatal):', e);
-    }
-    try { window.webgazer.showVideoPreview(true); } catch (_) {}
-    // Clear previous regression data so calibration starts fresh
-    try { window.webgazer.clearData(); } catch (_) {}
-  }, [isCalibrating, isScriptLoaded]);
+    (async () => {
+      try {
+        await loadWebGazerScript();
+        setIsScriptLoaded(true);
 
-  // 3. Activate gaze listener after calibration completes
+        if (!window.webgazer) return;
+
+        // Configure before starting
+        if (window.webgazer.params) {
+          window.webgazer.params.showFaceOverlay = false;
+          window.webgazer.params.showFaceFeedbackBox = true;
+        }
+
+        try { window.webgazer.showVideoPreview(true); } catch (_) {}
+        try { window.webgazer.begin(); } catch (e) {
+          console.warn('WebGazer begin (non-fatal):', e);
+        }
+      } catch (e) {
+        console.warn('WebGazer load failed (non-fatal):', e);
+      }
+    })();
+  }, [isCalibrating]);
+
+  // Gaze listener: activate after calibration, deactivate otherwise
   useEffect(() => {
     if (!isScriptLoaded || !window.webgazer) return;
 
@@ -95,60 +111,72 @@ export function useWebGazer() {
     if (isActive) {
       if (cursorEl) cursorEl.style.display = 'block';
 
-      window.webgazer.setGazeListener((data: any, elapsedTime: number) => {
-        if (!data) return;
-        const { x, y } = data;
+      try {
+        window.webgazer.setGazeListener((data: any, elapsedTime: number) => {
+          if (!data) return;
+          const { x, y } = data;
 
-        const cursor = document.getElementById('gaze-cursor');
-        if (cursor) cursor.style.transform = `translate(${x}px, ${y}px) rotate(45deg)`;
+          const cursor = document.getElementById('gaze-cursor');
+          if (cursor) cursor.style.transform = `translate(${x}px, ${y}px) rotate(45deg)`;
 
-        if (cursor) cursor.style.display = 'none';
-        const elUnder = document.elementFromPoint(x, y) as HTMLElement;
-        if (cursor) cursor.style.display = 'block';
+          if (cursor) cursor.style.display = 'none';
+          const elUnder = document.elementFromPoint(x, y) as HTMLElement;
+          if (cursor) cursor.style.display = 'block';
 
-        const target = elUnder?.closest('[data-gaze-target="true"]') as HTMLElement;
+          const target = elUnder?.closest('[data-gaze-target="true"]') as HTMLElement;
 
-        if (target) {
-          if (target !== targetRef.current) {
-            if (targetRef.current) resetProgress(targetRef.current);
-            targetRef.current = target;
-            startTimeRef.current = elapsedTime;
-            clickCooldownRef.current = false;
-          } else if (!clickCooldownRef.current) {
-            const progress = Math.min((elapsedTime - startTimeRef.current) / DWELL_TIME_MS, 1);
-            updateProgress(target, progress);
-            if (progress >= 1) {
-              target.click();
-              resetProgress(target);
-              clickCooldownRef.current = true;
-              target.style.transform = 'scale(0.95)';
-              setTimeout(() => { target.style.transform = ''; }, 150);
+          if (target) {
+            if (target !== targetRef.current) {
+              if (targetRef.current) resetProgress(targetRef.current);
+              targetRef.current = target;
+              startTimeRef.current = elapsedTime;
+              clickCooldownRef.current = false;
+            } else if (!clickCooldownRef.current) {
+              const progress = Math.min(
+                (elapsedTime - startTimeRef.current) / DWELL_TIME_MS,
+                1
+              );
+              updateProgress(target, progress);
+              if (progress >= 1) {
+                target.click();
+                resetProgress(target);
+                clickCooldownRef.current = true;
+                target.style.transform = 'scale(0.95)';
+                setTimeout(() => { target.style.transform = ''; }, 150);
+              }
+            }
+          } else {
+            if (targetRef.current) {
+              resetProgress(targetRef.current);
+              targetRef.current = null;
             }
           }
-        } else {
-          if (targetRef.current) {
-            resetProgress(targetRef.current);
-            targetRef.current = null;
-          }
-        }
-      });
+        });
+      } catch (e) {
+        console.warn('WebGazer setGazeListener (non-fatal):', e);
+      }
     } else {
       if (cursorEl) cursorEl.style.display = 'none';
-      try {
-        window.webgazer.clearGazeListener();
-      } catch (_) {}
-      if (!isCalibrating) {
-        try { window.webgazer.pause(); } catch (_) {}
-        try { window.webgazer.showVideoPreview(false); } catch (_) {}
-      }
       if (targetRef.current) {
         resetProgress(targetRef.current);
         targetRef.current = null;
       }
+      try { window.webgazer.clearGazeListener(); } catch (_) {}
+      if (!isCalibrating) {
+        try { window.webgazer.pause(); } catch (_) {}
+        try { window.webgazer.showVideoPreview(false); } catch (_) {}
+      }
     }
   }, [isActive, isScriptLoaded, isCalibrating]);
 
-  return { isActive, isCalibrating, startCalibration, finishCalibration, deactivate, isScriptLoaded };
+  return {
+    isActive,
+    isCalibrating,
+    startCalibration,
+    finishCalibration,
+    deactivate,
+    isScriptLoaded,
+  };
 }
 
 function resetProgress(el: HTMLElement) {
