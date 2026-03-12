@@ -9,6 +9,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { useWebGazer } from "@/hooks/use-webgazer";
+import { CalibrationOverlay } from "@/components/CalibrationOverlay";
 
 const NAV_ITEMS = [
   { path: "/", label: "URGENTE", icon: AlertTriangle, color: "text-rose-600", activeBg: "bg-rose-100" },
@@ -19,11 +20,22 @@ const NAV_ITEMS = [
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { isActive, toggleActive, isScriptLoaded } = useWebGazer();
+  const { isActive, isCalibrating, startCalibration, deactivate, isScriptLoaded } = useWebGazer();
+
+  const handleToggle = () => {
+    if (isActive || isCalibrating) {
+      deactivate();
+    } else {
+      startCalibration();
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen max-h-screen bg-amber-50 overflow-hidden">
-      
+
+      {/* Calibration overlay — shown on top of everything */}
+      {isCalibrating && <CalibrationOverlay />}
+
       {/* Top Header / App Bar */}
       <header className="h-24 flex items-center justify-between px-6 md:px-12 bg-white border-b-2 border-amber-100 shrink-0 z-50 shadow-sm">
         <div className="flex items-center gap-4">
@@ -37,19 +49,22 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Eye Tracking Toggle */}
         <button
-          onClick={toggleActive}
+          onClick={handleToggle}
           disabled={!isScriptLoaded}
+          data-testid="button-toggle-eyetracking"
           className={`
             flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-xl transition-all border-2
-            ${isActive 
-              ? 'bg-teal-100 text-teal-700 border-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.25)]' 
+            ${isActive
+              ? 'bg-teal-100 text-teal-700 border-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.25)]'
+              : isCalibrating
+              ? 'bg-amber-100 text-amber-700 border-amber-400 animate-pulse'
               : 'bg-stone-100 text-stone-600 border-stone-300 hover:bg-stone-200'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
         >
-          {isActive ? <Eye className="w-8 h-8" /> : <EyeOff className="w-8 h-8" />}
-          {isActive ? "MIRADA ACTIVA" : "ACTIVAR MIRADA"}
+          {isActive || isCalibrating ? <Eye className="w-8 h-8" /> : <EyeOff className="w-8 h-8" />}
+          {isActive ? "MIRADA ACTIVA" : isCalibrating ? "CALIBRANDO…" : "ACTIVAR MIRADA"}
         </button>
       </header>
 
@@ -64,14 +79,14 @@ export function Layout({ children }: { children: ReactNode }) {
           const isActiveTab = location === item.path;
           const Icon = item.icon;
           return (
-            <Link 
-              key={item.path} 
+            <Link
+              key={item.path}
               href={item.path}
               className={`
                 flex-1 flex flex-col items-center justify-center gap-2 md:gap-4 rounded-3xl
                 transition-all duration-300 border-2
-                ${isActiveTab 
-                  ? `${item.activeBg} border-current ${item.color}` 
+                ${isActiveTab
+                  ? `${item.activeBg} border-current ${item.color}`
                   : 'border-transparent text-stone-400 hover:bg-amber-50 hover:text-stone-600'
                 }
               `}
