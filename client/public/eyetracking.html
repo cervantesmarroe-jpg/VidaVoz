@@ -113,10 +113,30 @@
       position: absolute; bottom: 16px; left: 16px; z-index: 25;
       background: #1e293b; border: 1px solid #334155; border-radius: 12px;
       padding: 10px 20px; font-size: 0.95rem;
-      display: none; gap: 20px;
+      display: none; gap: 20px; align-items: center;
     }
     #data-panel.visible { display: flex; }
     #data-panel span { font-weight: 700; color: #818cf8; }
+
+    /* Botón recalibrar — aparece durante el tracking */
+    #btn-recalibrate {
+      background: #dc2626; color: #fff;
+      font-size: 0.9rem; font-weight: 800;
+      padding: 8px 18px; border: none; border-radius: 10px;
+      cursor: pointer; letter-spacing: 0.04em;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    #btn-recalibrate:hover  { background: #ef4444; }
+    #btn-recalibrate:active { transform: scale(0.95); }
+
+    /* Toast de aviso: cara no detectada */
+    #face-toast {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626;
+      border-radius: 10px; padding: 10px 24px; font-weight: 700;
+      z-index: 40; display: none; pointer-events: none;
+    }
 
     .medical-btn {
       background: #6366f1; color: #fff;
@@ -174,7 +194,11 @@
       <p>X: <span id="val-x">0</span></p>
       <p>Y: <span id="val-y">0</span></p>
       <p>Muestras: <span id="val-samples">0</span></p>
+      <button id="btn-recalibrate">↺ RECALIBRAR</button>
     </div>
+
+    <!-- Toast: cara no detectada -->
+    <div id="face-toast">⚠ IA no detecta tu rostro — asegúrate de tener buena luz</div>
   </div>
 
   <script type="module" src="/eyetracking-script.js"></script>

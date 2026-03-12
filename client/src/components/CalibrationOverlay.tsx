@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { CheckCircle, Eye, Camera, CameraOff, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { CheckCircle, Eye, Camera, CameraOff, Loader2, RotateCcw, AlertTriangle } from "lucide-react";
 import { useWebGazerStore, gazeTracker } from "@/hooks/use-webgazer";
 
 const CLICKS_NEEDED = 5;
@@ -18,13 +18,16 @@ const CALIBRATION_POINTS = [
 
 type CameraStatus = 'loading' | 'active' | 'denied';
 
+const FRESH_CLICKS = () => CALIBRATION_POINTS.map(() => 0);
+
 export function CalibrationOverlay() {
   const { finishCalibration, deactivate } = useWebGazerStore();
-  const [clicks, setClicks]     = useState<number[]>(CALIBRATION_POINTS.map(() => 0));
+  const [clicks, setClicks]           = useState<number[]>(FRESH_CLICKS());
   const [lastClicked, setLastClicked] = useState<number | null>(null);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('loading');
+  const [faceWarning, setFaceWarning] = useState(false);
+  const faceToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Wire up GazeTracker camera status callbacks
   useEffect(() => {
     gazeTracker.onCameraReady = () => setCameraStatus('active');
     gazeTracker.onCameraError = () => setCameraStatus('denied');
@@ -39,7 +42,18 @@ export function CalibrationOverlay() {
   const allDone     = clicks.every((c) => c >= CLICKS_NEEDED);
   const progress    = Math.round((totalClicks / totalNeeded) * 100);
 
+  // ── 3. safeRecord: solo incrementa si la IA detecta el rostro ────────────
   const handlePointClick = useCallback((index: number, clientX: number, clientY: number) => {
+    const recorded = gazeTracker.recordCalibrationPoint(clientX, clientY);
+
+    if (!recorded) {
+      // Cara no detectada — mostrar aviso (no alert, no interrumpe el flujo)
+      setFaceWarning(true);
+      if (faceToastTimer.current) clearTimeout(faceToastTimer.current);
+      faceToastTimer.current = setTimeout(() => setFaceWarning(false), 2500);
+      return;
+    }
+
     setLastClicked(index);
     setTimeout(() => setLastClicked(null), 220);
 
@@ -49,9 +63,15 @@ export function CalibrationOverlay() {
       next[index]++;
       return next;
     });
+  }, []);
 
-    // Record current eye position for this screen coordinate
-    gazeTracker.recordCalibrationPoint(clientX, clientY);
+  // ── 1. resetCalibration (Reset Clínico) ──────────────────────────────────
+  const resetCalibration = useCallback(() => {
+    gazeTracker.clearCalibration();
+    setClicks(FRESH_CLICKS());
+    setLastClicked(null);
+    setFaceWarning(false);
+    console.log('Sistema reiniciado. Esperando nuevos datos de entrenamiento.');
   }, []);
 
   const handleFinish = useCallback(() => {
@@ -95,12 +115,23 @@ export function CalibrationOverlay() {
             </p>
           </div>
         </div>
-        <button
-          onClick={deactivate}
-          className="text-stone-400 hover:text-white font-bold px-4 py-3 rounded-2xl border-2 border-stone-600 hover:border-stone-400 transition-colors text-base shrink-0 ml-4"
-        >
-          CANCELAR
-        </button>
+        <div className="flex items-center gap-3 shrink-0 ml-4">
+          {/* 2. Botón de recalibración */}
+          <button
+            onClick={resetCalibration}
+            data-testid="button-recalibrate"
+            className="flex items-center gap-2 text-stone-300 hover:text-white font-bold px-4 py-3 rounded-2xl border-2 border-stone-600 hover:border-amber-400 transition-colors text-base"
+          >
+            <RotateCcw className="w-4 h-4" />
+            REINICIAR
+          </button>
+          <button
+            onClick={deactivate}
+            className="text-stone-400 hover:text-white font-bold px-4 py-3 rounded-2xl border-2 border-stone-600 hover:border-stone-400 transition-colors text-base"
+          >
+            CANCELAR
+          </button>
+        </div>
       </div>
 
       {/* Status badge + progress bar */}
@@ -119,6 +150,14 @@ export function CalibrationOverlay() {
         </span>
       </div>
 
+      {/* Toast: cara no detectada (safeRecord feedback) */}
+      {faceWarning && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-red-950 border border-red-600 text-red-300 font-bold px-6 py-3 rounded-2xl shadow-2xl pointer-events-none animate-pulse">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          IA no detecta tu rostro — asegúrate de tener buena luz
+        </div>
+      )}
+
       {/* 9 calibration dots */}
       <div className="flex-1 relative">
         {CALIBRATION_POINTS.map((pt, idx) => {
@@ -135,8 +174,8 @@ export function CalibrationOverlay() {
                 const rect = e.currentTarget.getBoundingClientRect();
                 handlePointClick(
                   idx,
-                  rect.left + rect.width / 2,
-                  rect.top  + rect.height / 2
+                  rect.left + rect.width  / 2,
+                  rect.top  + rect.height / 2,
                 );
               }}
               style={{

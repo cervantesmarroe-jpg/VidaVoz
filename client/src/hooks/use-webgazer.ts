@@ -236,10 +236,11 @@ class GazeTracker {
   }
 
   // Captura de datos durante la calibración — patrón del usuario
-  recordCalibrationPoint(screenX: number, screenY: number) {
+  // Devuelve true si se grabó la muestra, false si la cara no se detectó (safeRecord)
+  recordCalibrationPoint(screenX: number, screenY: number): boolean {
     // Lee currentResults (el último frame detectado) — nunca rellamamos detectForVideo
     const shapes = this.currentResults?.categories;
-    if (!shapes) return;
+    if (!shapes) return false;
 
     const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
     const eyeX = find('eyeLookOutLeft') - find('eyeLookInLeft');
@@ -250,6 +251,7 @@ class GazeTracker {
     if (this.trainingData.length >= 27) { // 9 puntos × 3 clics mínimo
       this.calculateCalibration();
     }
+    return true;
   }
 
   private calculateCalibration() {

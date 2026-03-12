@@ -41,8 +41,33 @@ const ALPHA = 0.22;
 // recordCalibrationPoint() lee de aquí — nunca rellamamos detectForVideo
 let currentResults = null;
 
+// ─── 1b. Reset Clínico ────────────────────────────────────────────────────
+// Vacía el historial y vuelve a mostrar la pantalla de calibración
+function resetCalibration() {
+  trainingData = [];
+  isCalibrated = false;
+  allCalibrated = false;
+
+  // Resetear contadores y aspecto visual de los puntos
+  document.querySelectorAll('.calibration-point').forEach(pt => {
+    const id = pt.dataset.id;
+    clickCounts[id] = 0;
+    pt.textContent = CLICKS_NEEDED;
+    pt.classList.remove('done');
+  });
+  btnStartTrack.classList.remove('visible');
+
+  // UI: ocultar puntero y panel, mostrar calibración
+  gazeDot.style.display = 'none';
+  dataPanel.classList.remove('visible');
+  screenCalib.classList.add('visible');
+
+  setStatus('Recalibrando — haga clic en los puntos', 'warn');
+  console.log('Sistema reiniciado. Esperando nuevos datos de entrenamiento.');
+}
+
 // ─── 2. Captura de datos durante la calibración ───────────────────────────
-// Patrón exacto del usuario: lee currentResults, no llama detectForVideo
+// recordCalibrationPoint: lee currentResults (caché) — nunca rellamamos detectForVideo
 function recordCalibrationPoint(screenX, screenY) {
   const shapes = currentResults?.faceBlendshapes?.[0]?.categories;
   if (!shapes) {
@@ -62,6 +87,22 @@ function recordCalibrationPoint(screenX, screenY) {
     calculateRegression();
     isCalibrated = true;
     setStatus('¡Calibración Exitosa!', 'ok');
+  }
+}
+
+// ─── 3. safeRecord: solo graba si la IA detecta el rostro ─────────────────
+let faceToastTimer = null;
+
+function safeRecord(screenX, screenY) {
+  if (currentResults && currentResults.faceBlendshapes?.length > 0) {
+    recordCalibrationPoint(screenX, screenY);
+  } else {
+    // Mostrar toast de aviso (no alert — no interrumpe el flujo clínico)
+    const toast = document.getElementById('face-toast');
+    toast.style.display = 'block';
+    clearTimeout(faceToastTimer);
+    faceToastTimer = setTimeout(() => { toast.style.display = 'none'; }, 2500);
+    console.warn('safeRecord: cara no detectada, clic ignorado.');
   }
 }
 
@@ -174,7 +215,8 @@ document.querySelectorAll('.calibration-point').forEach(point => {
     const x    = rect.left + rect.width  / 2;
     const y    = rect.top  + rect.height / 2;
 
-    recordCalibrationPoint(x, y);
+    // safeRecord: solo graba si la IA detecta el rostro en este momento
+    safeRecord(x, y);
 
     const n = trainingData.length;
     valSamples.textContent = n;
@@ -196,6 +238,11 @@ document.querySelectorAll('.calibration-point').forEach(point => {
     }
   });
 });
+
+// ─── Botón recalibrar ──────────────────────────────────────────────────────
+document.getElementById('btn-recalibrate').onclick = () => {
+  resetCalibration();
+};
 
 // ─── Iniciar seguimiento ───────────────────────────────────────────────────
 btnStartTrack.onclick = () => {
