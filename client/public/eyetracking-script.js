@@ -21,6 +21,11 @@ const valSamples    = document.getElementById('val-samples');
 const ctx           = canvas.getContext('2d');
 const CLICKS_NEEDED = 3;
 
+// ─── Configuraciones para comunicación fluida ─────────────────────────────
+const SENSITIVITY = 1.5;   // ajusta cuánto se mueve el cursor respecto al ojo
+const DWELL_TIME  = 1500;  // ms para activar un botón
+const ALPHA       = 0.2;   // filtro paso bajo: 0.8·prev + 0.2·nuevo
+
 // ─── 1. Variables de estado ────────────────────────────────────────────────
 let faceLandmarker;
 let lastVideoTime  = -1;
@@ -32,10 +37,9 @@ let isCalibrated = false;
 // Modelo de regresión — patrón exacto del usuario
 let regressionModel = { alphaX: 0, betaX: 0, alphaY: 0, betaY: 0 };
 
-// Suavizado EWA
+// Suavizado — filtro paso bajo
 let smoothX = window.innerWidth  / 2;
 let smoothY = window.innerHeight / 2;
-const ALPHA = 0.22;
 
 // currentResults: caché del último resultado de detectForVideo
 // recordCalibrationPoint() lee de aquí — nunca rellamamos detectForVideo
@@ -144,6 +148,16 @@ function calculateRegression() {
   );
 }
 
+// ─── predictUniversalGaze: modo sin calibración ────────────────────────────
+// Mapeo directo basado en el centro de la pantalla.
+// No necesita clics previos — usa un promedio humano estándar con SENSITIVITY.
+function predictUniversalGaze(lookX, lookY) {
+  return {
+    rawX: (window.innerWidth  / 2) + (lookX * window.innerWidth  * SENSITIVITY),
+    rawY: (window.innerHeight / 2) - (lookY * window.innerHeight * SENSITIVITY),
+  };
+}
+
 // ─── 4. Aplicación en tiempo real ─────────────────────────────────────────
 // Patrón exacto del usuario: Coordenada = Alpha + (Beta * ValorOjo)
 function updateGazePoint(eyeX, eyeY) {
@@ -153,11 +167,8 @@ function updateGazePoint(eyeX, eyeY) {
       rawY: regressionModel.alphaY + regressionModel.betaY * eyeY,
     };
   }
-  // Fallback sin calibrar
-  return {
-    rawX: window.innerWidth  / 2 + eyeX * window.innerWidth  * 0.8,
-    rawY: window.innerHeight / 2 - eyeY * window.innerHeight * 0.8,
-  };
+  // Fallback: predictUniversalGaze con SENSITIVITY 1.5
+  return predictUniversalGaze(eyeX, eyeY);
 }
 
 // ─── Inicializar FaceLandmarker ────────────────────────────────────────────

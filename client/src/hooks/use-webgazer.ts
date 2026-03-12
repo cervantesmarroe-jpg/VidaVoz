@@ -6,8 +6,9 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-const DWELL_MS = 2000;
-const ALPHA    = 0.22;   // suavizado EWA
+const SENSITIVITY = 1.5;   // cuánto se mueve el cursor respecto al ojo
+const DWELL_MS    = 1500;  // ms para activar un botón (dwell time)
+const ALPHA       = 0.2;   // filtro paso bajo: 0.8·prev + 0.2·nuevo
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory = { categoryName: string; score: number };
@@ -69,25 +70,34 @@ function calculateRegression(data: TrainingPoint[]): RegressionModel {
   return { alphaX, betaX, alphaY, betaY };
 }
 
-// ─── updateGazePoint: aplica el modelo (o fallback sin calibrar) ──────────────
+// ─── predictUniversalGaze: fallback sin calibración ──────────────────────────
+// Mapeo directo basado en el centro de la pantalla.
+// No necesita clics previos — usa un promedio humano estándar con SENSITIVITY.
+function predictUniversalGaze(
+  lookX: number,
+  lookY: number,
+): { rawX: number; rawY: number } {
+  return {
+    rawX: (window.innerWidth  / 2) + (lookX * window.innerWidth  * SENSITIVITY),
+    rawY: (window.innerHeight / 2) - (lookY * window.innerHeight * SENSITIVITY),
+  };
+}
+
+// ─── updateGazePoint: aplica el modelo calibrado o predictUniversalGaze ───────
 function updateGazePoint(
   eyeX: number,
   eyeY: number,
   model: RegressionModel | null,
 ): { rawX: number; rawY: number } {
   if (model) {
-    // Aplicamos la fórmula: Coordenada = Alpha + (Beta * ValorOjo)
+    // Aplicamos la fórmula calibrada: Coordenada = Alpha + (Beta * ValorOjo)
     return {
       rawX: model.alphaX + model.betaX * eyeX,
       rawY: model.alphaY + model.betaY * eyeY,
     };
   }
-  // Fallback sin calibración: fórmula directa
-  const W = window.innerWidth, H = window.innerHeight;
-  return {
-    rawX: W / 2 + eyeX * W * 0.8,
-    rawY: H / 2 - eyeY * H * 0.8,
-  };
+  // Fallback: predictUniversalGaze con SENSITIVITY 1.5
+  return predictUniversalGaze(eyeX, eyeY);
 }
 
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
