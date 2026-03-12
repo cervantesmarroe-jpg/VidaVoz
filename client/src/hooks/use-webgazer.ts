@@ -52,7 +52,9 @@ export function useWebGazer() {
     try {
       wg()?.showVideoPreview(true);
       wg()?.params && (wg().params.showFaceFeedbackBox = true);
-      wg()?.begin();
+      // .catch() handles the TF.js face-model Promise rejection gracefully
+      const p = wg()?.begin();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch (e) {
       console.warn('webgazer.begin():', e);
     }
