@@ -1,0 +1,61 @@
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
+
+const video = document.getElementById("webcam");
+const gazeDot = document.getElementById("gaze-dot");
+const status = document.getElementById("status");
+const btnStart = document.getElementById("btn-start");
+
+let faceLandmarker;
+let lastVideoTime = -1;
+
+// 1. Configurar la IA de Google
+async function initializeFaceDetection() {
+    const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+            delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        outputFaceBlendshapes: true
+    });
+    status.innerText = "IA Lista. Haz clic en Activar.";
+}
+
+// 2. Activar Cámara
+btnStart.onclick = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    btnStart.style.display = "none";
+    status.innerText = "Monitorizando Mirada...";
+    renderLoop();
+};
+
+// 3. Bucle de Renderizado (Detección en tiempo real)
+async function renderLoop() {
+    if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const results = await faceLandmarker.detectForVideo(video, performance.now());
+
+        if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
+            const shapes = results.faceBlendshapes[0].categories;
+            
+            // Lógica de cálculo de mirada
+            // Buscamos cuánto se mueven los ojos hacia los lados y arriba/abajo
+            const eyeLookInL = shapes.find(s => s.categoryName === "eyeLookInLeft").score;
+            const eyeLookOutL = shapes.find(s => s.categoryName === "eyeLookOutLeft").score;
+            const eyeLookUpL = shapes.find(s => s.categoryName === "eyeLookUpLeft").score;
+            const eyeLookDownL = shapes.find(s => s.categoryName === "eyeLookDownLeft").score;
+
+            // Mapeo a coordenadas de pantalla (Ajustar sensibilidad multiplicando por el factor)
+            const posX = window.innerWidth / 2 + (eyeLookOutL - eyeLookInL) * (window.innerWidth * 0.8);
+            const posY = window.innerHeight / 2 - (eyeLookUpL - eyeLookDownL) * (window.innerHeight * 0.8);
+
+            gazeDot.style.left = `${posX}px`;
+            gazeDot.style.top = `${posY}px`;
+        }
+    }
+    requestAnimationFrame(renderLoop);
+}
+
+initializeFaceDetection();

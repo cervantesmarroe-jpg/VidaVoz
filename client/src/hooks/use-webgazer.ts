@@ -2,98 +2,44 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
-// ─── MediaPipe constants ────────────────────────────────────────────────────
-const WASM_PATH  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
-const MODEL_URL  = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+// ─── MediaPipe ───────────────────────────────────────────────────────────────
+const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-// Iris landmark indices in MediaPipe 478-point face mesh
-const L_IRIS = 468;   // left  iris center (normalized in video frame)
-const R_IRIS = 473;   // right iris center (normalized in video frame)
-// Eye corners used for gaze normalization
-const L_EYE_INNER = 133;  const L_EYE_OUTER = 33;
-const L_EYE_TOP   = 159;  const L_EYE_BOT   = 145;
-const R_EYE_INNER = 362;  const R_EYE_OUTER = 263;
-const R_EYE_TOP   = 386;  const R_EYE_BOT   = 374;
+const DWELL_MS  = 2000;
 
-const DWELL_MS = 2000;
+// Sensibilidad: cuántos píxeles de desplazamiento por unidad de blendshape (0-1)
+// Ajustable — valores más altos = más rango de movimiento ocular cubre la pantalla
+const SCALE_H = 0.8;   // horizontal: multiplica window.innerWidth
+const SCALE_V = 0.8;   // vertical:   multiplica window.innerHeight
 
-// ─── Gaze feature vector ─────────────────────────────────────────────────────
-// Returns [horizRatio, vertRatio] where 0.5/0.5 ≈ looking at centre of face.
-// Uses iris position relative to eye corners so it's stable under head translation.
-function gazeFeature(lm: { x: number; y: number; z: number }[]): [number, number] | null {
-  if (lm.length < 478) return null;
-  const li = lm[L_IRIS], ri = lm[R_IRIS];
-  const liIn = lm[L_EYE_INNER], liOut = lm[L_EYE_OUTER];
-  const riIn = lm[R_EYE_INNER], riOut = lm[R_EYE_OUTER];
-  const liTop = lm[L_EYE_TOP],  liBot = lm[L_EYE_BOT];
-  const riTop = lm[R_EYE_TOP],  riBot = lm[R_EYE_BOT];
+// Suavizado exponencial (0 = sin movimiento, 1 = sin suavizado)
+const ALPHA = 0.22;
 
-  const lhW = Math.abs(liOut.x - liIn.x) || 0.001;
-  const rhW = Math.abs(riOut.x - riIn.x) || 0.001;
-  const lvH = Math.abs(liBot.y - liTop.y) || 0.001;
-  const rvH = Math.abs(riBot.y - riTop.y) || 0.001;
+// ─── Gaze desde blendshapes ──────────────────────────────────────────────────
+// Devuelve la posición de pantalla estimada a partir de cuánto se mueven los ojos.
+// eyeLookOutLeft / eyeLookInLeft → movimiento horizontal
+// eyeLookUpLeft  / eyeLookDownLeft → movimiento vertical
+// Sin calibración: el "centro" es cuando todos los scores son ≈ 0 (mirada al frente).
+type Blendshape = { categoryName: string; score: number };
 
-  const lh = (li.x - liIn.x) / lhW;
-  const rh = (ri.x - riIn.x) / rhW;
-  const lv = (li.y - liTop.y) / lvH;
-  const rv = (ri.y - riTop.y) / rvH;
+function gazeFromBlendshapes(
+  shapes: Blendshape[],
+  offsetX = 0,
+  offsetY = 0,
+): { x: number; y: number } | null {
+  const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
 
-  return [(lh + rh) / 2, (lv + rv) / 2];
-}
+  const bx =  (find('eyeLookOutLeft') - find('eyeLookInLeft'));
+  const by = -(find('eyeLookUpLeft')  - find('eyeLookDownLeft'));
 
-// ─── Affine regression calibration ──────────────────────────────────────────
-// Finds a 2×3 matrix M such that [sx, sy] ≈ M · [gh, gv, 1]
-// using ordinary least squares.
-interface CalibSample { gh: number; gv: number; sx: number; sy: number }
+  const W = window.innerWidth;
+  const H = window.innerHeight;
 
-function fitAffine(samples: CalibSample[]): number[][] | null {
-  const n = samples.length;
-  if (n < 4) return null;
-  // Build X (n×3) and Y (n×2)
-  const X: number[][] = samples.map(s => [s.gh, s.gv, 1]);
-  const Yx: number[] = samples.map(s => s.sx);
-  const Yy: number[] = samples.map(s => s.sy);
-
-  // Solve normal equations: (X'X) β = X'Y
-  const XT = transpose(X);
-  const XTX = multiply(XT, X);
-  const inv = invert3x3(XTX);
-  if (!inv) return null;
-
-  const bx = multiply(inv, reshape(multiply(XT, Yx.map(v => [v]))))
-    .flat() as number[];
-  const by = multiply(inv, reshape(multiply(XT, Yy.map(v => [v]))))
-    .flat() as number[];
-
-  return [bx, by]; // each length 3: [a, b, c] so sx = a*gh + b*gv + c
-}
-
-function predictScreen(M: number[][], gh: number, gv: number): [number, number] {
-  const [bx, by] = M;
-  return [
-    bx[0] * gh + bx[1] * gv + bx[2],
-    by[0] * gh + by[1] * gv + by[2],
-  ];
-}
-
-// ─── Matrix helpers (pure JS, tiny 3×3 operations) ──────────────────────────
-function transpose(A: number[][]): number[][] {
-  return A[0].map((_, c) => A.map(r => r[c]));
-}
-function multiply(A: number[][], B: number[][]): number[][] {
-  return A.map(r => B[0].map((_, c) => r.reduce((s, _, k) => s + r[k] * B[k][c], 0)));
-}
-function reshape(A: number[][]): number[][] { return A; }
-function invert3x3(m: number[][]): number[][] | null {
-  const [[a,b,c],[d,e,f],[g,h,i]] = m;
-  const det = a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
-  if (Math.abs(det) < 1e-10) return null;
-  const inv = 1 / det;
-  return [
-    [(e*i-f*h)*inv, (c*h-b*i)*inv, (b*f-c*e)*inv],
-    [(f*g-d*i)*inv, (a*i-c*g)*inv, (c*d-a*f)*inv],
-    [(d*h-e*g)*inv, (b*g-a*h)*inv, (a*e-b*d)*inv],
-  ];
+  return {
+    x: W / 2 + bx * W * SCALE_H + offsetX,
+    y: H / 2 + by * H * SCALE_V + offsetY,
+  };
 }
 
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
@@ -105,12 +51,22 @@ class GazeTracker {
   private stream:        MediaStream | null = null;
   private rafId:         number = 0;
   private lastTime:      number = -1;
-  private calibSamples:  CalibSample[] = [];
-  private calibMatrix:   number[][] | null = null;
-  private gazeListeners: Set<GazeCallback> = new Set();
-  private currentFeature: [number, number] | null = null;
 
-  // Status callbacks
+  // Suavizado
+  private smoothX = window.innerWidth  / 2;
+  private smoothY = window.innerHeight / 2;
+
+  // Calibración: offset de pantalla para centrar el punto de mirada
+  private offsetX = 0;
+  private offsetY = 0;
+
+  // Muestras de calibración: blendshape_gaze → screen_target
+  private calibSamples: { rawX: number; rawY: number; sx: number; sy: number }[] = [];
+  private calibrated = false;
+
+  private gazeListeners: Set<GazeCallback> = new Set();
+
+  // Callbacks de estado
   onCameraReady: (() => void) | null = null;
   onCameraError: (() => void) | null = null;
   onInit:        (() => void) | null = null;
@@ -120,14 +76,14 @@ class GazeTracker {
       const filesetResolver = await FilesetResolver.forVisionTasks(WASM_PATH);
       this.landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-        runningMode: 'VIDEO',
-        numFaces: 1,
-        outputFaceBlendshapes: false,
+        runningMode:          'VIDEO',
+        numFaces:             1,
+        outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: false,
       });
       this.onInit?.();
     } catch (err) {
-      console.warn('GazeTracker: FaceLandmarker failed to init', err);
+      console.warn('GazeTracker: FaceLandmarker init failed', err);
     }
   }
 
@@ -153,7 +109,8 @@ class GazeTracker {
       v = document.createElement('video');
       v.id = 'gaze-video';
       v.setAttribute('playsinline', '');
-      v.setAttribute('autoplay', '');
+      v.setAttribute('autoplay',   '');
+      v.muted = true;
       v.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1';
       document.body.appendChild(v);
     }
@@ -167,14 +124,16 @@ class GazeTracker {
         this.lastTime = this.video.currentTime;
         try {
           const res = this.landmarker!.detectForVideo(this.video!, ts);
-          if (res.faceLandmarks.length > 0) {
-            const feat = gazeFeature(res.faceLandmarks[0]);
-            if (feat) {
-              this.currentFeature = feat;
-              if (this.calibMatrix) {
-                const [sx, sy] = predictScreen(this.calibMatrix, feat[0], feat[1]);
-                this.gazeListeners.forEach(cb => cb(sx, sy));
-              }
+          const shapes = res.faceBlendshapes?.[0]?.categories;
+          if (shapes) {
+            const pos = gazeFromBlendshapes(shapes, this.offsetX, this.offsetY);
+            if (pos) {
+              // Suavizado EWA
+              this.smoothX = ALPHA * pos.x + (1 - ALPHA) * this.smoothX;
+              this.smoothY = ALPHA * pos.y + (1 - ALPHA) * this.smoothY;
+              const gx = Math.max(0, Math.min(window.innerWidth,  this.smoothX));
+              const gy = Math.max(0, Math.min(window.innerHeight, this.smoothY));
+              this.gazeListeners.forEach(cb => cb(gx, gy));
             }
           }
         } catch (_) {}
@@ -194,66 +153,77 @@ class GazeTracker {
     this.stream?.getTracks().forEach(t => t.stop());
     this.stream = null;
     document.getElementById('gaze-video')?.remove();
-    this.video = null;
-    this.lastTime = -1;
+    this.video     = null;
+    this.lastTime  = -1;
+    this.smoothX   = window.innerWidth  / 2;
+    this.smoothY   = window.innerHeight / 2;
   }
 
-  // Call this for each calibration point click, passing the screen coords of the point
+  // Llamar durante cada click de calibración con las coordenadas de pantalla del punto
   recordCalibrationSample(screenX: number, screenY: number) {
-    if (!this.currentFeature) return;
-    const [gh, gv] = this.currentFeature;
-    this.calibSamples.push({ gh, gv, sx: screenX, sy: screenY });
+    if (!this.landmarker || !this.video || this.video.readyState < 2) return;
+    try {
+      const res    = this.landmarker.detectForVideo(this.video, performance.now());
+      const shapes = res.faceBlendshapes?.[0]?.categories;
+      if (!shapes) return;
+      const pos = gazeFromBlendshapes(shapes, 0, 0);
+      if (pos) {
+        this.calibSamples.push({ rawX: pos.x, rawY: pos.y, sx: screenX, sy: screenY });
+      }
+    } catch (_) {}
   }
 
+  // Calcula el offset medio: diferencia entre dónde predijo la mirada vs. dónde era el punto
   computeCalibration() {
-    const M = fitAffine(this.calibSamples);
-    if (M) {
-      this.calibMatrix = M;
-      console.log('GazeTracker: calibration computed from', this.calibSamples.length, 'samples');
-    } else {
-      console.warn('GazeTracker: calibration failed (not enough samples?)');
-    }
+    if (this.calibSamples.length === 0) return;
+    const meanDx = this.calibSamples.reduce((s, p) => s + (p.sx - p.rawX), 0) / this.calibSamples.length;
+    const meanDy = this.calibSamples.reduce((s, p) => s + (p.sy - p.rawY), 0) / this.calibSamples.length;
+    this.offsetX    = meanDx;
+    this.offsetY    = meanDy;
+    this.calibrated = true;
+    console.log(`GazeTracker: calibración OK — offset (${Math.round(meanDx)}, ${Math.round(meanDy)}) px`);
     this.calibSamples = [];
   }
 
   clearCalibration() {
     this.calibSamples = [];
-    this.calibMatrix = null;
-    this.currentFeature = null;
+    this.calibrated   = false;
+    this.offsetX      = 0;
+    this.offsetY      = 0;
   }
 
-  addGazeListener(cb: GazeCallback) { this.gazeListeners.add(cb); }
+  addGazeListener(cb: GazeCallback)    { this.gazeListeners.add(cb); }
   removeGazeListener(cb: GazeCallback) { this.gazeListeners.delete(cb); }
 
   get hasFaceModel() { return this.landmarker !== null; }
-  get hasCamera()    { return this.video !== null && (this.video.readyState ?? 0) >= 2; }
+  get hasCamera()    { return !!(this.video && this.video.readyState >= 2); }
 }
 
 export const gazeTracker = new GazeTracker();
 
-// ─── Zustand store (same public API as before) ───────────────────────────────
+// ─── Zustand store ────────────────────────────────────────────────────────────
 interface WebGazerState {
-  isActive:       boolean;
-  isCalibrating:  boolean;
+  isActive:          boolean;
+  isCalibrating:     boolean;
   startCalibration:  () => void;
   finishCalibration: () => void;
   deactivate:        () => void;
 }
 
 export const useWebGazerStore = create<WebGazerState>((set) => ({
-  isActive:      false,
-  isCalibrating: false,
+  isActive:          false,
+  isCalibrating:     false,
   startCalibration:  () => set({ isCalibrating: true,  isActive: false }),
   finishCalibration: () => set({ isCalibrating: false, isActive: true }),
   deactivate:        () => set({ isActive: false, isCalibrating: false }),
 }));
 
-// ─── React hook ──────────────────────────────────────────────────────────────
+// ─── React hook ───────────────────────────────────────────────────────────────
 export function useWebGazer() {
   const { isActive, isCalibrating, startCalibration, finishCalibration, deactivate } =
     useWebGazerStore();
 
-  // Create gaze cursor element once
+  // Crear el cursor de mirada una vez
   useEffect(() => {
     if (!document.getElementById('gaze-cursor')) {
       const el = document.createElement('div');
@@ -263,11 +233,10 @@ export function useWebGazer() {
     return () => { document.getElementById('gaze-cursor')?.remove(); };
   }, []);
 
-  // Lifecycle: calibrating → camera on, detection running (for feature collection)
+  // Calibrando → abrir cámara e iniciar detección (para recoger muestras)
   useEffect(() => {
     if (!isCalibrating) return;
     gazeTracker.clearCalibration();
-
     (async () => {
       if (!gazeTracker.hasFaceModel) await gazeTracker.init();
       await gazeTracker.startCamera();
@@ -275,7 +244,7 @@ export function useWebGazer() {
     })();
   }, [isCalibrating]);
 
-  // Lifecycle: active → gaze listener attached + dwell tracking
+  // Activo → gaze listener + dwell tracking
   useEffect(() => {
     const cursor = document.getElementById('gaze-cursor');
     if (!isActive) {
@@ -284,20 +253,16 @@ export function useWebGazer() {
       return;
     }
     if (cursor) cursor.style.display = 'block';
-
-    // Make sure detection is still running (it might have been stopped)
     gazeTracker.startDetection();
 
-    let targetEl: HTMLElement | null = null;
-    let enterTime = 0;
-    let cooldown  = false;
+    let targetEl:  HTMLElement | null = null;
+    let enterTime  = 0;
+    let cooldown   = false;
 
     const onGaze = (x: number, y: number) => {
-      // Move cursor
       const c = document.getElementById('gaze-cursor');
       if (c) c.style.transform = `translate(calc(${x}px - 50%), calc(${y}px - 50%)) rotate(45deg)`;
 
-      // Hit-test
       if (c) c.style.visibility = 'hidden';
       const hit = document.elementFromPoint(x, y) as HTMLElement | null;
       if (c) c.style.visibility = '';
@@ -335,7 +300,7 @@ export function useWebGazer() {
     };
   }, [isActive]);
 
-  // Deactivate: stop camera/detection when neither calibrating nor active
+  // Ni calibrando ni activo → apagar cámara
   useEffect(() => {
     if (!isCalibrating && !isActive) {
       gazeTracker.stopCamera();
@@ -345,7 +310,7 @@ export function useWebGazer() {
   return { isActive, isCalibrating, startCalibration, finishCalibration, deactivate };
 }
 
-// ─── Dwell progress helpers ──────────────────────────────────────────────────
+// ─── Dwell progress helpers ───────────────────────────────────────────────────
 function resetProgress(el: HTMLElement) {
   const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
   if (bar) bar.style.width = '0%';
