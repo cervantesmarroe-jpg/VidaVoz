@@ -50,8 +50,8 @@ export function CalibrationOverlay() {
       return next;
     });
 
-    // Record current iris position for this screen coordinate
-    gazeTracker.recordCalibrationSample(clientX, clientY);
+    // Record current eye position for this screen coordinate
+    gazeTracker.recordCalibrationPoint(clientX, clientY);
   }, []);
 
   const handleFinish = useCallback(() => {

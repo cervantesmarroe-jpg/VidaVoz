@@ -1,0 +1,53 @@
+// 1. Variables de estado
+let trainingData = [];
+let isCalibrated = false;
+let regressionModel = { alphaX: 0, betaX: 0, alphaY: 0, betaY: 0 };
+
+// 2. Captura de datos durante la calibración
+function recordCalibrationPoint(screenX, screenY) {
+    const shapes = currentResults.faceBlendshapes[0].categories;
+    const eyeX = shapes.find(s => s.categoryName === "eyeLookOutLeft").score - 
+                 shapes.find(s => s.categoryName === "eyeLookInLeft").score;
+    const eyeY = shapes.find(s => s.categoryName === "eyeLookUpLeft").score - 
+                 shapes.find(s => s.categoryName === "eyeLookDownLeft").score;
+
+    trainingData.push({ eyeX, eyeY, screenX, screenY });
+    
+    if (trainingData.length >= 27) { // 9 puntos x 3 clics mínimo
+        calculateRegression();
+        isCalibrated = true;
+        document.getElementById("status").innerText = "¡Calibración Exitosa!";
+    }
+}
+
+// 3. El Cerebro: Cálculo de Regresión Lineal
+function calculateRegression() {
+    // Calculamos la relación matemática entre el ojo y la pantalla
+    const n = trainingData.length;
+    let sumX = 0, sumY = 0, sumXX = 0, sumXY = 0, sumScreenX = 0, sumScreenY = 0;
+
+    trainingData.forEach(d => {
+        sumX += d.eyeX;
+        sumScreenX += d.screenX;
+        sumXX += d.eyeX * d.eyeX;
+        sumXY += d.eyeX * d.screenX;
+    });
+
+    // Fórmula de pendiente para X (y similar para Y)
+    regressionModel.betaX = (n * sumXY - sumX * sumScreenX) / (n * sumXX - sumX * sumX);
+    regressionModel.alphaX = (sumScreenX - regressionModel.betaX * sumX) / n;
+    
+    // (Repetir lógica similar para el eje Y en el código real...)
+}
+
+// 4. Aplicación en tiempo real (en tu bucle de renderizado)
+function updateGazePoint(currentEyeX, currentEyeY) {
+    if (!isCalibrated) return;
+
+    // Aplicamos la fórmula: Coordenada = Alpha + (Beta * ValorOjo)
+    const targetX = regressionModel.alphaX + (regressionModel.betaX * currentEyeX);
+    const targetY = regressionModel.alphaY + (regressionModel.betaY * currentEyeY);
+
+    gazeDot.style.left = `${targetX}px`;
+    gazeDot.style.top = `${targetY}px`;
+}
