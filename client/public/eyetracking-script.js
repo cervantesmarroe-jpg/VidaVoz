@@ -79,15 +79,18 @@ function resetCalibration() {
 // ─── 2. Captura de datos durante la calibración ───────────────────────────
 // recordCalibrationPoint: lee currentResults (caché) — nunca rellamamos detectForVideo
 function recordCalibrationPoint(screenX, screenY) {
-  const shapes = currentResults?.faceBlendshapes?.[0]?.categories;
-  if (!shapes) {
+  const shapes    = currentResults?.faceBlendshapes?.[0]?.categories;
+  const landmarks = currentResults?.faceLandmarks?.[0];
+  if (!shapes || !landmarks) {
     setStatus('Cara no detectada — repita el clic', 'warn');
     return;
   }
 
   const find = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
-  const eyeX = find('eyeLookOutLeft') - find('eyeLookInLeft');
-  const eyeY = find('eyeLookUpLeft')  - find('eyeLookDownLeft');
+  // Vector idéntico al de inferencia: iris + corrección de cabeza
+  const headRotX = landmarks[1].x - landmarks[4].x;
+  const eyeX = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
+  const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
 
   trainingData.push({ eyeX, eyeY, screenX, screenY });
 
@@ -154,27 +157,34 @@ function calculateRegression() {
   );
 }
 
-// ─── predictUniversalGaze: modo sin calibración ────────────────────────────
-// Mapeo directo basado en el centro de la pantalla.
-// No necesita clics previos — usa un promedio humano estándar con SENSITIVITY.
-function predictUniversalGaze(lookX, lookY) {
+// ─── estimateGazeNoCalibration: fórmula del usuario ──────────────────────
+// Combina rotación de cabeza (landmark) + movimiento de iris (blendshape)
+// No necesita clics previos — usa promedio humano estándar
+function estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX) {
+  // Vector de mirada universal: orientación cabeza (Yaw) + movimiento del iris
+  const horizontalGaze = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
+  const verticalGaze   = (eyeLookUpL  - eyeLookDownL);
+
+  // Proyección a píxeles con factor de escala estándar 1.2
   return {
-    rawX: (window.innerWidth  / 2) + (lookX * window.innerWidth  * SENSITIVITY),
-    rawY: (window.innerHeight / 2) - (lookY * window.innerHeight * SENSITIVITY),
+    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * 1.2),
+    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * 1.2),
   };
 }
 
 // ─── 4. Aplicación en tiempo real ─────────────────────────────────────────
-// Patrón exacto del usuario: Coordenada = Alpha + (Beta * ValorOjo)
-function updateGazePoint(eyeX, eyeY) {
+function updateGazePoint(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX) {
   if (isCalibrated) {
+    // Calibrado: misma feature que durante el entrenamiento (iris + cabeza)
+    const eyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
+    const eyeY = (eyeLookUpL  - eyeLookDownL);
     return {
       rawX: regressionModel.alphaX + regressionModel.betaX * eyeX,
       rawY: regressionModel.alphaY + regressionModel.betaY * eyeY,
     };
   }
-  // Fallback: predictUniversalGaze con SENSITIVITY 1.5
-  return predictUniversalGaze(eyeX, eyeY);
+  // Sin calibración: estimación universal con cabeza + iris
+  return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX);
 }
 
 // ─── Inicializar FaceLandmarker ────────────────────────────────────────────
@@ -307,15 +317,21 @@ function renderLoop(rafTs) {
           FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS, { color: '#34d399', lineWidth: 2 });
       }
 
-      if (results.faceBlendshapes?.length > 0) {
-        const shapes = results.faceBlendshapes[0].categories;
-        const find   = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+      if (results.faceBlendshapes?.length > 0 && results.faceLandmarks?.length > 0) {
+        const shapes    = results.faceBlendshapes[0].categories;
+        const landmarks = results.faceLandmarks[0];
+        const find      = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
 
-        // ── Mirada ────────────────────────────────────────────────────────
-        const eyeX =  find('eyeLookOutLeft') - find('eyeLookInLeft');
-        const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
+        // ── Rotación horizontal de cabeza: nariz punta (1) vs base (4) ──
+        const headRotX = landmarks[1].x - landmarks[4].x;
 
-        const { rawX, rawY } = updateGazePoint(eyeX, eyeY);
+        // ── Mirada (iris blendshapes) ─────────────────────────────────────
+        const eyeLookOutL  = find('eyeLookOutLeft');
+        const eyeLookInL   = find('eyeLookInLeft');
+        const eyeLookUpL   = find('eyeLookUpLeft');
+        const eyeLookDownL = find('eyeLookDownLeft');
+
+        const { rawX, rawY } = updateGazePoint(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX);
 
         smoothX = ALPHA * rawX + (1 - ALPHA) * smoothX;
         smoothY = ALPHA * rawY + (1 - ALPHA) * smoothY;
