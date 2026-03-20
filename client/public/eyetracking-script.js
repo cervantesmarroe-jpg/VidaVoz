@@ -22,10 +22,12 @@ const ctx           = canvas.getContext('2d');
 const CLICKS_NEEDED = 3;
 
 // ─── Configuraciones para comunicación fluida ─────────────────────────────
-const SENSITIVITY     = 1.5;   // ajusta cuánto se mueve el cursor respecto al ojo
-const DWELL_TIME      = 3000;  // 3 segundos manteniendo la mirada para activar
-const ALPHA           = 0.2;   // filtro paso bajo: 0.8·prev + 0.2·nuevo
-const BLINK_THRESHOLD = 0.55;  // umbral parpadeo deliberado (0–1)
+// SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal
+const SENSITIVITY_X   = -1.8; // mirada izquierda → cursor izquierda
+const SENSITIVITY_Y   =  1.5;
+const DWELL_TIME      = 3000;  // 3 s para activar
+const ALPHA           = 0.3;   // suavizado: 0.7·prev + 0.3·nuevo
+const BLINK_THRESHOLD = 0.85;  // umbral parpadeo deliberado — ambos ojos AND
 const BLINK_COOLDOWN  = 1200;  // ms de bloqueo tras cada parpadeo
 
 // ─── 1. Variables de estado ────────────────────────────────────────────────
@@ -165,10 +167,10 @@ function estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookD
   const horizontalGaze = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
   const verticalGaze   = (eyeLookUpL  - eyeLookDownL);
 
-  // Proyección a píxeles con factor de escala estándar 1.2
+  // Proyección a píxeles — SENSITIVITY_X negativo corrige el efecto espejo
   return {
-    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * 1.2),
-    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * 1.2),
+    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * SENSITIVITY_X),
+    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * SENSITIVITY_Y),
   };
 }
 
@@ -348,12 +350,14 @@ function renderLoop(rafTs) {
         valY.textContent       = Math.round(posY);
         valSamples.textContent = trainingData.length;
 
-        // ── Parpadeo deliberado ───────────────────────────────────────────
-        const blinkScore = (find('eyeBlinkLeft') + find('eyeBlinkRight')) / 2;
-        const isBlink    = blinkScore > BLINK_THRESHOLD;
+        // ── Parpadeo deliberado — ambos ojos AND (más intencional) ───────
+        const blinkLScore = find('eyeBlinkLeft');
+        const blinkRScore = find('eyeBlinkRight');
+        const isBlink     = blinkLScore > BLINK_THRESHOLD && blinkRScore > BLINK_THRESHOLD;
 
         const blinkEl = document.getElementById('val-blink');
-        if (blinkEl) blinkEl.textContent = blinkScore.toFixed(2);
+        // Mostrar el mínimo de ambos — así se ve cuánto falta para disparar
+        if (blinkEl) blinkEl.textContent = Math.min(blinkLScore, blinkRScore).toFixed(2);
 
         if (isBlink && !wasBlinking && !blinkOnCooldown) {
           blinkOnCooldown = true;

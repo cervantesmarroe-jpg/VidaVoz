@@ -6,10 +6,15 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-const DWELL_MS        = 3000;  // 3 s de mirada fija para activar
-const ALPHA           = 0.2;   // filtro paso bajo: 0.8·prev + 0.2·nuevo
-const BLINK_THRESHOLD = 0.55;  // umbral de parpadeo deliberado
+const DWELL_MS        = 3000;   // 3 s de mirada fija para activar
+const ALPHA           = 0.3;   // suavizado: 0.7·prev + 0.3·nuevo
+const BLINK_THRESHOLD = 0.85;  // umbral parpadeo deliberado — ambos ojos deben superarlo
 const BLINK_COOLDOWN  = 1200;  // ms entre parpadeos reconocidos
+
+// Sensibilidad de la estimación universal (sin calibración)
+// SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal
+const SENSITIVITY_X = -1.8;
+const SENSITIVITY_Y =  1.5;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
@@ -76,10 +81,11 @@ function estimateGazeNoCalibration(
   const horizontalGaze = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
   const verticalGaze   = (eyeLookUpL  - eyeLookDownL);
 
-  // 2. Proyección a píxeles con factor de escala estándar 1.2
+  // 2. Proyección a píxeles
+  // SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal
   return {
-    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * 1.2),
-    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * 1.2),
+    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * SENSITIVITY_X),
+    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * SENSITIVITY_Y),
   };
 }
 
@@ -224,9 +230,11 @@ class GazeTracker {
             const gy = Math.max(0, Math.min(window.innerHeight, this.smoothY));
             this.gazeListeners.forEach(cb => cb(gx, gy));
 
-            // Parpadeo deliberado (promedio ambos ojos)
-            const blinkScore = (find('eyeBlinkLeft') + find('eyeBlinkRight')) / 2;
-            const isBlink    = blinkScore > BLINK_THRESHOLD;
+            // Parpadeo deliberado: ambos ojos deben superar el umbral simultáneamente
+            // AND condition — más intencional, evita falsos positivos
+            const blinkL  = find('eyeBlinkLeft');
+            const blinkR  = find('eyeBlinkRight');
+            const isBlink = blinkL > BLINK_THRESHOLD && blinkR > BLINK_THRESHOLD;
 
             if (isBlink && !this.wasBlinking && !this.blinkOnCooldown) {
               this.blinkOnCooldown = true;
