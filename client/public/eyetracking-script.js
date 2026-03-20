@@ -22,9 +22,11 @@ const ctx           = canvas.getContext('2d');
 const CLICKS_NEEDED = 3;
 
 // ─── Configuraciones para comunicación fluida ─────────────────────────────
-const SENSITIVITY = 1.5;   // ajusta cuánto se mueve el cursor respecto al ojo
-const DWELL_TIME  = 1500;  // ms para activar un botón
-const ALPHA       = 0.2;   // filtro paso bajo: 0.8·prev + 0.2·nuevo
+const SENSITIVITY     = 1.5;   // ajusta cuánto se mueve el cursor respecto al ojo
+const DWELL_TIME      = 3000;  // 3 segundos manteniendo la mirada para activar
+const ALPHA           = 0.2;   // filtro paso bajo: 0.8·prev + 0.2·nuevo
+const BLINK_THRESHOLD = 0.55;  // umbral parpadeo deliberado (0–1)
+const BLINK_COOLDOWN  = 1200;  // ms de bloqueo tras cada parpadeo
 
 // ─── 1. Variables de estado ────────────────────────────────────────────────
 let faceLandmarker;
@@ -44,6 +46,10 @@ let smoothY = window.innerHeight / 2;
 // currentResults: caché del último resultado de detectForVideo
 // recordCalibrationPoint() lee de aquí — nunca rellamamos detectForVideo
 let currentResults = null;
+
+// Estado del parpadeo
+let wasBlinking    = false;
+let blinkOnCooldown = false;
 
 // ─── 1b. Reset Clínico ────────────────────────────────────────────────────
 // Vacía el historial y vuelve a mostrar la pantalla de calibración
@@ -305,6 +311,7 @@ function renderLoop(rafTs) {
         const shapes = results.faceBlendshapes[0].categories;
         const find   = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
 
+        // ── Mirada ────────────────────────────────────────────────────────
         const eyeX =  find('eyeLookOutLeft') - find('eyeLookInLeft');
         const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
 
@@ -324,6 +331,29 @@ function renderLoop(rafTs) {
         valX.textContent       = Math.round(posX);
         valY.textContent       = Math.round(posY);
         valSamples.textContent = trainingData.length;
+
+        // ── Parpadeo deliberado ───────────────────────────────────────────
+        const blinkScore = (find('eyeBlinkLeft') + find('eyeBlinkRight')) / 2;
+        const isBlink    = blinkScore > BLINK_THRESHOLD;
+
+        const blinkEl = document.getElementById('val-blink');
+        if (blinkEl) blinkEl.textContent = blinkScore.toFixed(2);
+
+        if (isBlink && !wasBlinking && !blinkOnCooldown) {
+          blinkOnCooldown = true;
+
+          // Flash del punto de mirada
+          gazeDot.classList.add('blink-flash');
+          setTimeout(() => gazeDot.classList.remove('blink-flash'), 350);
+
+          // Actualizar indicador visual
+          if (blinkEl) { blinkEl.classList.add('blink-active'); }
+          setTimeout(() => blinkEl?.classList.remove('blink-active'), 400);
+
+          console.log(`Parpadeo detectado en (${Math.round(posX)}, ${Math.round(posY)})`);
+          setTimeout(() => { blinkOnCooldown = false; }, BLINK_COOLDOWN);
+        }
+        wasBlinking = isBlink;
       }
     } catch (_) {}
   }
