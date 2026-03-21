@@ -334,37 +334,67 @@
 
   <!-- ── Modal resultado sesión Admin ─────────────────────────────────── -->
   <div id="admin-result-modal" class="overlay-modal" role="dialog">
-    <div class="modal-box">
-      <h2>⚙ Sesión de entrenamiento completada</h2>
-      <p>
-        Sesión <strong id="admin-result-count">1</strong> registrada.
-        Modelo Maestro actualizado con el promedio de
-        <strong id="admin-result-avg">1</strong> sesión(es).
-      </p>
+    <div class="modal-box" style="max-width:560px">
 
-      <dl class="admin-stats">
-        <dt>betaX (ganancia H)</dt>
-        <dd id="admin-result-betax">—</dd>
-        <dt>betaY (ganancia V)</dt>
-        <dd id="admin-result-betay">—</dd>
-        <dt>alphaX (offset H)</dt>
-        <dd id="admin-result-alphax">—</dd>
-        <dt>alphaY (offset V)</dt>
-        <dd id="admin-result-alphay">—</dd>
-        <p class="mirror-note">
-          ✓ Efecto espejo integrado — betaX es negativo por diseño: la regresión aprende
-          que mirar a la izquierda produce un valor positivo del iris que debe mover el
-          cursor a la izquierda (negativo en píxeles).
+      <!-- Contador principal -->
+      <div style="text-align:center;padding:12px 0 4px">
+        <div style="font-size:3rem;font-weight:900;color:#818cf8;line-height:1">
+          <span id="admin-history-count">1</span>
+        </div>
+        <div style="font-size:0.85rem;color:#64748b;margin-top:4px">
+          sesión(es) de entrenamiento acumuladas en RAM
+        </div>
+        <div style="font-size:0.75rem;color:#1e40af;margin-top:6px;
+                    background:#dbeafe;border-radius:6px;padding:4px 12px;display:inline-block">
+          🔒 Solo en memoria — se borra al cerrar la pestaña
+        </div>
+      </div>
+
+      <!-- Esta sesión -->
+      <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 16px">
+        <p style="font-size:0.78rem;color:#64748b;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">
+          Esta sesión
         </p>
-      </dl>
+        <dl class="admin-stats">
+          <dt>betaX (ganancia H)</dt><dd id="admin-last-betax">—</dd>
+          <dt>betaY (ganancia V)</dt><dd id="admin-last-betay">—</dd>
+          <dt>alphaX (offset H)</dt><dd id="admin-last-alphax">—</dd>
+          <dt>alphaY (offset V)</dt><dd id="admin-last-alphay">—</dd>
+        </dl>
+      </div>
 
+      <!-- Promedio acumulado (visible solo con >1 sesión) -->
+      <div id="admin-avg-section" style="display:none;background:#0c1a2e;border:2px solid #1e40af;border-radius:10px;padding:12px 16px">
+        <p style="font-size:0.78rem;color:#38bdf8;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">
+          ★ Promedio acumulado (exportar este)
+        </p>
+        <dl class="admin-stats">
+          <dt>betaX</dt><dd id="admin-avg-betax">—</dd>
+          <dt>betaY</dt><dd id="admin-avg-betay">—</dd>
+          <dt>alphaX</dt><dd id="admin-avg-alphax">—</dd>
+          <dt>alphaY</dt><dd id="admin-avg-alphay">—</dd>
+          <p class="mirror-note">✓ betaX negativo = efecto espejo integrado por regresión</p>
+        </dl>
+      </div>
+
+      <!-- Acciones -->
       <div class="modal-row">
-        <button id="btn-admin-another" class="medical-btn" style="background:#7c3aed">
+        <button id="btn-admin-another" class="medical-btn" style="background:#7c3aed;font-size:0.95rem">
           + Otra sesión
         </button>
-        <button id="btn-admin-finish" class="secondary-btn">Finalizar entrenamiento</button>
+        <button id="btn-admin-export" class="medical-btn" style="background:#0369a1;font-size:0.95rem">
+          📋 Exportar promedio
+        </button>
       </div>
-      <button id="btn-admin-reset-weights" class="danger-btn">🗑 Borrar Modelo Maestro</button>
+      <div class="modal-row">
+        <button id="btn-admin-finish" class="secondary-btn">
+          ✓ Finalizar y guardar en dispositivo
+        </button>
+        <button id="btn-admin-clear-history" class="danger-btn" style="flex:0 0 auto;padding:10px 16px">
+          🗑 Limpiar historial
+        </button>
+      </div>
+
     </div>
   </div>
 

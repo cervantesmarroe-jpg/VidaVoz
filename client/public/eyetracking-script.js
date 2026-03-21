@@ -111,6 +111,31 @@ function clearGlobalWeights() {
   try { localStorage.removeItem(WEIGHTS_KEY); } catch {}
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ── HISTORIAL ACUMULATIVO EN RAM (solo Modo Admin) ────────────────────────
+// Almacena los coeficientes de cada sesión de calibración durante el
+// entrenamiento. SOLO existe en memoria RAM — se pierde al cerrar la pestaña.
+// Privacidad garantizada: NO se persiste en localStorage ni en ningún
+// almacenamiento externo.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let calibrationHistory = [];   // [{ alphaX, betaX, alphaY, betaY }, ...]
+
+function computeHistoryAverage() {
+  if (calibrationHistory.length === 0) return null;
+  return averageSessions(calibrationHistory);
+}
+
+function clearCalibrationHistory() {
+  calibrationHistory = [];
+  updateHistoryCounter();
+}
+
+function updateHistoryCounter() {
+  const el = document.getElementById('admin-history-count');
+  if (el) el.textContent = calibrationHistory.length;
+}
+
 // ─── Contador de inicios de app ────────────────────────────────────────────
 function getStartCount()      { return parseInt(localStorage.getItem(STARTS_KEY) || '0'); }
 function incrementStartCount() {
@@ -483,9 +508,15 @@ btnStartTrack.onclick = () => {
   }
 
   if (isAdminMode) {
-    // ── Guardar sesión y mostrar resultado ──────────────────────────────
-    const updated = addTrainingSession(regressionModel);
-    showAdminResult(updated);
+    // ── Acumular en historial RAM (NO localStorage) ─────────────────────
+    calibrationHistory.push({
+      alphaX: regressionModel.alphaX,
+      betaX:  regressionModel.betaX,
+      alphaY: regressionModel.alphaY,
+      betaY:  regressionModel.betaY,
+    });
+    updateHistoryCounter();
+    showAdminResult();
     return;
   }
 
@@ -508,50 +539,84 @@ btnStartTrack.onclick = () => {
 };
 
 // ─── Panel de resultado de sesión Admin ──────────────────────────────────
-function showAdminResult(updated) {
-  const modal = document.getElementById('admin-result-modal');
-  const sc    = updated.sessionCount;
-  document.getElementById('admin-result-count').textContent   = sc;
-  document.getElementById('admin-result-avg').textContent     = updated.sessions?.length ?? 1;
-  document.getElementById('admin-result-betax').textContent   = updated.betaX.toFixed(2);
-  document.getElementById('admin-result-betay').textContent   = updated.betaY.toFixed(2);
-  document.getElementById('admin-result-alphax').textContent  = updated.alphaX.toFixed(1);
-  document.getElementById('admin-result-alphay').textContent  = updated.alphaY.toFixed(1);
-  modal.style.display = 'flex';
-  updateStartScreen();
+function showAdminResult() {
+  const n    = calibrationHistory.length;
+  const last = calibrationHistory[n - 1];
+  const avg  = computeHistoryAverage();
 
-  // ── Copiar-pegar para DEFAULT_WEIGHTS ──────────────────────────────────
-  // Muestra los valores listos para pegar como constante en el código.
-  // (betaX es negativo → efecto espejo ya integrado por la regresión)
+  // Contador principal
+  document.getElementById('admin-history-count').textContent = n;
+
+  // Valores de esta sesión
+  document.getElementById('admin-last-betax').textContent  = last.betaX.toFixed(2);
+  document.getElementById('admin-last-betay').textContent  = last.betaY.toFixed(2);
+  document.getElementById('admin-last-alphax').textContent = last.alphaX.toFixed(1);
+  document.getElementById('admin-last-alphay').textContent = last.alphaY.toFixed(1);
+
+  // Promedio acumulado
+  if (avg) {
+    document.getElementById('admin-avg-betax').textContent  = avg.betaX.toFixed(2);
+    document.getElementById('admin-avg-betay').textContent  = avg.betaY.toFixed(2);
+    document.getElementById('admin-avg-alphax').textContent = avg.alphaX.toFixed(1);
+    document.getElementById('admin-avg-alphay').textContent = avg.alphaY.toFixed(1);
+  }
+
+  // Sección de promedio solo visible con >1 sesión
+  document.getElementById('admin-avg-section').style.display = n > 1 ? 'block' : 'none';
+
+  document.getElementById('admin-result-modal').style.display = 'flex';
+}
+
+function exportHistoryAverage() {
+  const avg = computeHistoryAverage();
+  if (!avg) return;
+  const n = calibrationHistory.length;
   const snippet =
 `const DEFAULT_WEIGHTS = {
-  alphaX: ${updated.alphaX.toFixed(4)},
-  betaX:  ${updated.betaX.toFixed(4)},   // negativo = espejo integrado
-  alphaY: ${updated.alphaY.toFixed(4)},
-  betaY:  ${updated.betaY.toFixed(4)},
+  alphaX: ${avg.alphaX.toFixed(4)},
+  betaX:  ${avg.betaX.toFixed(4)},   // negativo = espejo integrado
+  alphaY: ${avg.alphaY.toFixed(4)},
+  betaY:  ${avg.betaY.toFixed(4)},
 };
-// Sesiones promediadas: ${updated.sessions?.length ?? 1}
-// Última actualización: ${new Date().toLocaleString('es-ES')}`;
-
+// Sesiones promediadas: ${n}
+// Fecha: ${new Date().toLocaleString('es-ES')}`;
   alert('─── COPIAR Y PEGAR EN eyetracking-script.js ───\n\n' + snippet);
 }
 
 document.getElementById('btn-admin-another').onclick = () => {
   document.getElementById('admin-result-modal').style.display = 'none';
-  // Nueva sesión de entrenamiento
-  trainingData  = [];
-  isCalibrated  = false;
+  trainingData = [];
+  isCalibrated = false;
   resetCalibration();
+};
+
+document.getElementById('btn-admin-export').onclick = () => {
+  exportHistoryAverage();
+};
+
+document.getElementById('btn-admin-clear-history').onclick = () => {
+  if (confirm(`¿Limpiar el historial de ${calibrationHistory.length} sesión(es) en RAM? Esta acción no se puede deshacer.`)) {
+    clearCalibrationHistory();
+    document.getElementById('admin-result-modal').style.display = 'none';
+    setStatus('Historial RAM limpiado. Puede comenzar de nuevo.', 'warn');
+  }
 };
 
 document.getElementById('btn-admin-finish').onclick = () => {
   document.getElementById('admin-result-modal').style.display = 'none';
   isAdminMode = false;
-  // Ir al tracking con el modelo maestro
+  // Guardar promedio del historial RAM en GLOBAL_GAZE_WEIGHTS (persistencia dispositivo)
+  const avg = computeHistoryAverage();
+  if (avg) {
+    addTrainingSession(avg);
+    updateStartScreen();
+    setStatus(`Promedio de ${calibrationHistory.length} sesión(es) guardado. Seguimiento activo.`, 'ok');
+  } else {
+    setStatus('Seguimiento activo.', 'ok');
+  }
   screenCalib.classList.remove('visible');
   dataPanel.classList.add('visible');
   gazeDot.style.display = 'block';
-  setStatus(`Modelo Maestro actualizado (${GLOBAL_GAZE_WEIGHTS.sessions?.length ?? 1} sesiones). Seguimiento activo.`, 'ok');
 };
 
 document.getElementById('btn-admin-reset-weights')?.addEventListener('click', () => {
