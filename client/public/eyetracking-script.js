@@ -1,5 +1,5 @@
 // ─── EyeTracking Clínico Pro — script.js ────────────────────────────────────
-// MediaPipe FaceLandmarker · regressionModel exacto · blendshapes
+// MediaPipe FaceLandmarker · Modelo Maestro de Regresión · RGPD Compliant
 // ────────────────────────────────────────────────────────────────────────────
 
 import { FaceLandmarker, FilesetResolver, DrawingUtils }
@@ -21,43 +21,116 @@ const valSamples    = document.getElementById('val-samples');
 const ctx           = canvas.getContext('2d');
 const CLICKS_NEEDED = 3;
 
-// ─── Configuraciones para comunicación fluida ─────────────────────────────
-// SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal
-const SENSITIVITY_X   = -1.8; // mirada izquierda → cursor izquierda
+// ─── Configuraciones ──────────────────────────────────────────────────────
+// SENSITIVITY_X negativo = efecto espejo para estimación universal sin calibrar.
+// En el Modelo Maestro, el espejo queda integrado en betaX (negativo por regresión).
+const SENSITIVITY_X   = -1.8;
 const SENSITIVITY_Y   =  1.5;
-const DWELL_TIME      = 3000;  // 3 s para activar
+const DWELL_TIME      = 3000;
 const ALPHA           = 0.3;   // suavizado: 0.7·prev + 0.3·nuevo
-const BLINK_THRESHOLD = 0.85;  // umbral parpadeo deliberado — ambos ojos AND
-const BLINK_COOLDOWN  = 1200;  // ms de bloqueo tras cada parpadeo
+const BLINK_THRESHOLD = 0.85;
+const BLINK_COOLDOWN  = 1200;
 
-// ─── 1. Variables de estado ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ── SISTEMA DE PESOS GLOBALES (Gold Standard) ─────────────────────────────
+// Almacena la regresión maestra en localStorage como configuración de DISPOSITIVO
+// (no contiene datos biométricos personales — solo coeficientes matemáticos).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const WEIGHTS_KEY     = 'vozuci-global-weights-v1';
+const STARTS_KEY      = 'vozuci-start-count-v1';
+const MAX_SESSIONS    = 10;   // sesiones a promediar (ventana deslizante)
+
+// Variable Global de Pesos — cargada desde localStorage al iniciar.
+// La app la usa por defecto sin pedir calibración al paciente.
+let GLOBAL_GAZE_WEIGHTS = loadGlobalWeights();
+
+function loadGlobalWeights() {
+  try {
+    const raw = localStorage.getItem(WEIGHTS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveGlobalWeights(w) {
+  try { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); } catch {}
+}
+
+// Promedia todas las sesiones de entrenamiento → Modelo Maestro
+function averageSessions(sessions) {
+  const n = sessions.length;
+  return {
+    alphaX: sessions.reduce((s, m) => s + m.alphaX, 0) / n,
+    betaX:  sessions.reduce((s, m) => s + m.betaX,  0) / n,
+    alphaY: sessions.reduce((s, m) => s + m.alphaY, 0) / n,
+    betaY:  sessions.reduce((s, m) => s + m.betaY,  0) / n,
+  };
+}
+
+// Añade sesión al histórico y recalcula el Modelo Maestro promedio
+function addTrainingSession(model) {
+  const prev     = GLOBAL_GAZE_WEIGHTS?.sessions || [];
+  const sessions = [...prev, { alphaX: model.alphaX, betaX: model.betaX,
+                                alphaY: model.alphaY, betaY: model.betaY }]
+                    .slice(-MAX_SESSIONS);
+  const avg = averageSessions(sessions);
+  GLOBAL_GAZE_WEIGHTS = {
+    ...avg,
+    sessions,
+    sessionCount: (GLOBAL_GAZE_WEIGHTS?.sessionCount || 0) + 1,
+    lastUpdated:  new Date().toISOString(),
+  };
+  saveGlobalWeights(GLOBAL_GAZE_WEIGHTS);
+  return GLOBAL_GAZE_WEIGHTS;
+}
+
+function clearGlobalWeights() {
+  GLOBAL_GAZE_WEIGHTS = null;
+  try { localStorage.removeItem(WEIGHTS_KEY); } catch {}
+}
+
+// ─── Contador de inicios de app ────────────────────────────────────────────
+function getStartCount()      { return parseInt(localStorage.getItem(STARTS_KEY) || '0'); }
+function incrementStartCount() {
+  const n = getStartCount() + 1;
+  try { localStorage.setItem(STARTS_KEY, String(n)); } catch {}
+  return n;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── ESTADO RUNTIME ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
 let faceLandmarker;
-let lastVideoTime  = -1;
-let lastMpTs       = 0;   // timestamp mínimo garantizado para MediaPipe
+let lastVideoTime   = -1;
+let lastMpTs        = 0;
 
-let trainingData = [];
-let isCalibrated = false;
-
-// Modelo de regresión — patrón exacto del usuario
+let trainingData    = [];
+let isCalibrated    = false;
 let regressionModel = { alphaX: 0, betaX: 0, alphaY: 0, betaY: 0 };
 
-// Suavizado — filtro paso bajo
 let smoothX = window.innerWidth  / 2;
 let smoothY = window.innerHeight / 2;
 
-// currentResults: caché del último resultado de detectForVideo
-// recordCalibrationPoint() lee de aquí — nunca rellamamos detectForVideo
-let currentResults = null;
-
-// Estado del parpadeo
-let wasBlinking    = false;
+let currentResults  = null;
+let wasBlinking     = false;
 let blinkOnCooldown = false;
 
-// Contadores de calibración — scope global para que resetCalibration() los vea
+// Modo de operación
+let isAdminMode  = false;   // entrenar modelo maestro
+let isWarmupMode = false;   // calentamiento rápido de 3 puntos
+
+// Contadores de calibración (scope global → resetCalibration los necesita)
 const clickCounts = {};
 let allCalibrated = false;
 
-// ─── 1b. Reset Clínico ────────────────────────────────────────────────────
+// ─── Ids de puntos de calentamiento (fila central: izquierda, centro, derecha)
+const WARMUP_POINT_IDS = ['3', '4', '5'];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── CALIBRACIÓN ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
 function resetCalibration() {
   trainingData  = [];
   isCalibrated  = false;
@@ -68,18 +141,44 @@ function resetCalibration() {
     clickCounts[id] = 0;
     pt.textContent = CLICKS_NEEDED;
     pt.classList.remove('done');
-  });
-  btnStartTrack.classList.remove('visible');
 
+    // En modo calentamiento, desactivar puntos fuera de la fila central
+    if (isWarmupMode) {
+      const active = WARMUP_POINT_IDS.includes(id);
+      pt.style.opacity      = active ? '1'    : '0.2';
+      pt.style.pointerEvents = active ? 'auto' : 'none';
+    } else {
+      pt.style.opacity      = '1';
+      pt.style.pointerEvents = 'auto';
+    }
+  });
+
+  btnStartTrack.classList.remove('visible');
   gazeDot.style.display = 'none';
   dataPanel.classList.remove('visible');
   screenCalib.classList.add('visible');
 
-  setStatus('Recalibrando — haga clic en los puntos', 'warn');
+  // Etiqueta del botón según modo
+  btnStartTrack.textContent = isAdminMode
+    ? 'GUARDAR Y CONTINUAR ENTRENANDO'
+    : 'INICIAR SEGUIMIENTO DE MIRADA';
+
+  // Banner de modo en la pantalla de calibración
+  document.getElementById('calib-mode-badge').textContent = isAdminMode
+    ? '⚙ MODO ADMINISTRADOR — Sesión de entrenamiento'
+    : isWarmupMode
+    ? '⚡ CALENTAMIENTO RÁPIDO (3 puntos)'
+    : '';
+  document.getElementById('calib-mode-badge').style.display =
+    (isAdminMode || isWarmupMode) ? 'block' : 'none';
+
+  setStatus(isAdminMode
+    ? 'Admin: calibre los 9 puntos (3 clics c/u)'
+    : isWarmupMode
+    ? 'Calentamiento: calibre los 3 puntos centrales'
+    : 'Calibrando — haga clic en los puntos', 'warn');
 }
 
-// ─── 2. Captura de datos durante la calibración ───────────────────────────
-// recordCalibrationPoint: lee currentResults (caché) — nunca rellamamos detectForVideo
 function recordCalibrationPoint(screenX, screenY) {
   const shapes    = currentResults?.faceBlendshapes?.[0]?.categories;
   const landmarks = currentResults?.faceLandmarks?.[0];
@@ -88,116 +187,133 @@ function recordCalibrationPoint(screenX, screenY) {
     return;
   }
 
-  const find = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
-  // Vector idéntico al de inferencia: iris + corrección de cabeza
+  const find     = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
   const headRotX = landmarks[1].x - landmarks[4].x;
-  const eyeX = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
-  const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
+  const eyeX     = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
+  const eyeY     =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
 
   trainingData.push({ eyeX, eyeY, screenX, screenY });
 
-  if (trainingData.length >= 27) { // 9 puntos × 3 clics mínimo
+  const minSamples = isWarmupMode ? 9 : 27;   // 3pts×3 ó 9pts×3
+  if (trainingData.length >= minSamples) {
     calculateRegression();
     isCalibrated = true;
-    setStatus('¡Calibración Exitosa!', 'ok');
+    setStatus('¡Calibración exitosa!', 'ok');
   }
 }
 
-// ─── 3. safeRecord: solo graba si la IA detecta el rostro ─────────────────
 let faceToastTimer = null;
-
 function safeRecord(screenX, screenY) {
   if (currentResults && currentResults.faceBlendshapes?.length > 0) {
     recordCalibrationPoint(screenX, screenY);
   } else {
-    // Mostrar toast de aviso (no alert — no interrumpe el flujo clínico)
     const toast = document.getElementById('face-toast');
     toast.style.display = 'block';
     clearTimeout(faceToastTimer);
     faceToastTimer = setTimeout(() => { toast.style.display = 'none'; }, 2500);
-    console.warn('safeRecord: cara no detectada, clic ignorado.');
   }
 }
 
-// ─── 3. El Cerebro: Cálculo de Regresión Lineal ──────────────────────────
-// Fórmula explícita: screenX = alphaX + betaX * eyeX
+// ─── Regresión lineal ────────────────────────────────────────────────────
 function calculateRegression() {
   const n = trainingData.length;
-  if (n < 4) { console.warn('Pocas muestras para calibrar'); return; }
+  if (n < 4) return;
 
-  let sumX = 0, sumScreenX = 0, sumXX = 0, sumXScreenX = 0;
-  let sumY = 0, sumScreenY = 0, sumYY = 0, sumYScreenY = 0;
+  let sumX = 0, sumSX = 0, sumXX = 0, sumXSX = 0;
+  let sumY = 0, sumSY = 0, sumYY = 0, sumYSY = 0;
 
   trainingData.forEach(d => {
-    sumX       += d.eyeX;
-    sumScreenX += d.screenX;
-    sumXX      += d.eyeX * d.eyeX;
-    sumXScreenX += d.eyeX * d.screenX;
-
-    sumY       += d.eyeY;
-    sumScreenY += d.screenY;
-    sumYY      += d.eyeY * d.eyeY;
-    sumYScreenY += d.eyeY * d.screenY;
+    sumX  += d.eyeX;    sumSX  += d.screenX;
+    sumXX += d.eyeX**2; sumXSX += d.eyeX * d.screenX;
+    sumY  += d.eyeY;    sumSY  += d.screenY;
+    sumYY += d.eyeY**2; sumYSY += d.eyeY * d.screenY;
   });
 
-  // Fórmula de pendiente para X
   const denX = (n * sumXX - sumX * sumX) || 0.001;
-  regressionModel.betaX  = (n * sumXScreenX - sumX * sumScreenX) / denX;
-  regressionModel.alphaX = (sumScreenX - regressionModel.betaX * sumX) / n;
+  regressionModel.betaX  = (n * sumXSX - sumX * sumSX) / denX;
+  regressionModel.alphaX = (sumSX - regressionModel.betaX * sumX) / n;
 
-  // Fórmula de pendiente para Y
   const denY = (n * sumYY - sumY * sumY) || 0.001;
-  regressionModel.betaY  = (n * sumYScreenY - sumY * sumScreenY) / denY;
-  regressionModel.alphaY = (sumScreenY - regressionModel.betaY * sumY) / n;
-
-  console.log(
-    `Regresión OK (${n} muestras):`,
-    `X → α=${regressionModel.alphaX.toFixed(1)} β=${regressionModel.betaX.toFixed(1)}`,
-    `Y → α=${regressionModel.alphaY.toFixed(1)} β=${regressionModel.betaY.toFixed(1)}`,
-  );
+  regressionModel.betaY  = (n * sumYSY - sumY * sumSY) / denY;
+  regressionModel.alphaY = (sumSY - regressionModel.betaY * sumY) / n;
 }
 
-// ─── estimateGazeNoCalibration: fórmula del usuario ──────────────────────
-// Combina rotación de cabeza (landmark) + movimiento de iris (blendshape)
-// No necesita clics previos — usa promedio humano estándar
-function estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX) {
-  // Vector de mirada universal: orientación cabeza (Yaw) + movimiento del iris
-  const horizontalGaze = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
-  const verticalGaze   = (eyeLookUpL  - eyeLookDownL);
-
-  // Proyección a píxeles — SENSITIVITY_X negativo corrige el efecto espejo
+// ─── Estimación universal sin calibración (fallback) ─────────────────────
+// SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal.
+// Con Modelo Maestro activo, este fallback no se usa — el espejo queda
+// integrado en betaX (negativo) calculado por la regresión.
+function estimateGazeNoCalibration(out, inn, up, down, headRotX) {
+  const h = (out - inn) + (headRotX * 2);
+  const v = up - down;
   return {
-    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * SENSITIVITY_X),
-    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * SENSITIVITY_Y),
+    rawX: (window.innerWidth  / 2) + (h * window.innerWidth  * SENSITIVITY_X),
+    rawY: (window.innerHeight / 2) - (v * window.innerHeight * SENSITIVITY_Y),
   };
 }
 
-// ─── 4. Aplicación en tiempo real ─────────────────────────────────────────
-function updateGazePoint(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX) {
-  if (isCalibrated) {
-    // Calibrado: misma feature que durante el entrenamiento (iris + cabeza)
-    const eyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
-    const eyeY = (eyeLookUpL  - eyeLookDownL);
+// ─── Punto de mirada — prioridad: sesión > pesos globales > universal ─────
+function updateGazePoint(out, inn, up, down, headRotX) {
+  const model = isCalibrated ? regressionModel : GLOBAL_GAZE_WEIGHTS;
+  if (model) {
+    const eyeX = (out - inn) + (headRotX * 2);
+    const eyeY = up - down;
     return {
-      rawX: regressionModel.alphaX + regressionModel.betaX * eyeX,
-      rawY: regressionModel.alphaY + regressionModel.betaY * eyeY,
+      rawX: model.alphaX + model.betaX * eyeX,
+      rawY: model.alphaY + model.betaY * eyeY,
     };
   }
-  // Sin calibración: estimación universal con cabeza + iris
-  return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX);
+  return estimateGazeNoCalibration(out, inn, up, down, headRotX);
 }
 
-// ─── startMedicalApp ──────────────────────────────────────────────────────
-// Se ejecuta SOLO cuando el usuario acepta el aviso de privacidad RGPD.
-// Carga MediaPipe y configura el acceso a cámara.
+// ═══════════════════════════════════════════════════════════════════════════
+// ── UI PANTALLA DE INICIO ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+function updateStartScreen() {
+  const badge  = document.getElementById('global-model-badge');
+  const w      = GLOBAL_GAZE_WEIGHTS;
+
+  if (w) {
+    const sessions = w.sessions?.length ?? w.sessionCount ?? 1;
+    const d = new Date(w.lastUpdated);
+    const fecha = isNaN(d) ? '' : ` · ${d.toLocaleDateString('es-ES')}`;
+    badge.textContent  = `✓ Modelo Maestro activo · ${sessions} sesión${sessions !== 1 ? 'es' : ''} promediadas${fecha}`;
+    badge.className    = 'global-badge active';
+    document.getElementById('btn-start').textContent = '▶ INICIAR (Modelo Maestro)';
+    document.getElementById('btn-manual-calib').style.display = 'inline-block';
+  } else {
+    badge.textContent  = '⚠ Sin modelo maestro — se pedirá calibración al paciente';
+    badge.className    = 'global-badge empty';
+    document.getElementById('btn-start').textContent = 'CALIBRAR E INICIAR';
+    document.getElementById('btn-manual-calib').style.display = 'none';
+  }
+
+  // Info sesiones de admin
+  const adminInfo = document.getElementById('admin-session-count');
+  if (adminInfo) {
+    const sc = GLOBAL_GAZE_WEIGHTS?.sessionCount ?? 0;
+    adminInfo.textContent = sc > 0 ? `${sc} sesión${sc !== 1 ? 'es' : ''} de entrenamiento registradas` : 'Sin sesiones de entrenamiento';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── INICIO DE LA APP ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
 async function startMedicalApp() {
+  // Conteo de inicios → sugerencia de calentamiento cada 20 arranques
+  const starts = incrementStartCount();
+  if (starts % 20 === 0 && GLOBAL_GAZE_WEIGHTS) {
+    showWarmupModal(starts);
+  }
+
+  updateStartScreen();
   setStatus('Cargando modelo IA…', 'warn');
 
   try {
     const vision = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm'
     );
-
     faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
@@ -212,100 +328,203 @@ async function startMedicalApp() {
     return;
   }
 
-  setStatus('IA Lista. Haz clic en Activar.', 'ok');
+  setStatus(GLOBAL_GAZE_WEIGHTS ? 'Modelo Maestro listo. Pulse Iniciar.' : 'IA lista. Pulse para calibrar.', 'ok');
 
-  // ─── Activar cámara ──────────────────────────────────────────────────────
-  btnStart.onclick = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-      await video.play();
-      video.addEventListener('loadedmetadata', () => {
-        canvas.width  = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }, { once: true });
+  // ─── ACTIVAR CÁMARA ────────────────────────────────────────────────────
+  btnStart.onclick = () => activateCamera(false);
 
-      screenStart.classList.add('hidden');
-      screenCalib.classList.add('visible');
+  document.getElementById('btn-manual-calib').onclick = () => {
+    isAdminMode  = false;
+    isWarmupMode = false;
+    activateCamera(true);   // forzar calibración aunque haya modelo global
+  };
 
-      // Render loop arranca ya durante calibración para que
-      // currentResults esté listo cuando el usuario haga clic en un punto
-      requestAnimationFrame(renderLoop);
-      setStatus('Calibrando… haga clic en cada punto 3 veces', 'warn');
-    } catch (err) {
-      setStatus('Error de cámara: ' + err.message, 'error');
-    }
+  document.getElementById('btn-admin').onclick = () => {
+    isAdminMode  = true;
+    isWarmupMode = false;
+    activateCamera(true);
   };
 }
 
-// ─── Puntos de calibración ─────────────────────────────────────────────────
+async function activateCamera(forceCalib) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    await video.play();
+    video.addEventListener('loadedmetadata', () => {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }, { once: true });
+
+    screenStart.classList.add('hidden');
+
+    const skipCalib = !forceCalib && GLOBAL_GAZE_WEIGHTS && !isAdminMode;
+    if (skipCalib) {
+      // Modelo Maestro disponible → saltar calibración
+      gazeDot.style.display = 'block';
+      dataPanel.classList.add('visible');
+      requestAnimationFrame(renderLoop);
+      setStatus('Seguimiento activo — Modelo Maestro', 'ok');
+    } else {
+      resetCalibration();
+      requestAnimationFrame(renderLoop);
+    }
+  } catch (err) {
+    setStatus('Error de cámara: ' + err.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── MODAL DE CALENTAMIENTO ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+function showWarmupModal(starts) {
+  const modal = document.getElementById('warmup-modal');
+  document.getElementById('warmup-start-count').textContent = starts;
+  modal.style.display = 'flex';
+}
+
+document.getElementById('btn-warmup-skip').onclick = () => {
+  document.getElementById('warmup-modal').style.display = 'none';
+};
+
+document.getElementById('btn-warmup-start').onclick = () => {
+  document.getElementById('warmup-modal').style.display = 'none';
+  isAdminMode  = false;
+  isWarmupMode = true;
+  // La cámara ya estará activa desde la llamada a startMedicalApp
+  // Si el video no está activo aún, esperar a que lo esté
+  if (video.srcObject) {
+    resetCalibration();
+    screenStart.classList.add('hidden');
+    screenCalib.classList.add('visible');
+  } else {
+    activateCamera(true);
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PUNTOS DE CALIBRACIÓN ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
 document.querySelectorAll('.calibration-point').forEach(point => {
   const id = point.dataset.id;
   clickCounts[id] = 0;
 
   point.addEventListener('click', (e) => {
+    // En calentamiento, ignorar puntos no pertenecientes a la fila central
+    if (isWarmupMode && !WARMUP_POINT_IDS.includes(id)) return;
+
     const rect = e.target.getBoundingClientRect();
-    const x    = rect.left + rect.width  / 2;
-    const y    = rect.top  + rect.height / 2;
+    safeRecord(rect.left + rect.width / 2, rect.top + rect.height / 2);
 
-    // safeRecord: solo graba si la IA detecta el rostro en este momento
-    safeRecord(x, y);
-
-    const n = trainingData.length;
-    valSamples.textContent = n;
-
+    valSamples.textContent = trainingData.length;
     clickCounts[id]++;
     const remaining = Math.max(0, CLICKS_NEEDED - clickCounts[id]);
-    if (remaining === 0) {
-      e.target.textContent = '✓';
-      e.target.classList.add('done');
-    } else {
-      e.target.textContent = remaining;
-    }
+    e.target.textContent = remaining === 0 ? '✓' : remaining;
+    if (remaining === 0) e.target.classList.add('done');
 
-    const allDone = Object.values(clickCounts).every(c => c >= CLICKS_NEEDED);
+    // Comprobar si están completos los puntos activos
+    const activeIds = isWarmupMode ? WARMUP_POINT_IDS : Object.keys(clickCounts);
+    const allDone   = activeIds.every(aid => (clickCounts[aid] || 0) >= CLICKS_NEEDED);
     if (allDone && !allCalibrated) {
       allCalibrated = true;
       btnStartTrack.classList.add('visible');
-      setStatus(`Calibración completa (${n} muestras). Pulse Iniciar.`, 'ok');
+      setStatus(`Calibración completa (${trainingData.length} muestras). Pulse Iniciar.`, 'ok');
     }
   });
 });
 
-// ─── Botón recalibrar ──────────────────────────────────────────────────────
-document.getElementById('btn-recalibrate').onclick = () => {
-  resetCalibration();
-};
+document.getElementById('btn-recalibrate').onclick = () => resetCalibration();
 
-// ─── Iniciar seguimiento ───────────────────────────────────────────────────
+// ─── Iniciar / Guardar sesión de entrenamiento ────────────────────────────
 btnStartTrack.onclick = () => {
-  // Calcular modelo final si aún no se calculó automáticamente
   if (!isCalibrated && trainingData.length >= 4) {
     calculateRegression();
     isCalibrated = true;
   }
 
+  if (isAdminMode) {
+    // ── Guardar sesión y mostrar resultado ──────────────────────────────
+    const updated = addTrainingSession(regressionModel);
+    showAdminResult(updated);
+    return;
+  }
+
+  if (isWarmupMode) {
+    // ── Calentamiento: afinar el modelo global y continuar ──────────────
+    addTrainingSession(regressionModel);
+    isWarmupMode  = false;
+    isCalibrated  = false;   // dejar que el modelo global tome el control
+    regressionModel = { alphaX: 0, betaX: 0, alphaY: 0, betaY: 0 };
+    updateStartScreen();
+  }
+
+  // ── Iniciar seguimiento ─────────────────────────────────────────────────
   screenCalib.classList.remove('visible');
   dataPanel.classList.add('visible');
   gazeDot.style.display = 'block';
-  setStatus('Seguimiento de mirada activo', 'ok');
+  setStatus(GLOBAL_GAZE_WEIGHTS
+    ? `Seguimiento activo · Modelo Maestro (${GLOBAL_GAZE_WEIGHTS.sessions?.length ?? 1} sesiones)`
+    : 'Seguimiento de mirada activo', 'ok');
 };
 
-// ─── Bucle de renderizado ──────────────────────────────────────────────────
+// ─── Panel de resultado de sesión Admin ──────────────────────────────────
+function showAdminResult(updated) {
+  const modal = document.getElementById('admin-result-modal');
+  const sc    = updated.sessionCount;
+  document.getElementById('admin-result-count').textContent   = sc;
+  document.getElementById('admin-result-avg').textContent     = updated.sessions?.length ?? 1;
+  document.getElementById('admin-result-betax').textContent   = updated.betaX.toFixed(2);
+  document.getElementById('admin-result-betay').textContent   = updated.betaY.toFixed(2);
+  document.getElementById('admin-result-alphax').textContent  = updated.alphaX.toFixed(1);
+  document.getElementById('admin-result-alphay').textContent  = updated.alphaY.toFixed(1);
+  modal.style.display = 'flex';
+  updateStartScreen();
+}
+
+document.getElementById('btn-admin-another').onclick = () => {
+  document.getElementById('admin-result-modal').style.display = 'none';
+  // Nueva sesión de entrenamiento
+  trainingData  = [];
+  isCalibrated  = false;
+  resetCalibration();
+};
+
+document.getElementById('btn-admin-finish').onclick = () => {
+  document.getElementById('admin-result-modal').style.display = 'none';
+  isAdminMode = false;
+  // Ir al tracking con el modelo maestro
+  screenCalib.classList.remove('visible');
+  dataPanel.classList.add('visible');
+  gazeDot.style.display = 'block';
+  setStatus(`Modelo Maestro actualizado (${GLOBAL_GAZE_WEIGHTS.sessions?.length ?? 1} sesiones). Seguimiento activo.`, 'ok');
+};
+
+document.getElementById('btn-admin-reset-weights')?.addEventListener('click', () => {
+  if (confirm('¿Borrar el Modelo Maestro? Se perderán todas las sesiones de entrenamiento.')) {
+    clearGlobalWeights();
+    updateStartScreen();
+    document.getElementById('admin-result-modal').style.display = 'none';
+    setStatus('Modelo Maestro eliminado', 'warn');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── BUCLE DE RENDERIZADO ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
 const drawingUtils = new DrawingUtils(ctx);
 
 function renderLoop(rafTs) {
   if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
 
-    // Timestamp estrictamente creciente — evita "Packet timestamp mismatch"
     const mpTs = Math.max(rafTs, lastMpTs + 0.1);
-    lastMpTs = mpTs;
+    lastMpTs   = mpTs;
 
     try {
       const results = faceLandmarker.detectForVideo(video, mpTs);
-
-      // Actualizar currentResults para recordCalibrationPoint()
       currentResults = results;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -328,10 +547,7 @@ function renderLoop(rafTs) {
         const landmarks = results.faceLandmarks[0];
         const find      = (name) => shapes.find(s => s.categoryName === name)?.score ?? 0;
 
-        // ── Rotación horizontal de cabeza: nariz punta (1) vs base (4) ──
-        const headRotX = landmarks[1].x - landmarks[4].x;
-
-        // ── Mirada (iris blendshapes) ─────────────────────────────────────
+        const headRotX   = landmarks[1].x - landmarks[4].x;
         const eyeLookOutL  = find('eyeLookOutLeft');
         const eyeLookInL   = find('eyeLookInLeft');
         const eyeLookUpL   = find('eyeLookUpLeft');
@@ -354,26 +570,19 @@ function renderLoop(rafTs) {
         valY.textContent       = Math.round(posY);
         valSamples.textContent = trainingData.length;
 
-        // ── Parpadeo deliberado — ambos ojos AND (más intencional) ───────
-        const blinkLScore = find('eyeBlinkLeft');
-        const blinkRScore = find('eyeBlinkRight');
-        const isBlink     = blinkLScore > BLINK_THRESHOLD && blinkRScore > BLINK_THRESHOLD;
+        const blinkL  = find('eyeBlinkLeft');
+        const blinkR  = find('eyeBlinkRight');
+        const isBlink = blinkL > BLINK_THRESHOLD && blinkR > BLINK_THRESHOLD;
 
         const blinkEl = document.getElementById('val-blink');
-        // Mostrar el mínimo de ambos — así se ve cuánto falta para disparar
-        if (blinkEl) blinkEl.textContent = Math.min(blinkLScore, blinkRScore).toFixed(2);
+        if (blinkEl) blinkEl.textContent = Math.min(blinkL, blinkR).toFixed(2);
 
         if (isBlink && !wasBlinking && !blinkOnCooldown) {
           blinkOnCooldown = true;
-
-          // Flash del punto de mirada
           gazeDot.classList.add('blink-flash');
           setTimeout(() => gazeDot.classList.remove('blink-flash'), 350);
-
-          // Actualizar indicador visual
           if (blinkEl) { blinkEl.classList.add('blink-active'); }
           setTimeout(() => blinkEl?.classList.remove('blink-active'), 400);
-
           setTimeout(() => { blinkOnCooldown = false; }, BLINK_COOLDOWN);
         }
         wasBlinking = isBlink;
@@ -384,18 +593,17 @@ function renderLoop(rafTs) {
   requestAnimationFrame(renderLoop);
 }
 
-// ─── Helper ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ── HELPERS ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
 function setStatus(text, cls = '') {
   statusEl.textContent = text;
   statusEl.className   = cls;
 }
 
-// ─── Consentimiento RGPD ──────────────────────────────────────────────────
-// startMedicalApp() se ejecuta SOLO al pulsar "ACEPTAR Y COMENZAR".
-// Antes de eso, MediaPipe y la cámara no se inicializan.
+// ─── Consentimiento RGPD → dispara toda la app ────────────────────────────
 document.getElementById('btn-accept-privacy').addEventListener('click', () => {
-  // Ocultar el modal de privacidad
   document.getElementById('privacy-modal').classList.add('hidden');
-  // Iniciar MediaPipe + configurar acceso a cámara
   startMedicalApp();
 });

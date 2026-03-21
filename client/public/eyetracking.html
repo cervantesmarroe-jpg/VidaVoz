@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EyeTracking Clínico Pro</title>
+  <title>EyeTracking Clínico Pro — Modelo Maestro</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,17 +18,15 @@
     }
 
     header {
-      padding: 16px 20px 12px;
+      padding: 14px 20px 10px;
       background: #1e293b;
       border-bottom: 1px solid #334155;
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      display: flex; align-items: center; gap: 12px;
       flex-shrink: 0;
     }
-    header h1 { font-size: 1.25rem; font-weight: 700; }
+    header h1 { font-size: 1.15rem; font-weight: 700; }
     #status {
-      font-size: 0.875rem; color: #94a3b8;
+      font-size: 0.85rem; color: #94a3b8;
       flex: 1; text-align: right;
     }
     #status.ok    { color: #34d399; }
@@ -39,10 +37,10 @@
       position: relative; flex: 1; overflow: hidden; background: #000;
     }
 
-    /* Miniatura de cámara + canvas de malla — esquina inferior derecha */
+    /* Miniatura cámara */
     #webcam, #output_canvas {
       position: absolute; bottom: 16px; right: 16px;
-      width: 220px; height: 165px;
+      width: 200px; height: 150px;
       border-radius: 12px; object-fit: cover;
       transform: scaleX(-1); z-index: 10;
     }
@@ -61,16 +59,34 @@
       transition: left 0.06s linear, top 0.06s linear;
     }
 
-    /* Pantalla de inicio */
+    /* ── Pantalla de inicio ─────────────────────────────────────────────── */
     #screen-start {
       position: absolute; inset: 0;
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 16px;
-      z-index: 30; background: #0f172a88;
+      align-items: center; justify-content: center; gap: 14px;
+      z-index: 30; background: #0f172acc; padding: 20px;
     }
     #screen-start.hidden { display: none; }
 
-    /* Pantalla de calibración */
+    .global-badge {
+      font-size: 0.88rem; font-weight: 700;
+      padding: 8px 20px; border-radius: 999px;
+      text-align: center; max-width: 520px;
+    }
+    .global-badge.active {
+      background: #14532d; color: #4ade80;
+      border: 1px solid #166534;
+    }
+    .global-badge.empty {
+      background: #431407; color: #fb923c;
+      border: 1px solid #7c2d12;
+    }
+
+    #admin-session-count {
+      font-size: 0.78rem; color: #64748b; text-align: center;
+    }
+
+    /* ── Pantalla de calibración ────────────────────────────────────────── */
     #screen-calibration {
       position: absolute; inset: 0;
       display: none; z-index: 30;
@@ -78,16 +94,22 @@
     }
     #screen-calibration.visible { display: block; }
 
-    /* Instrucción calibración */
+    /* Banner modo calibración */
+    #calib-mode-badge {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      background: #7c3aed; color: #fff; border-radius: 999px;
+      padding: 5px 20px; font-size: 0.82rem; font-weight: 800;
+      letter-spacing: 0.04em; display: none; z-index: 5;
+    }
+
     #calib-instruction {
-      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
       background: #1e293b; border: 1px solid #334155;
-      border-radius: 12px; padding: 12px 28px;
-      text-align: center; font-size: 1rem; white-space: nowrap;
+      border-radius: 12px; padding: 10px 24px;
+      text-align: center; font-size: 0.95rem; white-space: nowrap;
     }
     #calib-instruction strong { color: #fbbf24; }
 
-    /* Puntos de calibración */
     .calibration-point {
       position: absolute;
       width: 56px; height: 56px; border-radius: 50%;
@@ -101,24 +123,23 @@
     .calibration-point:active { transform: translate(-50%,-50%) scale(0.85); }
     .calibration-point.done   { background: #14532d; border-color: #4ade80; color: #4ade80; }
 
-    /* Botón "Iniciar seguimiento" — aparece cuando todos los puntos están calibrados */
     #btn-start-tracking {
       position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
       display: none;
     }
     #btn-start-tracking.visible { display: block; }
 
-    /* Panel de datos durante seguimiento */
+    /* ── Panel de datos ──────────────────────────────────────────────────── */
     #data-panel {
       position: absolute; bottom: 16px; left: 16px; z-index: 25;
       background: #1e293b; border: 1px solid #334155; border-radius: 12px;
-      padding: 10px 20px; font-size: 0.95rem;
-      display: none; gap: 20px; align-items: center;
+      padding: 10px 18px; font-size: 0.92rem;
+      display: none; gap: 16px; align-items: center;
     }
     #data-panel.visible { display: flex; }
     #data-panel span { font-weight: 700; color: #818cf8; }
 
-    /* Flash de parpadeo en el punto de mirada */
+    /* Parpadeo */
     @keyframes blink-flash {
       0%   { box-shadow: 0 0 18px 6px rgba(99,102,241,0.5); background: rgba(99,102,241,0.85); }
       30%  { box-shadow: 0 0 0 24px rgba(255,255,255,0.3), 0 0 50px 14px rgba(255,255,255,0.9);
@@ -126,24 +147,20 @@
       100% { box-shadow: 0 0 18px 6px rgba(99,102,241,0.5); background: rgba(99,102,241,0.85); }
     }
     #gaze-dot.blink-flash { animation: blink-flash 0.35s ease-out forwards; }
-
-    /* Indicador de parpadeo en el panel */
     #val-blink { color: #818cf8; transition: color 0.1s; }
-    #val-blink.blink-active { color: #fff; font-size: 1.2rem; }
+    #val-blink.blink-active { color: #fff; font-size: 1.15rem; }
 
-    /* Botón recalibrar — aparece durante el tracking */
+    /* Botón recalibrar */
     #btn-recalibrate {
       background: #dc2626; color: #fff;
-      font-size: 0.9rem; font-weight: 800;
-      padding: 8px 18px; border: none; border-radius: 10px;
-      cursor: pointer; letter-spacing: 0.04em;
-      transition: background 0.15s, transform 0.1s;
-      white-space: nowrap;
+      font-size: 0.85rem; font-weight: 800;
+      padding: 7px 14px; border: none; border-radius: 10px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s;
     }
     #btn-recalibrate:hover  { background: #ef4444; }
     #btn-recalibrate:active { transform: scale(0.95); }
 
-    /* Toast de aviso: cara no detectada */
+    /* Toast cara no detectada */
     #face-toast {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626;
@@ -151,10 +168,11 @@
       z-index: 40; display: none; pointer-events: none;
     }
 
+    /* Botones base */
     .medical-btn {
       background: #6366f1; color: #fff;
-      font-size: 1.15rem; font-weight: 800;
-      padding: 16px 36px; border: none; border-radius: 14px;
+      font-size: 1.1rem; font-weight: 800;
+      padding: 14px 32px; border: none; border-radius: 14px;
       cursor: pointer; letter-spacing: 0.05em;
       box-shadow: 0 4px 24px rgba(99,102,241,0.45);
       transition: background 0.15s, transform 0.1s;
@@ -162,50 +180,98 @@
     .medical-btn:hover  { background: #818cf8; }
     .medical-btn:active { transform: scale(0.96); }
 
-    /* ── Modal de privacidad RGPD ── */
+    .secondary-btn {
+      background: transparent; color: #94a3b8;
+      font-size: 0.9rem; font-weight: 700;
+      padding: 10px 20px; border: 1px solid #334155; border-radius: 10px;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .secondary-btn:hover { background: #1e293b; color: #f1f5f9; }
+
+    .admin-btn {
+      background: #78350f; color: #fbbf24;
+      font-size: 0.9rem; font-weight: 800;
+      padding: 10px 20px; border: 1px solid #92400e; border-radius: 10px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .admin-btn:hover { background: #92400e; }
+
+    /* ══ MODALES SUPERPUESTOS ═══════════════════════════════════════════════ */
+    .overlay-modal {
+      position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,0.78); backdrop-filter: blur(5px);
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+
+    .modal-box {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 20px; max-width: 500px; width: 100%;
+      padding: 36px 32px; display: flex; flex-direction: column; gap: 20px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+    }
+    .modal-box h2 { font-size: 1.2rem; font-weight: 900; color: #f1f5f9; }
+    .modal-box p  { font-size: 0.95rem; color: #94a3b8; line-height: 1.6; }
+
+    .modal-row { display: flex; gap: 10px; }
+    .modal-row button { flex: 1; }
+
+    /* ── Modal calentamiento ── */
+    #warmup-modal p em {
+      color: #fbbf24; font-style: normal; font-weight: 700;
+    }
+
+    /* ── Modal resultado Admin ── */
+    .admin-stats {
+      background: #0f172a; border: 1px solid #1e3a5f;
+      border-radius: 12px; padding: 14px 18px;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px 20px; font-size: 0.85rem;
+    }
+    .admin-stats dt { color: #64748b; }
+    .admin-stats dd { color: #38bdf8; font-weight: 700; text-align: right; }
+    .admin-stats .mirror-note {
+      grid-column: 1/-1; font-size: 0.78rem; color: #22d3ee;
+      border-top: 1px solid #1e3a5f; padding-top: 8px; margin-top: 4px;
+    }
+
+    .danger-btn {
+      background: transparent; color: #f87171;
+      border: 1px solid #7f1d1d; border-radius: 8px;
+      font-size: 0.8rem; font-weight: 700;
+      padding: 6px 14px; cursor: pointer; align-self: flex-start;
+      transition: background 0.15s;
+    }
+    .danger-btn:hover { background: #450a0a; }
+
+    /* ── Modal privacidad RGPD ── */
     #privacy-modal {
       position: fixed; inset: 0; z-index: 9999;
-      background: rgba(0, 0, 0, 0.82);
-      backdrop-filter: blur(6px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
+      background: rgba(0,0,0,0.82); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
     }
     #privacy-modal.hidden { display: none; }
 
     #privacy-modal-box {
-      background: #ffffff; color: #1e293b;
-      border-radius: 24px;
+      background: #ffffff; color: #1e293b; border-radius: 24px;
       max-width: 560px; width: 100%;
       padding: 40px 36px 32px;
       box-shadow: 0 24px 80px rgba(0,0,0,0.6);
       display: flex; flex-direction: column; align-items: center; gap: 28px;
       text-align: center;
     }
-
     #privacy-modal-box .pm-icon {
-      width: 64px; height: 64px; border-radius: 18px;
-      background: #d1fae5;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2rem;
+      width: 64px; height: 64px; border-radius: 18px; background: #d1fae5;
+      display: flex; align-items: center; justify-content: center; font-size: 2rem;
     }
-
     #privacy-modal-box h2 {
-      font-size: 1.35rem; font-weight: 900;
-      color: #0f172a; letter-spacing: -0.01em;
+      font-size: 1.35rem; font-weight: 900; color: #0f172a;
     }
-
     #privacy-modal-box p {
-      font-size: 1rem; line-height: 1.7;
-      color: #334155; max-width: 460px;
+      font-size: 1rem; line-height: 1.7; color: #334155; max-width: 460px;
     }
-
-    #privacy-modal-box p strong {
-      color: #0f172a; font-weight: 700;
-    }
-
+    #privacy-modal-box p strong { color: #0f172a; font-weight: 700; }
     #btn-accept-privacy {
-      width: 100%;
-      background: #16a34a; color: #fff;
+      width: 100%; background: #16a34a; color: #fff;
       font-size: 1.2rem; font-weight: 900;
       padding: 18px 32px; border: none; border-radius: 14px;
       cursor: pointer; letter-spacing: 0.04em;
@@ -214,50 +280,95 @@
     }
     #btn-accept-privacy:hover  { background: #15803d; }
     #btn-accept-privacy:active { transform: scale(0.97); }
-
     .pm-badges {
-      display: flex; flex-wrap: wrap; gap: 10px;
-      justify-content: center;
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
     }
     .pm-badge {
       display: flex; align-items: center; gap: 6px;
       background: #f0fdf4; border: 1px solid #bbf7d0;
       color: #166534; border-radius: 999px;
-      font-size: 0.8rem; font-weight: 700;
-      padding: 5px 12px;
+      font-size: 0.8rem; font-weight: 700; padding: 5px 12px;
     }
   </style>
 </head>
 <body>
 
-  <!-- ── Modal de privacidad RGPD — z-index 9999, bloquea todo hasta aceptar ── -->
+  <!-- ── Modal privacidad RGPD (z-index 9999) ─────────────────────────── -->
   <div id="privacy-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title">
     <div id="privacy-modal-box">
-
       <div class="pm-icon">🔒</div>
-
-      <div>
-        <h2 id="pm-title">Aviso de Privacidad</h2>
-      </div>
-
+      <h2 id="pm-title">Aviso de Privacidad</h2>
       <p>
         <strong>AVISO DE PRIVACIDAD LOCAL:</strong> Esta herramienta de comunicación asistiva
         procesa los movimientos oculares de forma local y efímera. No se graba video ni se toman
         fotografías. No se envían datos fuera de este dispositivo. Al cerrar la aplicación,
         toda la configuración matemática se borra permanentemente.
       </p>
-
       <div class="pm-badges">
         <span class="pm-badge">✓ Sin servidores externos</span>
         <span class="pm-badge">✓ Sin grabación</span>
         <span class="pm-badge">✓ Datos volátiles (RAM)</span>
         <span class="pm-badge">✓ RGPD art. 9.2.c</span>
       </div>
-
       <button id="btn-accept-privacy">ACEPTAR Y COMENZAR</button>
     </div>
   </div>
 
+  <!-- ── Modal calentamiento rápido (cada 20 inicios) ─────────────────── -->
+  <div id="warmup-modal" class="overlay-modal" role="dialog">
+    <div class="modal-box">
+      <h2>⚡ Optimizador de Precisión</h2>
+      <p>
+        Se han registrado <em id="warmup-start-count">20</em> inicios de la aplicación.<br><br>
+        Se recomienda un breve <em>calentamiento de 3 puntos</em> para mantener la calidad
+        asistencial del Modelo Maestro. Este paso es <em>opcional</em>.
+      </p>
+      <div class="modal-row">
+        <button id="btn-warmup-start" class="medical-btn" style="background:#059669">
+          ⚡ Hacer calentamiento
+        </button>
+        <button id="btn-warmup-skip" class="secondary-btn">Más tarde</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal resultado sesión Admin ─────────────────────────────────── -->
+  <div id="admin-result-modal" class="overlay-modal" role="dialog">
+    <div class="modal-box">
+      <h2>⚙ Sesión de entrenamiento completada</h2>
+      <p>
+        Sesión <strong id="admin-result-count">1</strong> registrada.
+        Modelo Maestro actualizado con el promedio de
+        <strong id="admin-result-avg">1</strong> sesión(es).
+      </p>
+
+      <dl class="admin-stats">
+        <dt>betaX (ganancia H)</dt>
+        <dd id="admin-result-betax">—</dd>
+        <dt>betaY (ganancia V)</dt>
+        <dd id="admin-result-betay">—</dd>
+        <dt>alphaX (offset H)</dt>
+        <dd id="admin-result-alphax">—</dd>
+        <dt>alphaY (offset V)</dt>
+        <dd id="admin-result-alphay">—</dd>
+        <p class="mirror-note">
+          ✓ Efecto espejo integrado — betaX es negativo por diseño: la regresión aprende
+          que mirar a la izquierda produce un valor positivo del iris que debe mover el
+          cursor a la izquierda (negativo en píxeles).
+        </p>
+      </dl>
+
+      <div class="modal-row">
+        <button id="btn-admin-another" class="medical-btn" style="background:#7c3aed">
+          + Otra sesión
+        </button>
+        <button id="btn-admin-finish" class="secondary-btn">Finalizar entrenamiento</button>
+      </div>
+      <button id="btn-admin-reset-weights" class="danger-btn">🗑 Borrar Modelo Maestro</button>
+    </div>
+  </div>
+
+  <!-- ── Cabecera ──────────────────────────────────────────────────────── -->
   <header>
     <h1>Asistente de Mirada Pro</h1>
     <p id="status">Esperando consentimiento…</p>
@@ -268,18 +379,40 @@
     <canvas id="output_canvas"></canvas>
     <div id="gaze-dot"></div>
 
-    <!-- Pantalla 1: inicio -->
+    <!-- ── Pantalla 1: inicio ──────────────────────────────────────────── -->
     <div id="screen-start">
-      <button id="btn-start" class="medical-btn">ACTIVAR CÁMARA</button>
+
+      <!-- Estado del Modelo Maestro -->
+      <div id="global-model-badge" class="global-badge empty">
+        ⚠ Sin modelo maestro — se pedirá calibración al paciente
+      </div>
+      <p id="admin-session-count" style="font-size:0.78rem;color:#64748b"></p>
+
+      <!-- Botón principal -->
+      <button id="btn-start" class="medical-btn">CALIBRAR E INICIAR</button>
+
+      <!-- Botón calibración manual (solo visible si hay modelo maestro) -->
+      <button id="btn-manual-calib" class="secondary-btn" style="display:none">
+        Calibrar manualmente
+      </button>
+
+      <!-- Botón administrador -->
+      <button id="btn-admin" class="admin-btn">
+        ⚙ Modo Administrador — Entrenar Modelo
+      </button>
     </div>
 
-    <!-- Pantalla 2: calibración 9 puntos -->
+    <!-- ── Pantalla 2: calibración 9 puntos ──────────────────────────── -->
     <div id="screen-calibration">
+
+      <!-- Badge de modo (Admin / Calentamiento) -->
+      <div id="calib-mode-badge"></div>
+
       <div id="calib-instruction">
-        Mire cada punto y <strong>haga clic</strong> sobre él (3 veces mínimo cada uno)
+        Mire cada punto y <strong>haga clic</strong> sobre él (3 veces mínimo)
       </div>
 
-      <!-- 3 × 3 grid: posiciones en % -->
+      <!-- 3×3 grid — fila central (ids 3,4,5) se usa para calentamiento rápido -->
       <div class="calibration-point" data-id="0" style="left:10%;top:15%">3</div>
       <div class="calibration-point" data-id="1" style="left:50%;top:15%">3</div>
       <div class="calibration-point" data-id="2" style="left:90%;top:15%">3</div>
