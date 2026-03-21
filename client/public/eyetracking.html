@@ -161,13 +161,106 @@
     }
     .medical-btn:hover  { background: #818cf8; }
     .medical-btn:active { transform: scale(0.96); }
+
+    /* ── Modal de privacidad RGPD ── */
+    #privacy-modal {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    #privacy-modal.hidden { display: none; }
+
+    #privacy-modal-box {
+      background: #ffffff; color: #1e293b;
+      border-radius: 24px;
+      max-width: 560px; width: 100%;
+      padding: 40px 36px 32px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+      display: flex; flex-direction: column; align-items: center; gap: 28px;
+      text-align: center;
+    }
+
+    #privacy-modal-box .pm-icon {
+      width: 64px; height: 64px; border-radius: 18px;
+      background: #d1fae5;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem;
+    }
+
+    #privacy-modal-box h2 {
+      font-size: 1.35rem; font-weight: 900;
+      color: #0f172a; letter-spacing: -0.01em;
+    }
+
+    #privacy-modal-box p {
+      font-size: 1rem; line-height: 1.7;
+      color: #334155; max-width: 460px;
+    }
+
+    #privacy-modal-box p strong {
+      color: #0f172a; font-weight: 700;
+    }
+
+    #btn-accept-privacy {
+      width: 100%;
+      background: #16a34a; color: #fff;
+      font-size: 1.2rem; font-weight: 900;
+      padding: 18px 32px; border: none; border-radius: 14px;
+      cursor: pointer; letter-spacing: 0.04em;
+      box-shadow: 0 6px 28px rgba(22,163,74,0.4);
+      transition: background 0.15s, transform 0.1s;
+    }
+    #btn-accept-privacy:hover  { background: #15803d; }
+    #btn-accept-privacy:active { transform: scale(0.97); }
+
+    .pm-badges {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      justify-content: center;
+    }
+    .pm-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      color: #166534; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 700;
+      padding: 5px 12px;
+    }
   </style>
 </head>
 <body>
 
+  <!-- ── Modal de privacidad RGPD — z-index 9999, bloquea todo hasta aceptar ── -->
+  <div id="privacy-modal" role="dialog" aria-modal="true" aria-labelledby="pm-title">
+    <div id="privacy-modal-box">
+
+      <div class="pm-icon">🔒</div>
+
+      <div>
+        <h2 id="pm-title">Aviso de Privacidad</h2>
+      </div>
+
+      <p>
+        <strong>AVISO DE PRIVACIDAD LOCAL:</strong> Esta herramienta de comunicación asistiva
+        procesa los movimientos oculares de forma local y efímera. No se graba video ni se toman
+        fotografías. No se envían datos fuera de este dispositivo. Al cerrar la aplicación,
+        toda la configuración matemática se borra permanentemente.
+      </p>
+
+      <div class="pm-badges">
+        <span class="pm-badge">✓ Sin servidores externos</span>
+        <span class="pm-badge">✓ Sin grabación</span>
+        <span class="pm-badge">✓ Datos volátiles (RAM)</span>
+        <span class="pm-badge">✓ RGPD art. 9.2.c</span>
+      </div>
+
+      <button id="btn-accept-privacy">ACEPTAR Y COMENZAR</button>
+    </div>
+  </div>
+
   <header>
     <h1>Asistente de Mirada Pro</h1>
-    <p id="status">Iniciando IA Médica…</p>
+    <p id="status">Esperando consentimiento…</p>
   </header>
 
   <div id="video-wrapper">

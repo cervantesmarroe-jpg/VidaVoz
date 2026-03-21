@@ -53,14 +53,16 @@ let currentResults = null;
 let wasBlinking    = false;
 let blinkOnCooldown = false;
 
+// Contadores de calibración — scope global para que resetCalibration() los vea
+const clickCounts = {};
+let allCalibrated = false;
+
 // ─── 1b. Reset Clínico ────────────────────────────────────────────────────
-// Vacía el historial y vuelve a mostrar la pantalla de calibración
 function resetCalibration() {
-  trainingData = [];
-  isCalibrated = false;
+  trainingData  = [];
+  isCalibrated  = false;
   allCalibrated = false;
 
-  // Resetear contadores y aspecto visual de los puntos
   document.querySelectorAll('.calibration-point').forEach(pt => {
     const id = pt.dataset.id;
     clickCounts[id] = 0;
@@ -69,13 +71,11 @@ function resetCalibration() {
   });
   btnStartTrack.classList.remove('visible');
 
-  // UI: ocultar puntero y panel, mostrar calibración
   gazeDot.style.display = 'none';
   dataPanel.classList.remove('visible');
   screenCalib.classList.add('visible');
 
   setStatus('Recalibrando — haga clic en los puntos', 'warn');
-  console.log('Sistema reiniciado. Esperando nuevos datos de entrenamiento.');
 }
 
 // ─── 2. Captura de datos durante la calibración ───────────────────────────
@@ -95,8 +95,6 @@ function recordCalibrationPoint(screenX, screenY) {
   const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
 
   trainingData.push({ eyeX, eyeY, screenX, screenY });
-
-  console.log(`Muestra ${trainingData.length}: eyeX=${eyeX.toFixed(3)} eyeY=${eyeY.toFixed(3)} → (${Math.round(screenX)}, ${Math.round(screenY)})`);
 
   if (trainingData.length >= 27) { // 9 puntos × 3 clics mínimo
     calculateRegression();
@@ -189,52 +187,58 @@ function updateGazePoint(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, head
   return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX);
 }
 
-// ─── Inicializar FaceLandmarker ────────────────────────────────────────────
-setStatus('Cargando modelo IA…', 'warn');
+// ─── startMedicalApp ──────────────────────────────────────────────────────
+// Se ejecuta SOLO cuando el usuario acepta el aviso de privacidad RGPD.
+// Carga MediaPipe y configura el acceso a cámara.
+async function startMedicalApp() {
+  setStatus('Cargando modelo IA…', 'warn');
 
-const vision = await FilesetResolver.forVisionTasks(
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm'
-);
-
-faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-  baseOptions: {
-    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-    delegate: 'GPU',
-  },
-  runningMode:           'VIDEO',
-  numFaces:              1,
-  outputFaceBlendshapes: true,
-});
-
-setStatus('IA Lista. Haz clic en Activar.', 'ok');
-
-// ─── Activar cámara ────────────────────────────────────────────────────────
-btnStart.onclick = async () => {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    await video.play();
-    video.addEventListener('loadedmetadata', () => {
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-    }, { once: true });
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm'
+    );
 
-    screenStart.classList.add('hidden');
-    screenCalib.classList.add('visible');
-
-    // Arrancamos el render loop YA (durante calibración) para que
-    // currentResults esté actualizado cuando el usuario haga clic en un punto
-    requestAnimationFrame(renderLoop);
-    setStatus('Calibrando… haga clic en cada punto 3 veces', 'warn');
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+        delegate: 'GPU',
+      },
+      runningMode:           'VIDEO',
+      numFaces:              1,
+      outputFaceBlendshapes: true,
+    });
   } catch (err) {
-    setStatus('Error de cámara: ' + err.message, 'error');
+    setStatus('Error cargando IA: ' + err.message, 'error');
+    return;
   }
-};
+
+  setStatus('IA Lista. Haz clic en Activar.', 'ok');
+
+  // ─── Activar cámara ──────────────────────────────────────────────────────
+  btnStart.onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      await video.play();
+      video.addEventListener('loadedmetadata', () => {
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }, { once: true });
+
+      screenStart.classList.add('hidden');
+      screenCalib.classList.add('visible');
+
+      // Render loop arranca ya durante calibración para que
+      // currentResults esté listo cuando el usuario haga clic en un punto
+      requestAnimationFrame(renderLoop);
+      setStatus('Calibrando… haga clic en cada punto 3 veces', 'warn');
+    } catch (err) {
+      setStatus('Error de cámara: ' + err.message, 'error');
+    }
+  };
+}
 
 // ─── Puntos de calibración ─────────────────────────────────────────────────
-const clickCounts = {};
-let allCalibrated = false;
-
 document.querySelectorAll('.calibration-point').forEach(point => {
   const id = point.dataset.id;
   clickCounts[id] = 0;
@@ -370,7 +374,6 @@ function renderLoop(rafTs) {
           if (blinkEl) { blinkEl.classList.add('blink-active'); }
           setTimeout(() => blinkEl?.classList.remove('blink-active'), 400);
 
-          console.log(`Parpadeo detectado en (${Math.round(posX)}, ${Math.round(posY)})`);
           setTimeout(() => { blinkOnCooldown = false; }, BLINK_COOLDOWN);
         }
         wasBlinking = isBlink;
@@ -386,3 +389,13 @@ function setStatus(text, cls = '') {
   statusEl.textContent = text;
   statusEl.className   = cls;
 }
+
+// ─── Consentimiento RGPD ──────────────────────────────────────────────────
+// startMedicalApp() se ejecuta SOLO al pulsar "ACEPTAR Y COMENZAR".
+// Antes de eso, MediaPipe y la cámara no se inicializan.
+document.getElementById('btn-accept-privacy').addEventListener('click', () => {
+  // Ocultar el modal de privacidad
+  document.getElementById('privacy-modal').classList.add('hidden');
+  // Iniciar MediaPipe + configurar acceso a cámara
+  startMedicalApp();
+});
