@@ -41,15 +41,37 @@ const WEIGHTS_KEY     = 'vozuci-global-weights-v1';
 const STARTS_KEY      = 'vozuci-start-count-v1';
 const MAX_SESSIONS    = 10;   // sesiones a promediar (ventana deslizante)
 
-// Variable Global de Pesos — cargada desde localStorage al iniciar.
+// ─── DEFAULT_WEIGHTS ─────────────────────────────────────────────────────
+// Valores de fábrica calculados por el administrador y pegados aquí.
+// Actúan como "firmware" del dispositivo: la app arranca con precisión
+// incluso si localStorage está vacío (primer uso, modo privado, etc.).
+// Para obtener nuevos valores: entrenar en Modo Admin → aparece un alert()
+// con la constante lista para copiar y reemplazar aquí.
+//
+// betaX SIEMPRE negativo (espejo integrado). Si es null → sin pesos por defecto.
+const DEFAULT_WEIGHTS = {
+  alphaX: null,   // ← pegar valor del alert tras entrenar
+  betaX:  null,   // ← negativo (efecto espejo integrado)
+  alphaY: null,
+  betaY:  null,
+};
+
+// Variable Global de Pesos — prioridad: localStorage > DEFAULT_WEIGHTS.
 // La app la usa por defecto sin pedir calibración al paciente.
 let GLOBAL_GAZE_WEIGHTS = loadGlobalWeights();
 
 function loadGlobalWeights() {
   try {
     const raw = localStorage.getItem(WEIGHTS_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  // Sin localStorage → usar DEFAULT_WEIGHTS de fábrica si están definidos
+  const d = DEFAULT_WEIGHTS;
+  if (d.alphaX !== null && d.betaX !== null && d.alphaY !== null && d.betaY !== null) {
+    return { alphaX: d.alphaX, betaX: d.betaX, alphaY: d.alphaY, betaY: d.betaY,
+             sessions: [], sessionCount: 0, lastUpdated: null, isDefault: true };
+  }
+  return null;
 }
 
 function saveGlobalWeights(w) {
@@ -273,13 +295,18 @@ function updateStartScreen() {
   const badge  = document.getElementById('global-model-badge');
   const w      = GLOBAL_GAZE_WEIGHTS;
 
-  if (w) {
+  if (w && !w.isDefault) {
     const sessions = w.sessions?.length ?? w.sessionCount ?? 1;
     const d = new Date(w.lastUpdated);
     const fecha = isNaN(d) ? '' : ` · ${d.toLocaleDateString('es-ES')}`;
     badge.textContent  = `✓ Modelo Maestro activo · ${sessions} sesión${sessions !== 1 ? 'es' : ''} promediadas${fecha}`;
     badge.className    = 'global-badge active';
     document.getElementById('btn-start').textContent = '▶ INICIAR (Modelo Maestro)';
+    document.getElementById('btn-manual-calib').style.display = 'inline-block';
+  } else if (w?.isDefault) {
+    badge.textContent  = '⚙ Usando DEFAULT_WEIGHTS (valores de fábrica) — entrene para personalizar';
+    badge.className    = 'global-badge active';
+    document.getElementById('btn-start').textContent = '▶ INICIAR (Valores por defecto)';
     document.getElementById('btn-manual-calib').style.display = 'inline-block';
   } else {
     badge.textContent  = '⚠ Sin modelo maestro — se pedirá calibración al paciente';
@@ -481,6 +508,21 @@ function showAdminResult(updated) {
   document.getElementById('admin-result-alphay').textContent  = updated.alphaY.toFixed(1);
   modal.style.display = 'flex';
   updateStartScreen();
+
+  // ── Copiar-pegar para DEFAULT_WEIGHTS ──────────────────────────────────
+  // Muestra los valores listos para pegar como constante en el código.
+  // (betaX es negativo → efecto espejo ya integrado por la regresión)
+  const snippet =
+`const DEFAULT_WEIGHTS = {
+  alphaX: ${updated.alphaX.toFixed(4)},
+  betaX:  ${updated.betaX.toFixed(4)},   // negativo = espejo integrado
+  alphaY: ${updated.alphaY.toFixed(4)},
+  betaY:  ${updated.betaY.toFixed(4)},
+};
+// Sesiones promediadas: ${updated.sessions?.length ?? 1}
+// Última actualización: ${new Date().toLocaleString('es-ES')}`;
+
+  alert('─── COPIAR Y PEGAR EN eyetracking-script.js ───\n\n' + snippet);
 }
 
 document.getElementById('btn-admin-another').onclick = () => {
