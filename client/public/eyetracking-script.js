@@ -327,6 +327,10 @@ function updateStartScreen() {
 // ── INICIO DE LA APP ──────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Promesa global: se resuelve cuando MediaPipe está listo
+let mpReadyResolve;
+const mpReady = new Promise(res => { mpReadyResolve = res; });
+
 async function startMedicalApp() {
   // Conteo de inicios → sugerencia de calentamiento cada 20 arranques
   const starts = incrementStartCount();
@@ -337,6 +341,23 @@ async function startMedicalApp() {
   updateStartScreen();
   setStatus('Cargando modelo IA…', 'warn');
 
+  // ─── Registrar botones AHORA (antes del await de MediaPipe) ─────────────
+  // Así el usuario puede pulsar Admin/Iniciar aunque MediaPipe aún esté cargando.
+  btnStart.onclick = () => { isAdminMode = false; isWarmupMode = false; activateCamera(false); };
+
+  document.getElementById('btn-manual-calib').onclick = () => {
+    isAdminMode  = false;
+    isWarmupMode = false;
+    activateCamera(true);
+  };
+
+  document.getElementById('btn-admin').onclick = () => {
+    isAdminMode  = true;
+    isWarmupMode = false;
+    activateCamera(true);
+  };
+
+  // ─── Cargar MediaPipe en segundo plano ───────────────────────────────────
   try {
     const vision = await FilesetResolver.forVisionTasks(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm'
@@ -350,30 +371,20 @@ async function startMedicalApp() {
       numFaces:              1,
       outputFaceBlendshapes: true,
     });
+    mpReadyResolve();   // desbloquea activateCamera si ya estaba esperando
+    setStatus(GLOBAL_GAZE_WEIGHTS ? 'Modelo Maestro listo. Pulse Iniciar.' : 'IA lista. Pulse para calibrar.', 'ok');
   } catch (err) {
     setStatus('Error cargando IA: ' + err.message, 'error');
-    return;
   }
-
-  setStatus(GLOBAL_GAZE_WEIGHTS ? 'Modelo Maestro listo. Pulse Iniciar.' : 'IA lista. Pulse para calibrar.', 'ok');
-
-  // ─── ACTIVAR CÁMARA ────────────────────────────────────────────────────
-  btnStart.onclick = () => activateCamera(false);
-
-  document.getElementById('btn-manual-calib').onclick = () => {
-    isAdminMode  = false;
-    isWarmupMode = false;
-    activateCamera(true);   // forzar calibración aunque haya modelo global
-  };
-
-  document.getElementById('btn-admin').onclick = () => {
-    isAdminMode  = true;
-    isWarmupMode = false;
-    activateCamera(true);
-  };
 }
 
 async function activateCamera(forceCalib) {
+  // Esperar a MediaPipe si aún está cargando (no bloquea el hilo UI)
+  if (!faceLandmarker) {
+    setStatus('Cargando IA, espere…', 'warn');
+    await mpReady;
+  }
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
