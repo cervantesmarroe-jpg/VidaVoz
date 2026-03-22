@@ -9,11 +9,11 @@ import {
 
 const MSG_DWELL_MS = 2000;
 
-// ── Paleta por grupos ────────────────────────────────────────────────────────
-// Ambiente:  Crema Tostado  #FDF2E2  → hover #F0D9B5  accent #B8865A
-// Físico:    Amarillo Past  #FEF9E7  → hover #FDF0C4  accent #B8980A
-// Higiene:   Verde Menta    #DDF5E0  → hover #B8E8BD  accent #27AE60
-// Emocional: Rosa Palo      #FCECEC  → hover #F5CCCC  accent #C0647A
+// ── Paleta por grupos (saturación media-alta) ────────────────────────────────
+// Ambiente:  Ámbar Dorado   #F2B860  → hover #E8A030  accent #7A4E00
+// Físico:    Amarillo Vivo  #EDD040  → hover #DFC020  accent #6B5000
+// Higiene:   Verde Medio    #80CC9C  → hover #5CB87C  accent #1A5E34
+// Emocional: Salmón Medio   #EE8888  → hover #E06060  accent #7A1A28
 // Text & icons: #333333
 
 const MSGS: {
@@ -25,65 +25,65 @@ const MSGS: {
     id: "frio-calor", label: "TENGO FRÍO / CALOR",
     phrase: "Tengo frío o calor. Por favor regule la temperatura.",
     icon: Thermometer,
-    bg: "#FDF2E2", bgHover: "#F0D9B5", accent: "#B8865A",
+    bg: "#F2B860", bgHover: "#E8A030", accent: "#7A4E00",
   },
   {
     id: "luz", label: "LUZ: ENCENDER / APAGAR",
     phrase: "Por favor, encienda o apague la luz.",
     icon: Lightbulb,
-    bg: "#FDF2E2", bgHover: "#F0D9B5", accent: "#B8865A",
+    bg: "#F2B860", bgHover: "#E8A030", accent: "#7A4E00",
   },
   // ─ Físico ────────────────────────────────────────────────────────
   {
     id: "hambre", label: "TENGO HAMBRE",
     phrase: "Tengo hambre. Quisiera comer algo.",
     icon: UtensilsCrossed,
-    bg: "#FEF9E7", bgHover: "#FDF0C4", accent: "#B8980A",
+    bg: "#EDD040", bgHover: "#DFC020", accent: "#6B5000",
   },
   {
     id: "posicion", label: "CAMBIAR DE POSICIÓN",
     phrase: "Necesito cambiar de posición. Estoy incómodo.",
     icon: MoveHorizontal,
-    bg: "#FEF9E7", bgHover: "#FDF0C4", accent: "#B8980A",
+    bg: "#EDD040", bgHover: "#DFC020", accent: "#6B5000",
   },
   // ─ Higiene ───────────────────────────────────────────────────────
   {
     id: "wc", label: "IR AL WC",
     phrase: "Necesito ir al baño urgentemente.",
     icon: Bath,
-    bg: "#DDF5E0", bgHover: "#B8E8BD", accent: "#27AE60",
+    bg: "#80CC9C", bgHover: "#5CB87C", accent: "#1A5E34",
   },
   {
     id: "hora", label: "¿QUÉ HORA ES?",
     phrase: "¿Qué hora es? ¿Es de día o de noche?",
     icon: Clock,
-    bg: "#FDF2E2", bgHover: "#F0D9B5", accent: "#B8865A",
+    bg: "#F2B860", bgHover: "#E8A030", accent: "#7A4E00",
   },
   // ─ Emocional ─────────────────────────────────────────────────────
   {
     id: "familia", label: "QUIERO VER A MI FAMILIA",
     phrase: "Quiero ver a mi familia. Por favor, déjenles pasar.",
     icon: Users,
-    bg: "#FCECEC", bgHover: "#F5CCCC", accent: "#C0647A",
+    bg: "#EE8888", bgHover: "#E06060", accent: "#7A1A28",
   },
   {
     id: "miedo", label: "TENGO MIEDO / NERVIOS",
     phrase: "Tengo miedo. Estoy nervioso. Necesito apoyo.",
     icon: HeartCrack,
-    bg: "#FCECEC", bgHover: "#F5CCCC", accent: "#C0647A",
+    bg: "#EE8888", bgHover: "#E06060", accent: "#7A1A28",
   },
   // ─ Higiene (cont.) ───────────────────────────────────────────────
   {
     id: "musica", label: "QUIERO LA RADIO / MÚSICA",
     phrase: "Quiero escuchar música o la radio.",
     icon: Music,
-    bg: "#FCECEC", bgHover: "#F5CCCC", accent: "#C0647A",
+    bg: "#EE8888", bgHover: "#E06060", accent: "#7A1A28",
   },
   {
     id: "aspiracion", label: "NECESITO ASPIRACIÓN",
     phrase: "Necesito aspiración de secreciones. Tengo mocos o flemas.",
     icon: Wind,
-    bg: "#DDF5E0", bgHover: "#B8E8BD", accent: "#27AE60",
+    bg: "#80CC9C", bgHover: "#5CB87C", accent: "#1A5E34",
   },
 ];
 
