@@ -1,32 +1,34 @@
-import { useRef, useCallback } from "react";
-import { Layout } from "@/components/Layout";
+import { useRef, useCallback, useEffect, useState } from "react";
+import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { useTTS } from "@/hooks/use-tts";
 import { Wind, Zap, Frown, GlassWater } from "lucide-react";
 
 const DWELL_MS = 3000;
 
+// ── Tipos ────────────────────────────────────────────────────────────────────
 interface UrgentMsg {
   label: string;
-  sublabel?: string;
+  sublabel: string;
   phrase: string;
   icon: React.ElementType;
   bg: string;
   border: string;
-  shadow: string;
+  glow: string;
   text: string;
   priority?: boolean;
 }
 
+// ── Definición de mensajes ───────────────────────────────────────────────────
 const URGENT_MSGS: UrgentMsg[] = [
   {
     label: "ME FALTA",
     sublabel: "EL AIRE",
     phrase: "Me falta el aire. Me ahogo. Necesito ayuda urgente.",
     icon: Wind,
-    bg: "from-[#D9534F] to-[#b03a37]",
-    border: "border-[#ff8a88]",
-    shadow: "shadow-[0_0_48px_rgba(217,83,79,0.6)]",
-    text: "text-white",
+    bg: "linear-gradient(160deg, #D9534F 0%, #a03030 100%)",
+    border: "3px solid #ff9a98",
+    glow: "0 0 60px rgba(217,83,79,0.7)",
+    text: "#ffffff",
     priority: true,
   },
   {
@@ -34,188 +36,250 @@ const URGENT_MSGS: UrgentMsg[] = [
     sublabel: "DOLOR",
     phrase: "Tengo mucho dolor. Necesito ayuda.",
     icon: Zap,
-    bg: "from-[#F0AD4E] to-[#c8872a]",
-    border: "border-[#ffd08a]",
-    shadow: "shadow-[0_0_36px_rgba(240,173,78,0.5)]",
-    text: "text-white",
+    bg: "linear-gradient(160deg, #F0AD4E 0%, #b87a1a 100%)",
+    border: "3px solid #ffd48a",
+    glow: "0 0 50px rgba(240,173,78,0.6)",
+    text: "#ffffff",
   },
   {
     label: "TENGO",
     sublabel: "NÁUSEAS",
     phrase: "Tengo náuseas. Tengo ganas de vomitar.",
     icon: Frown,
-    bg: "from-[#5CB85C] to-[#3d8b3d]",
-    border: "border-[#96e096]",
-    shadow: "shadow-[0_0_36px_rgba(92,184,92,0.5)]",
-    text: "text-white",
+    bg: "linear-gradient(160deg, #5CB85C 0%, #2d6e2d 100%)",
+    border: "3px solid #90e090",
+    glow: "0 0 50px rgba(92,184,92,0.6)",
+    text: "#ffffff",
   },
   {
     label: "TENGO",
     sublabel: "SED",
     phrase: "Tengo mucha sed. Necesito agua.",
     icon: GlassWater,
-    bg: "from-[#5BC0DE] to-[#2d9ab8]",
-    border: "border-[#9ae6fc]",
-    shadow: "shadow-[0_0_36px_rgba(91,192,222,0.5)]",
-    text: "text-white",
+    bg: "linear-gradient(160deg, #5BC0DE 0%, #2080a0 100%)",
+    border: "3px solid #9ae0f8",
+    glow: "0 0 50px rgba(91,192,222,0.6)",
+    text: "#ffffff",
   },
 ];
 
+// ── Sonido de campana ────────────────────────────────────────────────────────
 function playBell() {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(1047, ctx.currentTime);
-    osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.4);
-
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(1319, ctx.currentTime);
-    osc2.frequency.exponentialRampToValueAtTime(1109, ctx.currentTime + 0.4);
-
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.1);
-
-    osc1.start(ctx.currentTime);
-    osc2.start(ctx.currentTime);
-    osc1.stop(ctx.currentTime + 1.1);
-    osc2.stop(ctx.currentTime + 1.1);
-  } catch {
-    // silently ignore if AudioContext is unavailable
-  }
+    const ctx = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const o1 = ctx.createOscillator();
+    const o2 = ctx.createOscillator();
+    const g  = ctx.createGain();
+    o1.connect(g); o2.connect(g); g.connect(ctx.destination);
+    o1.type = "sine"; o1.frequency.setValueAtTime(1047, ctx.currentTime);
+    o1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.4);
+    o2.type = "sine"; o2.frequency.setValueAtTime(1319, ctx.currentTime);
+    o2.frequency.exponentialRampToValueAtTime(1109, ctx.currentTime + 0.4);
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.1);
+    o1.start(); o2.start(); o1.stop(ctx.currentTime + 1.1); o2.stop(ctx.currentTime + 1.1);
+  } catch { /* silently ignore */ }
 }
 
-interface UrgentButtonProps {
+// ── Cursor de mirada ─────────────────────────────────────────────────────────
+interface GazeCursorProps { isDwelling: boolean }
+
+function GazeCursor({ isDwelling }: GazeCursorProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    const onMove = (e: PointerEvent) => {
+      const x = e.clientX - 22;
+      const y = e.clientY - 22;
+      wrap.style.transform = `translate(${x}px, ${y}px)`;
+      wrap.style.opacity = "1";
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="fixed top-0 left-0 pointer-events-none z-[9998]"
+      style={{ opacity: 0, transition: "transform 0.09s linear, opacity 0.3s", willChange: "transform" }}
+    >
+      <div
+        style={{
+          width: 44, height: 44,
+          borderRadius: "50%",
+          background: isDwelling
+            ? "rgba(251, 191, 36, 0.18)"
+            : "rgba(255, 255, 255, 0.22)",
+          border: `3px solid ${isDwelling ? "#f59e0b" : "#fbbf24"}`,
+          boxShadow: isDwelling
+            ? "0 0 32px rgba(245,158,11,0.9), 0 0 8px rgba(255,255,255,0.4)"
+            : "0 0 16px rgba(251,191,36,0.6)",
+          animation: isDwelling ? "cursor-scale-pulse 0.8s ease-in-out infinite" : "none",
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Botón urgente ────────────────────────────────────────────────────────────
+interface BtnProps {
   msg: UrgentMsg;
+  onDwellStart: () => void;
+  onDwellEnd: () => void;
 }
 
-function UrgentButton({ msg }: UrgentButtonProps) {
+function UrgentButton({ msg, onDwellStart, onDwellEnd }: BtnProps) {
   const { speak } = useTTS();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const svgRef   = useRef<SVGSVGElement>(null);
-  const circRef  = useRef<SVGCircleElement>(null);
-  const btnRef   = useRef<HTMLButtonElement>(null);
+  const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const svgRef    = useRef<SVGSVGElement>(null);
+  const circRef   = useRef<SVGCircleElement>(null);
+  const btnRef    = useRef<HTMLButtonElement>(null);
+
+  const fire = useCallback(() => {
+    playBell();
+    speak(msg.phrase);
+  }, [msg.phrase, speak]);
 
   const startDwell = useCallback(() => {
     if (timerRef.current) return;
+    onDwellStart();
+    btnRef.current?.classList.add("urgent-btn-dwelling");
     svgRef.current?.classList.add("active");
-
-    // ensure class is absent, force reflow, then re-add to restart animation
     circRef.current?.classList.remove("animating");
     void circRef.current?.getBoundingClientRect();
     circRef.current?.classList.add("animating");
-
     timerRef.current = setTimeout(() => {
-      playBell();
-      speak(msg.phrase);
       timerRef.current = null;
       cancelDwell();
+      fire();
     }, DWELL_MS);
-  }, [msg.phrase, speak]);
+  }, [fire, onDwellStart]);
 
   const cancelDwell = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    onDwellEnd();
+    btnRef.current?.classList.remove("urgent-btn-dwelling");
     svgRef.current?.classList.remove("active");
     circRef.current?.classList.remove("animating");
-  }, []);
+  }, [onDwellEnd]);
 
-  const handleClick = () => {
-    cancelDwell();
-    playBell();
-    speak(msg.phrase);
-  };
+  const handleClick = () => { cancelDwell(); fire(); };
 
   return (
     <button
       ref={btnRef}
       data-gaze-target="true"
-      data-testid={`button-urgent-${msg.sublabel?.toLowerCase().replace(/\s/g, "-") ?? msg.label.toLowerCase()}`}
+      data-testid={`button-urgent-${msg.sublabel.toLowerCase().replace(/\s/g, "-")}`}
       onClick={handleClick}
       onPointerEnter={startDwell}
       onPointerLeave={cancelDwell}
-      className={`
-        relative flex flex-col items-center justify-center gap-3 md:gap-5
-        rounded-3xl select-none touch-manipulation cursor-pointer
-        bg-gradient-to-b ${msg.bg}
-        border-4 ${msg.border}
-        ${msg.shadow}
-        ${msg.priority ? "ring-4 ring-white/50 ring-offset-4 ring-offset-amber-50" : ""}
-        transition-transform duration-150 active:scale-95
-        overflow-hidden
-      `}
+      style={{
+        background: msg.bg,
+        border: msg.priority ? `4px solid #ff9a98` : msg.border,
+        boxShadow: msg.glow,
+        borderRadius: "20px",
+        padding: "20px",
+        outline: msg.priority ? "3px solid rgba(255,255,255,0.35)" : "none",
+        outlineOffset: msg.priority ? "4px" : "0",
+        transition: "filter 0.15s",
+        color: msg.text,
+        cursor: "pointer",
+        userSelect: "none",
+        touchAction: "manipulation",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "12px",
+      }}
     >
       {/* Anillo de dwell SVG */}
-      <svg
-        ref={svgRef}
-        className="dwell-ring-svg"
-        viewBox="0 0 120 120"
-        aria-hidden="true"
-      >
-        <circle
-          ref={circRef}
-          className="dwell-ring-circle"
-          cx="60"
-          cy="60"
-          r="52"
-        />
+      <svg ref={svgRef} className="dwell-ring-svg" viewBox="0 0 120 120" aria-hidden="true">
+        <circle ref={circRef} className="dwell-ring-circle" cx="60" cy="60" r="52" />
       </svg>
+
+      {/* Brillo superior */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "linear-gradient(to bottom, rgba(255,255,255,0.15) 0%, transparent 45%)",
+        borderRadius: "20px", pointerEvents: "none",
+      }} />
 
       {/* Icono */}
       <msg.icon
-        className={`${msg.text} drop-shadow-xl z-10`}
-        style={{ width: "clamp(4rem, 10vw, 7rem)", height: "clamp(4rem, 10vw, 7rem)", strokeWidth: 1.5 }}
+        style={{ width: "4rem", height: "4rem", strokeWidth: 1.5, filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.35))", position: "relative", zIndex: 1 }}
         aria-hidden="true"
       />
 
       {/* Texto */}
-      <div className={`z-10 flex flex-col items-center leading-tight ${msg.text}`}>
-        <span
-          className="font-black uppercase tracking-wider"
-          style={{ fontSize: "clamp(1.5rem, 3.5vw, 2.8rem)" }}
-        >
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.1 }}>
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontSize: "clamp(1rem, 2.5vw, 1.6rem)",
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          color: msg.text,
+          textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+        }}>
           {msg.label}
         </span>
-        {msg.sublabel && (
-          <span
-            className="font-black uppercase tracking-widest"
-            style={{ fontSize: "clamp(1.8rem, 4.5vw, 3.6rem)" }}
-          >
-            {msg.sublabel}
-          </span>
-        )}
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontSize: "clamp(1.4rem, 3.8vw, 2.8rem)",
+          fontWeight: 900,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: msg.text,
+          textShadow: "0 2px 12px rgba(0,0,0,0.45)",
+        }}>
+          {msg.sublabel}
+        </span>
       </div>
-
-      {/* Capa de brillo sutil en la parte superior */}
-      <div className="absolute inset-x-0 top-0 h-1/3 bg-white/10 rounded-t-3xl pointer-events-none" />
     </button>
   );
 }
 
+// ── Página principal ─────────────────────────────────────────────────────────
 export default function Urgent() {
+  const [isDwelling, setIsDwelling] = useState(false);
+
   return (
-    <Layout>
-      <div className="h-full flex items-center justify-center p-3 md:p-4">
-        <div
-          className="grid grid-cols-2 gap-3 md:gap-5"
-          style={{ width: "min(100%, 98vw)", height: "min(100%, 95vh)" }}
-        >
-          {URGENT_MSGS.map((msg) => (
-            <UrgentButton key={msg.sublabel ?? msg.label} msg={msg} />
-          ))}
-        </div>
+    <FullscreenLayout>
+      {/* Cursor de mirada */}
+      <GazeCursor isDwelling={isDwelling} />
+
+      {/* Grid 2x2 — ocupa todo el espacio disponible */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gridTemplateRows: "1fr 1fr",
+          gap: "10px",
+          padding: "10px",
+          height: "100%",
+          boxSizing: "border-box",
+          background: "#111",
+        }}
+      >
+        {URGENT_MSGS.map((msg) => (
+          <UrgentButton
+            key={msg.sublabel}
+            msg={msg}
+            onDwellStart={() => setIsDwelling(true)}
+            onDwellEnd={() => setIsDwelling(false)}
+          />
+        ))}
       </div>
-    </Layout>
+    </FullscreenLayout>
   );
 }

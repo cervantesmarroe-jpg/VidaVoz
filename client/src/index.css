@@ -129,6 +129,45 @@
   transition: outline 0.15s, box-shadow 0.15s, transform 0.15s !important;
 }
 
+/* ── Botón URGENTE — latido durante dwell ───────────────────────────────── */
+@keyframes button-pulse {
+  0%, 100% { transform: scale(1);    filter: brightness(1); }
+  50%       { transform: scale(1.04); filter: brightness(1.15); }
+}
+.urgent-btn-dwelling {
+  animation: button-pulse 0.8s ease-in-out infinite !important;
+}
+
+/* ── Cursor de mirada (gaze cursor) ────────────────────────────────────── */
+.gaze-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  border: 3px solid #fbbf24;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+  z-index: 9999;
+  transition: transform 0.09s linear, opacity 0.3s;
+  will-change: transform;
+}
+.gaze-cursor.dwelling {
+  border-color: #f59e0b;
+  box-shadow: 0 0 32px rgba(245, 158, 11, 0.9), 0 0 8px rgba(255, 255, 255, 0.4);
+  animation: cursor-pulse 0.8s ease-in-out infinite;
+}
+@keyframes cursor-pulse {
+  0%, 100% { transform: translate(var(--cx), var(--cy)) scale(1);   }
+  50%       { transform: translate(var(--cx), var(--cy)) scale(1.35); }
+}
+@keyframes cursor-scale-pulse {
+  0%, 100% { transform: scale(1);   }
+  50%       { transform: scale(1.4); }
+}
+
 /* ── Anillo de dwell dorado (carga circular 3s) ────────────────────────── */
 @keyframes dwell-ring-fill {
   from { stroke-dashoffset: 326; }
