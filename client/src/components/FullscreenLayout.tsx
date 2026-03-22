@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Eye,
+  EyeOff,
   AlertTriangle,
   MessageSquareText,
   ActivitySquare,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useScanning } from "@/context/ScanningContext";
+import { useWebGazer } from "@/hooks/use-webgazer";
 
 const TABS = [
   { path: "/",         icon: AlertTriangle,    label: "URGENTE",  color: "text-rose-400"   },
@@ -21,10 +23,16 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { accepted, accept } = useConsent();
   const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
+  const { isActive, isCalibrating, startCalibration, deactivate } = useWebGazer();
 
   const handleDecline = () => {
     accept();
     activateScanning();
+  };
+
+  const handleGazeToggle = () => {
+    if (isActive || isCalibrating) deactivate();
+    else startCalibration();
   };
 
   return (
@@ -50,16 +58,26 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
         className="shrink-0 bg-black flex items-center justify-between px-4 z-50 border-b border-white/10"
         style={{ height: "48px", marginTop: isScanningMode ? "40px" : "0" }}
       >
-        {/* Estado de mirada */}
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Eye className="w-5 h-5 text-green-400" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          </div>
-          <span className="text-green-400 font-black text-xs tracking-[0.2em] uppercase">
-            Modo Asistido Activo
+        {/* Botón activar/desactivar mirada */}
+        <button
+          data-testid="button-toggle-eyetracking"
+          onClick={handleGazeToggle}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border
+            ${isActive
+              ? "bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_12px_rgba(74,222,128,0.3)]"
+              : isCalibrating
+              ? "bg-amber-500/20 text-amber-400 border-amber-500/50 animate-pulse"
+              : "bg-white/8 text-white/70 border-white/20 hover:bg-white/15 hover:text-white"
+            }`}
+        >
+          {isActive || isCalibrating
+            ? <Eye className="w-4 h-4 shrink-0" />
+            : <EyeOff className="w-4 h-4 shrink-0" />
+          }
+          <span>
+            {isActive ? "Mirada activa" : isCalibrating ? "Calibrando…" : "Activar mirada"}
           </span>
-        </div>
+        </button>
 
         {/* Navegación de pestañas */}
         <nav className="flex items-center gap-1" aria-label="Pestañas">
