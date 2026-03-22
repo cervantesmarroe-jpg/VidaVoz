@@ -7,6 +7,7 @@ import {
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer } from "@/hooks/use-webgazer";
+import { CalibrationScreen } from "@/components/CalibrationScreen";
 
 const TAB_DWELL_MS = 1500;
 
@@ -141,6 +142,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex flex-col bg-black overflow-hidden" style={{ height: "100dvh" }}>
+
+      {/* Pantalla de calibración (overlay de pantalla completa) */}
+      {isCalibrating && <CalibrationScreen />}
 
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}

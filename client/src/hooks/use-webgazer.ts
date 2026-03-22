@@ -315,6 +315,12 @@ class GazeTracker {
     this.blinkOnCooldown = false;
   }
 
+  // ── Modelo público ───────────────────────────────────────────────────────────
+  getModel(): (RegressionModel & { calibrated: boolean }) | null {
+    if (!this.regressionModel) return null;
+    return { ...this.regressionModel, calibrated: this.isCalibrated };
+  }
+
   // ── Listeners ───────────────────────────────────────────────────────────────
   addGazeListener(cb: GazeCallback)     { this.gazeListeners.add(cb); }
   removeGazeListener(cb: GazeCallback)  { this.gazeListeners.delete(cb); }
