@@ -725,3 +725,20 @@ document.getElementById('btn-accept-privacy').addEventListener('click', () => {
   document.getElementById('privacy-modal').classList.add('hidden');
   startMedicalApp();
 });
+
+// ─── "No acepto" → mostrar panel de rechazo ───────────────────────────────
+document.getElementById('btn-decline-privacy').addEventListener('click', () => {
+  document.getElementById('privacy-content').style.display = 'none';
+  document.getElementById('privacy-decline').style.display = 'flex';
+});
+
+// ─── "Volver" → recuperar panel de consentimiento ────────────────────────
+document.getElementById('btn-back-privacy').addEventListener('click', () => {
+  document.getElementById('privacy-decline').style.display = 'none';
+  document.getElementById('privacy-content').style.display = 'flex';
+});
+
+// ─── "Reintentar" → refrescar la página ──────────────────────────────────
+document.getElementById('btn-retry-privacy').addEventListener('click', () => {
+  location.reload();
+});

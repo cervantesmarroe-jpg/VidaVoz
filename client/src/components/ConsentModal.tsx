@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { ShieldCheck, Eye, Wifi, Server, HardDrive, X } from "lucide-react";
+import { useState } from "react";
+import { ShieldCheck, Eye, Wifi, Server, HardDrive, X, RefreshCw, Camera } from "lucide-react";
 
 const STORAGE_KEY = "vozuci-consent-v1";
 
@@ -8,6 +8,85 @@ interface ConsentModalProps {
 }
 
 export function ConsentModal({ onAccept }: ConsentModalProps) {
+  const [declined, setDeclined] = useState(false);
+
+  if (declined) {
+    return (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-stone-900/80 backdrop-blur-sm p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="decline-title"
+      >
+        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full flex flex-col overflow-hidden">
+
+          {/* Cabecera neutra */}
+          <div className="bg-stone-700 text-white px-8 py-7 rounded-t-3xl">
+            <div className="flex items-center gap-4">
+              <Camera className="w-9 h-9 shrink-0 text-stone-300" />
+              <h2 id="decline-title" className="text-2xl font-black leading-tight">
+                La cámara es necesaria
+              </h2>
+            </div>
+          </div>
+
+          {/* Cuerpo */}
+          <div className="px-8 py-7 flex flex-col gap-5">
+
+            <p className="text-stone-700 text-base leading-relaxed">
+              Entendemos su preocupación. VozUCI es una herramienta de comunicación
+              asistiva diseñada para pacientes que no pueden hablar. La cámara frontal
+              es el único mecanismo de entrada disponible.
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col gap-3">
+              <p className="font-bold text-stone-800 text-sm">¿Por qué necesitamos la cámara?</p>
+              <ul className="text-stone-700 text-sm leading-relaxed space-y-2">
+                <li className="flex gap-2">
+                  <span className="text-teal-600 font-black shrink-0">✓</span>
+                  El movimiento ocular y el parpadeo activan los botones de comunicación.
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-teal-600 font-black shrink-0">✓</span>
+                  No se graba ni almacena ninguna imagen fuera del dispositivo.
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-teal-600 font-black shrink-0">✓</span>
+                  Todo el procesamiento ocurre localmente en la pantalla del paciente.
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-stone-500 text-sm leading-relaxed">
+              Si desea revisar el aviso de privacidad completo o tiene dudas,
+              consulte con el personal sanitario responsable del tratamiento.
+            </p>
+          </div>
+
+          {/* Pie */}
+          <div className="px-8 py-6 bg-stone-50 rounded-b-3xl flex flex-col sm:flex-row gap-3">
+            <button
+              data-testid="button-consent-retry"
+              onClick={() => window.location.reload()}
+              className="flex-1 flex items-center justify-center gap-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-black text-lg py-5 px-6 rounded-2xl transition-colors shadow-lg"
+            >
+              <RefreshCw className="w-5 h-5 shrink-0" />
+              Reintentar
+            </button>
+            <button
+              data-testid="button-consent-back"
+              onClick={() => setDeclined(false)}
+              className="sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-stone-100 border-2 border-stone-300 text-stone-600 font-bold text-base py-5 px-6 rounded-2xl transition-colors"
+            >
+              ← Volver
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-stone-900/80 backdrop-blur-sm p-4"
@@ -92,7 +171,7 @@ export function ConsentModal({ onAccept }: ConsentModalProps) {
           </button>
           <button
             data-testid="button-consent-reject"
-            onClick={() => window.history.back()}
+            onClick={() => setDeclined(true)}
             className="sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-stone-100 border-2 border-stone-300 text-stone-600 font-bold text-lg py-5 px-6 rounded-2xl transition-colors"
           >
             <X className="w-5 h-5" />
