@@ -14,6 +14,7 @@ import {
 import { useWebGazer } from "@/hooks/use-webgazer";
 import { CalibrationOverlay } from "@/components/CalibrationOverlay";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
+import { useScanning } from "@/context/ScanningContext";
 
 const NAV_ITEMS = [
   { path: "/",         label: "URGENTE",  icon: AlertTriangle,    color: "text-rose-600",   activeBg: "bg-rose-100" },
@@ -29,6 +30,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const mainRef     = useRef<HTMLElement>(null);
   const { isActive, isCalibrating, startCalibration, deactivate } = useWebGazer();
   const { accepted, accept, revoke } = useConsent();
+  const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
 
   // Diálogo de confirmación para "Finalizar Sesión"
   const [showFinalizar, setShowFinalizar] = useState(false);
@@ -36,6 +38,11 @@ export function Layout({ children }: { children: ReactNode }) {
   const handleToggle = () => {
     if (isActive || isCalibrating) deactivate();
     else startCalibration();
+  };
+
+  const handleDecline = () => {
+    accept();           // hide the consent modal
+    activateScanning(); // start sequential scanning mode (no camera)
   };
 
   const scrollUp   = useCallback(() => {
@@ -60,10 +67,33 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex flex-col h-screen max-h-screen bg-amber-50 overflow-hidden">
+    <div className={`flex flex-col h-screen max-h-screen bg-amber-50 overflow-hidden ${isScanningMode ? "pt-[52px]" : ""}`}>
 
       {/* Modal RGPD — siempre en primer plano si no hay consentimiento */}
-      {!accepted && <ConsentModal onAccept={accept} />}
+      {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}
+
+      {/* Banner de modo barrido */}
+      {isScanningMode && (
+        <div
+          className="fixed top-0 left-0 right-0 z-[9990] flex items-center justify-between gap-4 px-6 py-3 bg-amber-400 text-amber-950 shadow-lg"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3 font-bold text-base md:text-lg">
+            <span className="text-2xl">👆</span>
+            <span>
+              MODO BARRIDO ACTIVO — Toque en cualquier punto para seleccionar el botón resaltado
+            </span>
+          </div>
+          <button
+            data-testid="button-stop-scanning"
+            onClick={deactivateScanning}
+            className="shrink-0 bg-amber-950/20 hover:bg-amber-950/30 text-amber-950 font-black text-sm px-4 py-2 rounded-xl transition-colors border border-amber-950/30"
+          >
+            ✕ Detener
+          </button>
+        </div>
+      )}
 
       {/* Overlay de calibración */}
       {isCalibrating && <CalibrationOverlay />}

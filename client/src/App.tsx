@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { ScanningProvider } from "@/context/ScanningContext";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -62,10 +63,12 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <ScanningProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </ScanningProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

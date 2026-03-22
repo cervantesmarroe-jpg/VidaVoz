@@ -5,9 +5,10 @@ const STORAGE_KEY = "vozuci-consent-v1";
 
 interface ConsentModalProps {
   onAccept: () => void;
+  onDecline?: () => void;
 }
 
-export function ConsentModal({ onAccept }: ConsentModalProps) {
+export function ConsentModal({ onAccept, onDecline }: ConsentModalProps) {
   const [declined, setDeclined] = useState(false);
 
   if (declined) {
@@ -64,22 +65,34 @@ export function ConsentModal({ onAccept }: ConsentModalProps) {
           </div>
 
           {/* Pie */}
-          <div className="px-8 py-6 bg-stone-50 rounded-b-3xl flex flex-col sm:flex-row gap-3">
-            <button
-              data-testid="button-consent-retry"
-              onClick={() => window.location.reload()}
-              className="flex-1 flex items-center justify-center gap-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-black text-lg py-5 px-6 rounded-2xl transition-colors shadow-lg"
-            >
-              <RefreshCw className="w-5 h-5 shrink-0" />
-              Reintentar
-            </button>
-            <button
-              data-testid="button-consent-back"
-              onClick={() => setDeclined(false)}
-              className="sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-stone-100 border-2 border-stone-300 text-stone-600 font-bold text-base py-5 px-6 rounded-2xl transition-colors"
-            >
-              ← Volver
-            </button>
+          <div className="px-8 py-6 bg-stone-50 rounded-b-3xl flex flex-col gap-3">
+            {onDecline && (
+              <button
+                data-testid="button-scanning-mode"
+                onClick={onDecline}
+                className="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-white font-black text-lg py-5 px-6 rounded-2xl transition-colors shadow-lg"
+              >
+                <Eye className="w-6 h-6 shrink-0" />
+                Continuar sin cámara (modo táctil)
+              </button>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                data-testid="button-consent-retry"
+                onClick={() => window.location.reload()}
+                className="flex-1 flex items-center justify-center gap-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-black text-lg py-5 px-6 rounded-2xl transition-colors shadow-lg"
+              >
+                <RefreshCw className="w-5 h-5 shrink-0" />
+                Reintentar con cámara
+              </button>
+              <button
+                data-testid="button-consent-back"
+                onClick={() => setDeclined(false)}
+                className="sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-stone-100 border-2 border-stone-300 text-stone-600 font-bold text-base py-5 px-6 rounded-2xl transition-colors"
+              >
+                ← Volver
+              </button>
+            </div>
           </div>
 
         </div>
