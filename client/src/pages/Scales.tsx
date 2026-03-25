@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
-import { RotateCcw, Send } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 const DWELL_MS = 2500;
 
@@ -459,91 +459,83 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTÓN ENVIAR VALORES
+// PANEL DE PUNTUACIONES (siempre visible al fondo)
 // ─────────────────────────────────────────────────────────────────────────────
-interface EnviarProps {
+interface ScoreSummaryProps {
   evaLocked:     number | null;
   borgLocked:    number | null;
   anxietyLocked: number | null;
 }
 
-function EnviarButton({ evaLocked, borgLocked, anxietyLocked }: EnviarProps) {
-  const { speak } = useTTS();
-  const [hover,  setHover]  = useState<"send" | null>(null);
-  const barRef = useRef<HTMLDivElement>(null);
-
-  const onLock = useCallback(() => {
-    const parts: string[] = [];
-    if (evaLocked !== null)     parts.push(`Dolor ${evaLocked} sobre diez.`);
-    if (borgLocked !== null)    parts.push(`Esfuerzo respiratorio ${borgLocked}, ${BORG_BLOCKS[borgLocked].label}.`);
-    if (anxietyLocked !== null) parts.push(ANXIETY_LEVELS[anxietyLocked].tts);
-    playBell();
-    speak(parts.join(" "));
-  }, [speak, evaLocked, borgLocked, anxietyLocked]);
-
-  const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
+function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProps) {
+  const items = [
+    {
+      key: "eva",
+      label: "Dolor (EVA)",
+      value: evaLocked !== null ? `${evaLocked} / 10` : null,
+    },
+    {
+      key: "borg",
+      label: "Esfuerzo (BORG)",
+      value: borgLocked !== null ? `${borgLocked} — ${BORG_BLOCKS[borgLocked].label}` : null,
+    },
+    {
+      key: "ansiedad",
+      label: "Ansiedad",
+      value: anxietyLocked !== null ? ANXIETY_LEVELS[anxietyLocked].label : null,
+    },
+  ];
 
   return (
     <div
-      data-gaze-target="true"
-      data-testid="button-enviar-valores"
-      onPointerEnter={() => setHover("send")}
-      onPointerLeave={() => setHover(null)}
-      onClick={onLock}
+      data-testid="score-summary"
       style={{
         flexShrink: 0,
-        height: 60,
         borderRadius: 14,
-        background: "#D5F5E3",
-        border: hover ? `3px solid #fbbf24` : "1.5px solid #A8E6C8",
-        boxShadow: hover
-          ? "0 0 18px rgba(251,191,36,0.4)"
-          : "0 2px 8px rgba(20,100,50,0.12)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        gap: 12, cursor: "pointer", userSelect: "none",
-        position: "relative", overflow: "hidden",
-        transition: "border .15s, box-shadow .15s",
+        background: "#FFFFFF",
+        border: "1.5px solid #E0E0E0",
+        boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+        display: "flex",
+        alignItems: "stretch",
+        overflow: "hidden",
       }}
     >
-      {/* Barra de progreso dorada */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0,
-        height: 5, width: `${progress * 100}%`,
-        background: "linear-gradient(to right, #fbbf24, #f59e0b)",
-        transition: "none",
-        borderRadius: "0 3px 0 0",
-      }} />
-
-      <Send style={{ width: 22, height: 22, color: "#145A30", flexShrink: 0 }} />
-      <span style={{
-        fontFamily: "'Lexend',sans-serif", fontWeight: 900,
-        fontSize: "clamp(.85rem,2.2vw,1.15rem)",
-        letterSpacing: ".07em", textTransform: "uppercase",
-        color: "#145A30",
-      }}>
-        Enviar valores
-      </span>
-
-      {/* Resumen compacto de valores marcados */}
-      <div style={{
-        display: "flex", gap: 8, marginLeft: 4,
-      }}>
-        {evaLocked !== null && (
-          <span style={{ background: "rgba(20,90,48,0.15)", borderRadius: 8, padding: "2px 8px", fontSize: ".7rem", fontWeight: 800, color: "#145A30", fontFamily: "'Lexend',sans-serif" }}>
-            EVA {evaLocked}/10
+      {items.map((item, idx) => (
+        <div
+          key={item.key}
+          data-testid={`score-chip-${item.key}`}
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "8px 6px",
+            borderRight: idx < items.length - 1 ? "1px solid #E0E0E0" : "none",
+            gap: 3,
+          }}
+        >
+          <span style={{
+            fontFamily: "'Lexend',sans-serif",
+            fontSize: "clamp(.46rem,1.2vw,.62rem)",
+            fontWeight: 700,
+            letterSpacing: ".1em",
+            textTransform: "uppercase",
+            color: "#AAAAAA",
+          }}>
+            {item.label}
           </span>
-        )}
-        {borgLocked !== null && (
-          <span style={{ background: "rgba(20,90,48,0.15)", borderRadius: 8, padding: "2px 8px", fontSize: ".7rem", fontWeight: 800, color: "#145A30", fontFamily: "'Lexend',sans-serif" }}>
-            BORG {borgLocked}
+          <span style={{
+            fontFamily: "'Lexend',sans-serif",
+            fontSize: "clamp(.68rem,1.8vw,.92rem)",
+            fontWeight: 900,
+            color: item.value !== null ? "#333333" : "#CCCCCC",
+            textAlign: "center",
+          }}>
+            {item.value ?? "—"}
           </span>
-        )}
-        {anxietyLocked !== null && (
-          <span style={{ background: "rgba(20,90,48,0.15)", borderRadius: 8, padding: "2px 8px", fontSize: ".7rem", fontWeight: 800, color: "#145A30", fontFamily: "'Lexend',sans-serif" }}>
-            {ANXIETY_LEVELS[anxietyLocked].label}
-          </span>
-        )}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -556,8 +548,6 @@ export default function Scales() {
   const [evaLocked,     setEvaLocked]     = useState<number | null>(null);
   const [borgLocked,    setBorgLocked]    = useState<number | null>(null);
   const [anxietyLocked, setAnxietyLocked] = useState<number | null>(null);
-
-  const anyLocked = evaLocked !== null || borgLocked !== null || anxietyLocked !== null;
 
   const handleReset = useCallback(() => {
     setResetKey((k) => k + 1);
@@ -596,14 +586,12 @@ export default function Scales() {
         <BorgStrip    key={`borg-${resetKey}`}     onLocked={setBorgLocked}    />
         <AnxietyStrip key={`ansiedad-${resetKey}`} onLocked={setAnxietyLocked} />
 
-        {/* Botón ENVIAR — solo visible cuando hay al menos un valor marcado */}
-        {anyLocked && (
-          <EnviarButton
-            evaLocked={evaLocked}
-            borgLocked={borgLocked}
-            anxietyLocked={anxietyLocked}
-          />
-        )}
+        {/* Recuento de puntuaciones — siempre visible */}
+        <ScoreSummary
+          evaLocked={evaLocked}
+          borgLocked={borgLocked}
+          anxietyLocked={anxietyLocked}
+        />
       </div>
     </FullscreenLayout>
   );
