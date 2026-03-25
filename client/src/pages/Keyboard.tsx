@@ -64,8 +64,8 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
         flex: wide ? 2 : 1,
         position: "relative",
         borderRadius: 12,
-        background: isFocused ? "#2C2A00" : "#1E1E1E",
-        border: isFocused ? "2px solid #FFE84D" : "2px solid rgba(255,255,255,0.08)",
+        background: isFocused ? "#FEF9C3" : "#FFFFFF",
+        border: isFocused ? "2px solid #F59E0B" : "1.5px solid #E0E0E0",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -76,12 +76,12 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
         touchAction: "none",
         transition: "background .12s, border-color .12s",
         minWidth: 0,
-        boxShadow: isFocused ? "0 0 10px rgba(255,232,77,0.35)" : "none",
+        boxShadow: isFocused ? "0 0 10px rgba(245,158,11,0.25)" : "0 1px 3px rgba(0,0,0,0.06)",
       }}
     >
       {/* Letra / icono */}
       {icon ? (
-        <span style={{ color: isFocused ? "#FFE84D" : "rgba(255,255,255,0.75)", display: "flex" }}>
+        <span style={{ color: isFocused ? "#92400E" : "#555555", display: "flex" }}>
           {icon}
         </span>
       ) : (
@@ -89,7 +89,7 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
           fontFamily: "'Lexend',sans-serif",
           fontWeight: 800,
           fontSize: "clamp(.9rem,2.2vw,1.4rem)",
-          color: isFocused ? "#FFE84D" : "rgba(255,255,255,0.85)",
+          color: isFocused ? "#92400E" : "#333333",
           lineHeight: 1,
           transition: "color .12s",
         }}>
@@ -104,7 +104,7 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
           bottom: 0, left: 0,
           height: 4,
           width: `${progress * 100}%`,
-          background: "#FFE84D",
+          background: "#F59E0B",
           borderRadius: "0 2px 0 0",
           transition: "none",
         }} />
@@ -140,7 +140,7 @@ function ActionBtn({ label, icon, bg, textColor, isFocused, progress, onEnter, o
         position: "relative",
         borderRadius: 14,
         background: bg,
-        border: isFocused ? "3px solid #fbbf24" : "2px solid rgba(0,0,0,0.12)",
+        border: isFocused ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -239,7 +239,7 @@ export default function Keyboard() {
         padding: "10px",
         gap: "8px",
         boxSizing: "border-box",
-        background: "#111",
+        background: "#FAFAFA",
       }}>
 
         {/* ── Visor de mensaje ──────────────────────────────────────────────── */}
@@ -247,20 +247,21 @@ export default function Keyboard() {
           flexShrink: 0,
           minHeight: 72,
           maxHeight: 100,
-          background: "#1A1A1A",
+          background: "#FFFFFF",
           borderRadius: 14,
-          border: "2px solid rgba(255,255,255,0.1)",
+          border: "1.5px solid #E0E0E0",
           padding: "10px 18px",
           display: "flex",
           alignItems: "center",
           overflow: "hidden",
           boxSizing: "border-box",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
         }}>
           <span style={{
             fontFamily: "'Lexend',sans-serif",
             fontWeight: 700,
             fontSize: "clamp(1rem,3vw,1.8rem)",
-            color: message ? "#FFFFFF" : "rgba(255,255,255,0.28)",
+            color: message ? "#333333" : "#BBBBBB",
             letterSpacing: ".02em",
             wordBreak: "break-all",
             lineHeight: 1.3,
@@ -273,7 +274,7 @@ export default function Keyboard() {
               display: "inline-block",
               width: 3,
               height: "1.2em",
-              background: "#FFE84D",
+              background: "#F59E0B",
               marginLeft: 4,
               verticalAlign: "middle",
               animation: "blink 1s step-end infinite",
@@ -342,8 +343,8 @@ export default function Keyboard() {
           <ActionBtn
             label="Borrar todo"
             icon={<Trash2 size={22} />}
-            bg="#2A1A1A"
-            textColor="#FF9B9B"
+            bg="#FEE2E2"
+            textColor="#991B1B"
             isFocused={focusedAct === "clear"}
             progress={focusedAct === "clear" ? actionProgress : 0}
             onEnter={() => setFocusedAct("clear")}

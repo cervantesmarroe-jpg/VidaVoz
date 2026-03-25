@@ -11,6 +11,7 @@ export interface QuadButtonProps {
   bg: string;
   border: string;
   glow: string;
+  textColor?: string;
   priority?: boolean;
   onDwellStart?: () => void;
   onDwellEnd?: () => void;
@@ -22,7 +23,9 @@ export interface QuadButtonProps {
 // ── Botón cuadrante reutilizable ─────────────────────────────────────────────
 export function QuadButton({
   label, sublabel, phrase,
-  icon: Icon, bg, border, glow, priority,
+  icon: Icon, bg, border, glow,
+  textColor = "#333333",
+  priority,
   onDwellStart, onDwellEnd, onActivate,
   testId, children,
 }: QuadButtonProps) {
@@ -70,13 +73,13 @@ export function QuadButton({
       onPointerLeave={cancelDwell}
       style={{
         background: bg,
-        border: priority ? "4px solid rgba(255,255,255,0.55)" : border,
+        border: priority ? `4px solid ${textColor}44` : border,
         boxShadow: glow,
         borderRadius: "20px",
         padding: "20px",
-        outline: priority ? "3px solid rgba(255,255,255,0.3)" : "none",
+        outline: priority ? `3px solid ${textColor}22` : "none",
         outlineOffset: priority ? "4px" : "0",
-        color: "#fff",
+        color: textColor,
         cursor: "pointer",
         userSelect: "none",
         touchAction: "manipulation",
@@ -98,23 +101,24 @@ export function QuadButton({
       {/* Shimmer */}
       <div style={{
         position: "absolute", inset: 0, borderRadius: "20px", pointerEvents: "none",
-        background: "linear-gradient(to bottom, rgba(255,255,255,0.14) 0%, transparent 45%)",
+        background: "linear-gradient(to bottom, rgba(255,255,255,0.25) 0%, transparent 45%)",
       }} />
 
       {/* Icon */}
       <Icon style={{
-        width: "4rem", height: "4rem", strokeWidth: 1.5,
-        filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.35))",
+        width: "4rem", height: "4rem", strokeWidth: 1.8,
+        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.12))",
         position: "relative", zIndex: 1, flexShrink: 0,
+        color: textColor,
       }} aria-hidden="true" />
 
       {/* Label */}
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.1, textAlign: "center" }}>
-        <span style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1rem,2.5vw,1.6rem)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
+        <span style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(0.85rem,2.2vw,1.4rem)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", textShadow: "none", color: textColor, opacity: 0.75 }}>
           {label}
         </span>
         {sublabel && (
-          <span style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1.4rem,3.8vw,2.8rem)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", textShadow: "0 2px 12px rgba(0,0,0,0.45)" }}>
+          <span style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1.3rem,3.5vw,2.6rem)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", color: textColor }}>
             {sublabel}
           </span>
         )}
@@ -137,7 +141,7 @@ export function QuadGrid({ children }: { children: ReactNode }) {
       padding: "10px",
       height: "100%",
       boxSizing: "border-box",
-      background: "#111",
+      background: "#FAFAFA",
     }}>
       {children}
     </div>

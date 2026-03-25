@@ -9,9 +9,10 @@ const URGENT = [
     sublabel: "EL AIRE",
     phrase: "Me falta el aire. Me ahogo. Necesito ayuda urgente.",
     icon: Wind,
-    bg: "linear-gradient(160deg, #D9534F 0%, #a03030 100%)",
-    border: "4px solid #ff9a98",
-    glow: "0 0 60px rgba(217,83,79,0.7)",
+    bg: "#F2D7D5",
+    border: "4px solid #D9A8A5",
+    glow: "0 6px 24px rgba(192,57,43,0.22)",
+    textColor: "#7B2020",
     priority: true,
     testId: "button-urgent-el-aire",
   },
@@ -20,9 +21,10 @@ const URGENT = [
     sublabel: "DOLOR",
     phrase: "Tengo mucho dolor. Necesito ayuda.",
     icon: Zap,
-    bg: "linear-gradient(160deg, #F0AD4E 0%, #b87a1a 100%)",
-    border: "3px solid #ffd08a",
-    glow: "0 0 50px rgba(240,173,78,0.6)",
+    bg: "#FEEFDC",
+    border: "2px solid #F5D5A0",
+    glow: "0 6px 20px rgba(180,100,0,0.18)",
+    textColor: "#7A4200",
     testId: "button-urgent-dolor",
   },
   {
@@ -30,9 +32,10 @@ const URGENT = [
     sublabel: "NÁUSEAS",
     phrase: "Tengo náuseas. Tengo ganas de vomitar.",
     icon: Frown,
-    bg: "linear-gradient(160deg, #5CB85C 0%, #3d8b3d 100%)",
-    border: "3px solid #96e096",
-    glow: "0 0 50px rgba(92,184,92,0.6)",
+    bg: "#D5F5E3",
+    border: "2px solid #A8E6C8",
+    glow: "0 6px 20px rgba(25,130,60,0.18)",
+    textColor: "#145A30",
     testId: "button-urgent-nauseas",
   },
   {
@@ -40,9 +43,10 @@ const URGENT = [
     sublabel: "SED",
     phrase: "Tengo mucha sed. Necesito agua.",
     icon: GlassWater,
-    bg: "linear-gradient(160deg, #5BC0DE 0%, #2080a0 100%)",
-    border: "3px solid #9ae0f8",
-    glow: "0 0 50px rgba(91,192,222,0.6)",
+    bg: "#FCF3CF",
+    border: "2px solid #F0DC80",
+    glow: "0 6px 20px rgba(160,120,0,0.18)",
+    textColor: "#6B4C00",
     testId: "button-urgent-sed",
   },
 ];
@@ -63,6 +67,7 @@ export default function Urgent() {
             bg={msg.bg}
             border={msg.border}
             glow={msg.glow}
+            textColor={msg.textColor}
             priority={msg.priority}
             testId={msg.testId}
             onActivate={() => speak(msg.phrase)}

@@ -102,8 +102,8 @@ function SideTab({ path, Icon, label, color, active }: SideTabProps) {
         padding: "10px 4px",
         borderRadius: "10px",
         overflow: "hidden",
-        background: active ? "rgba(255,255,255,0.12)" : "transparent",
-        border: active ? `1px solid ${color}44` : "1px solid transparent",
+        background: active ? `${color}18` : "transparent",
+        border: active ? `1px solid ${color}55` : "1px solid transparent",
         cursor: "pointer",
         transition: "background 0.2s",
         textDecoration: "none",
@@ -118,10 +118,10 @@ function SideTab({ path, Icon, label, color, active }: SideTabProps) {
           height: "0%", background: `${color}33`, pointerEvents: "none",
         }}
       />
-      <Icon style={{ width: 22, height: 22, color: active ? color : "rgba(255,255,255,0.35)", position: "relative", zIndex: 1 }} />
+      <Icon style={{ width: 22, height: 22, color: active ? color : "#AAAAAA", position: "relative", zIndex: 1 }} />
       <span style={{
         fontSize: "0.5rem", fontWeight: 800, letterSpacing: "0.06em",
-        textTransform: "uppercase", color: active ? color : "rgba(255,255,255,0.3)",
+        textTransform: "uppercase", color: active ? color : "#AAAAAA",
         position: "relative", zIndex: 1, lineHeight: 1.2, textAlign: "center",
       }}>
         {label}
@@ -141,7 +141,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const handleGazeToggle = () => { if (isActive || isCalibrating) deactivate(); else startCalibration(); };
 
   return (
-    <div className="flex flex-col bg-black overflow-hidden" style={{ height: "100dvh" }}>
+    <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
 
       {/* Pantalla de calibración (overlay de pantalla completa) */}
       {isCalibrating && <CalibrationScreen />}
@@ -165,23 +165,39 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <header
-        className="shrink-0 bg-black flex items-center px-4 z-50 border-b border-white/10"
-        style={{ height: "48px", marginTop: isScanningMode ? "40px" : "0" }}
+        style={{
+          height: "48px",
+          marginTop: isScanningMode ? "40px" : "0",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E0E0E0",
+          display: "flex",
+          alignItems: "center",
+          paddingLeft: "16px",
+          paddingRight: "16px",
+          flexShrink: 0,
+          zIndex: 50,
+        }}
       >
         <button
           data-testid="button-toggle-eyetracking"
           onClick={handleGazeToggle}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border
-            ${isActive
-              ? "bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_12px_rgba(74,222,128,0.3)]"
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "6px 16px", borderRadius: 12,
+            fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.82rem",
+            cursor: "pointer", border: "1.5px solid",
+            transition: "all 0.2s",
+            ...(isActive
+              ? { background: "#D5F5E3", color: "#145A30", borderColor: "#A8E6C8", boxShadow: "0 0 10px rgba(20,150,70,0.15)" }
               : isCalibrating
-              ? "bg-amber-500/20 text-amber-400 border-amber-500/50 animate-pulse"
-              : "bg-white/8 text-white/70 border-white/20 hover:bg-white/15 hover:text-white"
-            }`}
+              ? { background: "#FCF3CF", color: "#6B4C00", borderColor: "#F0DC80" }
+              : { background: "#F5F5F5", color: "#555555", borderColor: "#E0E0E0" }
+            ),
+          }}
         >
           {isActive || isCalibrating
-            ? <Eye className="w-4 h-4 shrink-0" />
-            : <EyeOff className="w-4 h-4 shrink-0" />}
+            ? <Eye style={{ width: 15, height: 15, flexShrink: 0 }} />
+            : <EyeOff style={{ width: 15, height: 15, flexShrink: 0 }} />}
           <span>{isActive ? "Mirada activa" : isCalibrating ? "Calibrando…" : "Activar mirada"}</span>
         </button>
       </header>
@@ -191,8 +207,14 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
         {/* Barra lateral de navegación */}
         <nav
-          className="shrink-0 bg-black flex flex-col items-center justify-center gap-2 border-r border-white/10 py-3"
-          style={{ width: "64px" }}
+          style={{
+            width: "64px", flexShrink: 0,
+            background: "#FFFFFF",
+            borderRight: "1px solid #E0E0E0",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            gap: 4, padding: "12px 0",
+          }}
           aria-label="Navegación"
         >
           {TABS.map((tab) => (

@@ -183,19 +183,19 @@ function BorgStrip() {
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
-        border: isLocked ? "3px solid #fbbf24" : "2px solid rgba(0,0,0,0.12)",
-        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.5)" : "none",
+        border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
+        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
         padding: "7px 8px", gap: 4, boxSizing: "border-box",
-        background: "#1A1A1A",
+        background: "#FFFFFF",
         transition: "border-color .2s, box-shadow .2s",
       }}
     >
       {/* Etiqueta */}
-      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "rgba(255,255,255,.85)", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
+      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
         RESPIRACIÓN (BORG)
         {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#FFD", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
+          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4C00", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
             ✓ {locked} – {BORG_BLOCKS[locked!].label}
           </span>
         )}
@@ -300,19 +300,19 @@ function AnxietyStrip() {
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
-        border: isLocked ? "3px solid #fbbf24" : "2px solid rgba(0,0,0,0.12)",
-        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.5)" : "none",
+        border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
+        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
         padding: "7px 8px", gap: 4, boxSizing: "border-box",
-        background: "#1A1A1A",
+        background: "#FFFFFF",
         transition: "border-color .2s, box-shadow .2s",
       }}
     >
       {/* Etiqueta */}
-      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "rgba(255,255,255,.85)", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
+      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
         ANSIEDAD
         {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#FFD", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
+          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4C00", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
             ✓ {ANXIETY_LEVELS[locked!].label}
           </span>
         )}
@@ -373,7 +373,7 @@ export default function Scales() {
     <FullscreenLayout>
       <div style={{
         display: "flex", flexDirection: "column", height: "100%",
-        padding: "10px", gap: "10px", boxSizing: "border-box", background: "#111",
+        padding: "10px", gap: "10px", boxSizing: "border-box", background: "#FAFAFA",
       }}>
         {/* Botón reiniciar */}
         <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
@@ -382,11 +382,12 @@ export default function Scales() {
             data-testid="button-scale-reset"
             onClick={() => setResetKey((k) => k + 1)}
             style={{
-              background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)",
-              borderRadius: 10, color: "rgba(255,255,255,.75)", padding: "5px 13px",
+              background: "#FFFFFF", border: "1.5px solid #E0E0E0",
+              borderRadius: 10, color: "#555555", padding: "5px 13px",
               cursor: "pointer", fontFamily: "'Lexend',sans-serif", fontWeight: 700,
               fontSize: ".7rem", letterSpacing: ".08em", textTransform: "uppercase",
               display: "flex", alignItems: "center", gap: 6,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
             }}
           >
             <RotateCcw style={{ width: 12, height: 12 }} />

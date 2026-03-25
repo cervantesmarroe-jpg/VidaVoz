@@ -9,19 +9,12 @@ import {
 
 const MSG_DWELL_MS = 2000;
 
-// ── Paleta por grupos (saturación media-alta) ────────────────────────────────
-// Ambiente:  Ámbar Dorado   #F2B860  → hover #E8A030  accent #7A4E00
-// Físico:    Amarillo Vivo  #EDD040  → hover #DFC020  accent #6B5000
-// Higiene:   Verde Medio    #80CC9C  → hover #5CB87C  accent #1A5E34
-// Emocional: Salmón Medio   #EE8888  → hover #E06060  accent #7A1A28
-// Text & icons: #333333
+// Paleta pastel soft — colores alineados con la nueva estética higiénica
+// Salmón:  #FDDEDE  accent #B03060
+// Verde:   #D5F5E3  accent #145A30
+// Ámbar:   #FEEFDC  accent #7A4200
+// Amarillo:#FCF3CF  accent #6B4C00
 
-// Orden calculado para que ningún vecino (horizontal ni vertical) comparta color:
-// Fila 1: Salmón | Verde
-// Fila 2: Ámbar  | Salmón
-// Fila 3: Amarillo | Ámbar
-// Fila 4: Verde  | Amarillo
-// Fila 5: Salmón | Ámbar
 const MSGS: {
   id: string; label: string; phrase: string;
   icon: ElementType; bg: string; bgHover: string; accent: string;
@@ -31,65 +24,65 @@ const MSGS: {
     id: "familia", label: "QUIERO VER A MI FAMILIA",
     phrase: "Quiero ver a mi familia. Por favor, déjenles pasar.",
     icon: Users,
-    bg: "#EE8888", bgHover: "#E06060", accent: "#7A1A28",   // Salmón
+    bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
   {
     id: "wc", label: "IR AL WC",
     phrase: "Necesito ir al baño urgentemente.",
     icon: Bath,
-    bg: "#80CC9C", bgHover: "#5CB87C", accent: "#1A5E34",   // Verde
+    bg: "#D5F5E3", bgHover: "#B8EDD1", accent: "#145A30",
   },
   // Fila 2 ─────────────────────────────────────────────────────────
   {
     id: "frio-calor", label: "TENGO FRÍO / CALOR",
     phrase: "Tengo frío o calor. Por favor regule la temperatura.",
     icon: Thermometer,
-    bg: "#F2B860", bgHover: "#E8A030", accent: "#7A4E00",   // Ámbar
+    bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
   {
     id: "miedo", label: "TENGO MIEDO / NERVIOS",
     phrase: "Tengo miedo. Estoy nervioso. Necesito apoyo.",
     icon: HeartCrack,
-    bg: "#EE8888", bgHover: "#E06060", accent: "#7A1A28",   // Salmón
+    bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
   // Fila 3 ─────────────────────────────────────────────────────────
   {
     id: "hambre", label: "TENGO HAMBRE",
     phrase: "Tengo hambre. Quisiera comer algo.",
     icon: UtensilsCrossed,
-    bg: "#EDD040", bgHover: "#DFC020", accent: "#6B5000",   // Amarillo
+    bg: "#FCF3CF", bgHover: "#F7E89E", accent: "#6B4C00",
   },
   {
     id: "luz", label: "LUZ: ENCENDER / APAGAR",
     phrase: "Por favor, encienda o apague la luz.",
     icon: Lightbulb,
-    bg: "#F2B860", bgHover: "#E8A030", accent: "#7A4E00",   // Ámbar
+    bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
   // Fila 4 ─────────────────────────────────────────────────────────
   {
     id: "aspiracion", label: "NECESITO ASPIRACIÓN",
     phrase: "Necesito aspiración de secreciones. Tengo mocos o flemas.",
     icon: Wind,
-    bg: "#80CC9C", bgHover: "#5CB87C", accent: "#1A5E34",   // Verde
+    bg: "#D5F5E3", bgHover: "#B8EDD1", accent: "#145A30",
   },
   {
     id: "posicion", label: "CAMBIAR DE POSICIÓN",
     phrase: "Necesito cambiar de posición. Estoy incómodo.",
     icon: MoveHorizontal,
-    bg: "#EDD040", bgHover: "#DFC020", accent: "#6B5000",   // Amarillo
+    bg: "#FCF3CF", bgHover: "#F7E89E", accent: "#6B4C00",
   },
   // Fila 5 ─────────────────────────────────────────────────────────
   {
     id: "musica", label: "QUIERO LA RADIO / MÚSICA",
     phrase: "Quiero escuchar música o la radio.",
     icon: Music,
-    bg: "#EE8888", bgHover: "#E06060", accent: "#7A1A28",   // Salmón
+    bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
   {
     id: "hora", label: "¿QUÉ HORA ES?",
     phrase: "¿Qué hora es? ¿Es de día o de noche?",
     icon: Clock,
-    bg: "#F2B860", bgHover: "#E8A030", accent: "#7A4E00",   // Ámbar
+    bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
 ];
 
@@ -113,7 +106,7 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
     if (timerRef.current) return;
     if (btnRef.current) {
       btnRef.current.style.background = bgHover;
-      btnRef.current.style.boxShadow  = "0 0 0 2.5px #fbbf24, 0 4px 18px rgba(251,191,36,0.28)";
+      btnRef.current.style.boxShadow  = `0 0 0 2.5px #fbbf24, 0 4px 14px rgba(251,191,36,0.22)`;
     }
     const bar = barRef.current;
     if (bar) {
@@ -152,7 +145,8 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
         gap: "14px",
         padding: "0 16px",
         background: bg,
-        border: `1.5px solid ${accent}55`,
+        border: `1.5px solid #E0E0E0`,
+        borderLeft: `5px solid ${accent}`,
         borderRadius: "14px",
         color: "#333333",
         cursor: "pointer",
@@ -162,19 +156,13 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
         minHeight: "0",
         width: "100%",
         transition: "background 0.18s",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
-      {/* Acento lateral */}
-      <div style={{
-        position: "absolute", left: 0, top: 0, bottom: 0,
-        width: "5px", background: accent, borderRadius: "14px 0 0 14px",
-      }} />
-
       {/* Icon */}
       <Icon style={{
         width: "1.6rem", height: "1.6rem",
         color: accent, flexShrink: 0,
-        position: "relative", zIndex: 1,
         strokeWidth: 2,
       }} aria-hidden="true" />
 
@@ -188,8 +176,6 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
         textAlign: "left",
         lineHeight: 1.25,
         color: "#333333",
-        position: "relative",
-        zIndex: 1,
       }}>
         {label}
       </span>
@@ -216,11 +202,11 @@ export default function Messages() {
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
         gridTemplateRows: "repeat(5, 1fr)",
-        gap: "10px",
+        gap: "8px",
         padding: "10px",
         height: "100%",
         boxSizing: "border-box",
-        background: "#111",
+        background: "#FAFAFA",
         overflowY: "auto",
       }}>
         {MSGS.map((m) => (
