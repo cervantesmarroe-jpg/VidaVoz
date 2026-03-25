@@ -83,8 +83,10 @@ function useDwellWithProgress<T>(
 // ESCALA 1 — EVA (Dolor): gradiente continuo 0-10
 // ─────────────────────────────────────────────────────────────────────────────
 function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
-  const { speak }  = useTTS();
-  const stripRef   = useRef<HTMLDivElement>(null);
+  const { speak }   = useTTS();
+  const stripRef    = useRef<HTMLDivElement>(null);
+  // innerRef tracks only the numbers row, excluding padding and emojis
+  const innerRef    = useRef<HTMLDivElement>(null);
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
 
@@ -96,12 +98,17 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
   const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
 
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = stripRef.current?.getBoundingClientRect();
+  // Track pointer over the INNER numbers container so the hit-zones
+  // align exactly with the circles regardless of padding or emoji width.
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    const rect = innerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const val = Math.max(0, Math.min(10, Math.round((e.clientX - rect.left) / rect.width * 10)));
+    const x   = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    // 11 values (0-10): divide width into 11 equal buckets
+    const val = Math.min(10, Math.floor(x / rect.width * 11));
     setHover(val);
   }, []);
+  // Cancel on pointer leave of the OUTER strip
   const onPointerLeave = useCallback(() => setHover(null), []);
 
   const active   = hover ?? locked;
@@ -111,70 +118,97 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
     <div
       ref={stripRef}
       data-gaze-target="true"
-      onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
-        touchAction: "none", userSelect: "none", overflow: "hidden",
+        touchAction: "none", userSelect: "none",
         background: "linear-gradient(to right, #DDF5E0 0%, #F2D7D5 100%)",
         border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
         boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.5)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
-        justifyContent: "space-between", padding: "7px 12px",
+        justifyContent: "space-between", padding: "6px 10px",
         boxSizing: "border-box", transition: "border-color .2s, box-shadow .2s",
       }}
     >
-      {/* Etiqueta */}
-      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.85rem)", color: "#333", letterSpacing: ".18em", textTransform: "uppercase", textShadow: "0 1px 3px rgba(255,255,255,.65)", flexShrink: 0 }}>
-        DOLOR (EVA)
-        {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4500", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
-            ✓ {locked}/10
-          </span>
-        )}
+      {/* Etiqueta + emojis extremos */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: "clamp(1rem,3vw,1.5rem)", lineHeight: 1 }}>😊</span>
+        <span style={{
+          fontFamily: "'Lexend',sans-serif", fontWeight: 900,
+          fontSize: "clamp(.6rem,1.6vw,.85rem)", color: "#333",
+          letterSpacing: ".15em", textTransform: "uppercase",
+          textShadow: "0 1px 3px rgba(255,255,255,.65)",
+        }}>
+          DOLOR (EVA)
+          {isLocked && (
+            <span style={{ marginLeft: 8, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4500", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
+              ✓ {locked}/10
+            </span>
+          )}
+        </span>
+        <span style={{ fontSize: "clamp(1rem,3vw,1.5rem)", lineHeight: 1 }}>😭</span>
       </div>
 
-      {/* Fila de caras + números 0-10 */}
-      <div style={{ display: "flex", alignItems: "center", flex: 1, minHeight: 0, gap: 6, padding: "4px 0" }}>
-        <span style={{ fontSize: "clamp(1.3rem,3.5vw,1.9rem)", flexShrink: 0 }}>😊</span>
-        <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", height: "100%" }}>
-          {Array.from({ length: 11 }, (_, i) => i).map((n) => {
-            const isSel    = hover === n;
-            const isThisLk = isLocked && locked === n;
-            const dimmed   = isLocked && locked !== n;
-            const sz       = isThisLk ? 46 : isSel ? 40 : 28;
-            // Growing gold ring via box-shadow (RAF-driven, no CSS transition)
-            const ringPx   = isSel && !isThisLk ? 2 + progress * 5 : 0;
-            const ringAlpha = isSel && !isThisLk ? 0.3 + progress * 0.5 : 0;
-            return (
-              <div key={n} style={{
-                width: sz, height: sz, borderRadius: "50%", flexShrink: 0,
-                position: "relative",
-                background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.30)" : "rgba(0,0,0,.18)",
-                opacity: dimmed ? 0.38 : 1,
-                color: "#333", display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "'Lexend',sans-serif",
-                fontWeight: isSel || isThisLk ? 900 : 700,
-                fontSize: isThisLk ? "clamp(.95rem,2.8vw,1.2rem)" : isSel ? "clamp(.85rem,2.3vw,1.1rem)" : "clamp(.62rem,1.6vw,.82rem)",
-                border: isThisLk ? "3px solid #7A4500" : "none",
-                boxShadow: isThisLk
-                  ? "0 0 14px rgba(251,191,36,.7)"
-                  : isSel && ringPx > 0
-                  ? `0 0 0 ${ringPx}px rgba(251,191,36,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(251,191,36,${ringAlpha * 0.6})`
-                  : "none",
-                textShadow: "0 1px 3px rgba(255,255,255,.55)",
-                transition: "width .18s, height .18s, opacity .2s, background .14s",
-              }}>
-                {n}
-              </div>
-            );
-          })}
-        </div>
-        <span style={{ fontSize: "clamp(1.3rem,3.5vw,1.9rem)", flexShrink: 0 }}>😭</span>
+      {/* Números 0-10: ref propio para tracking correcto */}
+      <div
+        ref={innerRef}
+        onPointerMove={onPointerMove}
+        style={{
+          flex: 1, minHeight: 0,
+          display: "flex", alignItems: "center",
+          justifyContent: "space-between",
+          padding: "3px 0",
+          gap: 2,
+        }}
+      >
+        {Array.from({ length: 11 }, (_, i) => i).map((n) => {
+          const isSel    = hover === n;
+          const isThisLk = isLocked && locked === n;
+          const dimmed   = isLocked && locked !== n;
+          // Responsive sizes: clamp(min, vw-relative, max)
+          const szStr    = isThisLk
+            ? "clamp(22px, 6.5vw, 42px)"
+            : isSel
+            ? "clamp(20px, 5.8vw, 36px)"
+            : "clamp(16px, 4.5vw, 28px)";
+          const ringPx    = isSel && !isThisLk ? 2 + progress * 4 : 0;
+          const ringAlpha = isSel && !isThisLk ? 0.35 + progress * 0.45 : 0;
+          return (
+            <div key={n} style={{
+              width: szStr, height: szStr,
+              minWidth: 0, flexShrink: 1,
+              borderRadius: "50%",
+              position: "relative",
+              background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.30)" : "rgba(0,0,0,.18)",
+              opacity: dimmed ? 0.35 : 1,
+              color: "#333", display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'Lexend',sans-serif",
+              fontWeight: isSel || isThisLk ? 900 : 700,
+              fontSize: isThisLk
+                ? "clamp(.65rem,2.2vw,1.1rem)"
+                : isSel
+                ? "clamp(.6rem,1.9vw,1rem)"
+                : "clamp(.5rem,1.5vw,.8rem)",
+              border: isThisLk ? "2.5px solid #7A4500" : "none",
+              boxShadow: isThisLk
+                ? "0 0 12px rgba(251,191,36,.7)"
+                : isSel && ringPx > 0
+                ? `0 0 0 ${ringPx}px rgba(251,191,36,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(251,191,36,${ringAlpha * 0.6})`
+                : "none",
+              textShadow: "0 1px 2px rgba(255,255,255,.6)",
+              transition: "opacity .2s, background .14s",
+            }}>
+              {n}
+            </div>
+          );
+        })}
       </div>
 
       {active === null && (
-        <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontSize: ".58rem", fontWeight: 600, color: "rgba(51,51,51,.55)", textShadow: "0 1px 2px rgba(255,255,255,.5)", flexShrink: 0 }}>
+        <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontSize: ".56rem", fontWeight: 600, color: "rgba(51,51,51,.5)", textShadow: "0 1px 2px rgba(255,255,255,.5)", flexShrink: 0 }}>
           Mira un número · 2,5 s para fijar
         </div>
       )}
