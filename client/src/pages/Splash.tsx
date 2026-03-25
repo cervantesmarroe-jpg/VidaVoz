@@ -8,23 +8,27 @@ function VidavozLogo() {
   const wave  = "#8BA7CC";
   const sw    = 4.5;
 
-  // 16 barras con sus medias-alturas (crecen y decrecen hacia la derecha)
+  // 18 barras con patrón de onda de voz real: picos y valles irregulares,
+  // rango dinámico amplio (2–30 u) para simular la envolvente del habla.
   const bars = [
-    { x: 143, h: 6  },
-    { x: 150, h: 9  },
-    { x: 157, h: 13 },
-    { x: 164, h: 17 },
-    { x: 171, h: 21 },
-    { x: 178, h: 24 },
-    { x: 185, h: 26 },
-    { x: 192, h: 24 },
-    { x: 199, h: 21 },
-    { x: 206, h: 17 },
-    { x: 213, h: 13 },
-    { x: 220, h: 10 },
-    { x: 227, h: 7  },
-    { x: 234, h: 5  },
-    { x: 241, h: 3  },
+    { x: 138, h: 4  },   // arranque suave
+    { x: 145, h: 14 },   // subida rápida
+    { x: 152, h: 7  },   // valle
+    { x: 159, h: 22 },   // primer pico
+    { x: 166, h: 30 },   // pico dominante
+    { x: 173, h: 11 },   // caída
+    { x: 180, h: 27 },   // segundo pico alto
+    { x: 187, h: 16 },   // descenso parcial
+    { x: 194, h: 29 },   // tercer pico
+    { x: 201, h: 8  },   // valle profundo
+    { x: 208, h: 23 },   // recuperación
+    { x: 215, h: 6  },   // valle
+    { x: 222, h: 18 },   // cuarto pico menor
+    { x: 229, h: 10 },   // descenso
+    { x: 236, h: 13 },   // pequeña cresta final
+    { x: 243, h: 5  },   // decaimiento
+    { x: 250, h: 3  },   // cola
+    { x: 257, h: 1  },   // cierre
   ];
 
   return (
@@ -62,7 +66,7 @@ function VidavozLogo() {
           x1={x} y1={80 - h}
           x2={x} y2={80 + h}
           stroke={wave}
-          strokeWidth={3.8}
+          strokeWidth={4.2}
           strokeLinecap="round"
           className="wave-bar"
           style={{ animationDelay: `${i * 28}ms` }}
