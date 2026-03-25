@@ -10,26 +10,28 @@ const DWELL_MS = 2500;
 // DATOS
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Gradiente fisionómico pastel: #DDF5E0 (mint) → #F2D7D5 (coral)
 const BORG_BLOCKS = [
-  { value: 0,  label: "Nada",     face: "😌", bg: "#A8D8F0" },
-  { value: 1,  label: "Muy leve", face: "😊", bg: "#82C4EB" },
-  { value: 2,  label: "Leve",     face: "🙂", bg: "#5BAEE0" },
-  { value: 3,  label: "Moderado", face: "😐", bg: "#7DD4A0" },
-  { value: 4,  label: "Algo duro",face: "😐", bg: "#55C47A" },
-  { value: 5,  label: "Duro",     face: "😟", bg: "#FFE566" },
-  { value: 6,  label: "Duro",     face: "😟", bg: "#FFD01E" },
-  { value: 7,  label: "Muy duro", face: "😰", bg: "#FFB347" },
-  { value: 8,  label: "Muy duro", face: "😰", bg: "#FF8C42" },
-  { value: 9,  label: "Extremo",  face: "😱", bg: "#FF6B6B" },
-  { value: 10, label: "Máximo",   face: "😱", bg: "#FF4040" },
+  { value: 0,  label: "Nada",      face: "😌", bg: "#DDF5E0" },
+  { value: 1,  label: "Muy leve",  face: "😊", bg: "#DFF2DF" },
+  { value: 2,  label: "Leve",      face: "🙂", bg: "#E1EFDE" },
+  { value: 3,  label: "Moderado",  face: "😐", bg: "#E3ECDD" },
+  { value: 4,  label: "Algo duro", face: "😐", bg: "#E5E9DC" },
+  { value: 5,  label: "Duro",      face: "😟", bg: "#E8E6DB" },
+  { value: 6,  label: "Duro",      face: "😟", bg: "#EAE3D9" },
+  { value: 7,  label: "Muy duro",  face: "😰", bg: "#ECE0D8" },
+  { value: 8,  label: "Muy duro",  face: "😰", bg: "#EEDDD7" },
+  { value: 9,  label: "Extremo",   face: "😱", bg: "#F0DAD6" },
+  { value: 10, label: "Máximo",    face: "😱", bg: "#F2D7D5" },
 ] as const;
 
+// Gradiente fisionómico pastel: #DDF5E0 (mint) → #F2D7D5 (coral)
 const ANXIETY_LEVELS = [
-  { label: "Tranquilo",   face: "😌", bg: "#6DC98E", tts: "Estoy tranquilo." },
-  { label: "Inquieto",    face: "🙂", bg: "#B8E07A", tts: "Me siento inquieto." },
-  { label: "Ansioso",     face: "😟", bg: "#FFD166", tts: "Estoy ansioso." },
-  { label: "Muy ansioso", face: "😰", bg: "#FF9B54", tts: "Estoy muy ansioso." },
-  { label: "Pánico",      face: "😱", bg: "#FF6B6B", tts: "Siento pánico." },
+  { label: "Tranquilo",   face: "😌", bg: "#DDF5E0", tts: "Estoy tranquilo." },
+  { label: "Inquieto",    face: "🙂", bg: "#E2EEDD", tts: "Me siento inquieto." },
+  { label: "Ansioso",     face: "😟", bg: "#E8E6DB", tts: "Estoy ansioso." },
+  { label: "Muy ansioso", face: "😰", bg: "#EDDFD8", tts: "Estoy muy ansioso." },
+  { label: "Pánico",      face: "😱", bg: "#F2D7D5", tts: "Siento pánico." },
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,8 +116,8 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none", overflow: "hidden",
-        background: "linear-gradient(to right, #28A745 0%, #DC3545 100%)",
-        border: isLocked ? "3px solid #fbbf24" : "2px solid rgba(0,0,0,0.12)",
+        background: "linear-gradient(to right, #DDF5E0 0%, #F2D7D5 100%)",
+        border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
         boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.5)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
         justifyContent: "space-between", padding: "7px 12px",
@@ -148,7 +150,7 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
               <div key={n} style={{
                 width: sz, height: sz, borderRadius: "50%", flexShrink: 0,
                 position: "relative",
-                background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.28)" : "rgba(0,0,0,.14)",
+                background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.30)" : "rgba(0,0,0,.18)",
                 opacity: dimmed ? 0.38 : 1,
                 color: "#333", display: "flex", alignItems: "center", justifyContent: "center",
                 fontFamily: "'Lexend',sans-serif",
@@ -534,7 +536,7 @@ export default function Scales() {
     <FullscreenLayout>
       <div style={{
         display: "flex", flexDirection: "column", height: "100%",
-        padding: "10px", gap: "10px", boxSizing: "border-box", background: "#FAFAFA",
+        padding: "10px", gap: "10px", boxSizing: "border-box", background: "#FDF2E2",
       }}>
         {/* Barra superior: reiniciar */}
         <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
@@ -543,7 +545,7 @@ export default function Scales() {
             data-testid="button-scale-reset"
             onClick={handleReset}
             style={{
-              background: "#FFFFFF", border: "1.5px solid #E0E0E0",
+              background: "#FDF2E2", border: "1.5px solid #E0D8CB",
               borderRadius: 10, color: "#555555", padding: "5px 13px",
               cursor: "pointer", fontFamily: "'Lexend',sans-serif", fontWeight: 700,
               fontSize: ".7rem", letterSpacing: ".08em", textTransform: "uppercase",
