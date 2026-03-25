@@ -218,3 +218,14 @@ input[type=range].gaze-slider::-webkit-slider-thumb {
 input[type=range].gaze-slider::-moz-range-thumb {
   @apply w-20 h-20 bg-amber-400 rounded-full cursor-pointer border-4 border-white shadow-xl;
 }
+
+/* ── Splash screen — ondas de voz ───────────────────────────────────────── */
+@keyframes wavePulse {
+  0%, 100% { opacity: 0.25; }
+  50%       { opacity: 0.95; }
+}
+
+.wave-bar {
+  opacity: 0.25;
+  animation: wavePulse 0.78s ease-in-out 3 both;
+}

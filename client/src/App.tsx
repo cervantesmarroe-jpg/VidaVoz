@@ -1,4 +1,4 @@
-import { Component, ReactNode } from "react";
+import { Component, ReactNode, useState, useCallback } from "react";
 import { ScanningProvider } from "@/context/ScanningContext";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
@@ -12,6 +12,7 @@ import Urgent from "./pages/Urgent";
 import Messages from "./pages/Messages";
 import Scales from "./pages/Scales";
 import Keyboard from "./pages/Keyboard";
+import Splash from "./pages/Splash";
 
 // Error boundary to prevent white screen crashes
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -60,12 +61,17 @@ function Router() {
 }
 
 function App() {
+  const [splashDone, setSplashDone] = useState(false);
+  const handleSplashDone = useCallback(() => setSplashDone(true), []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ScanningProvider>
           <TooltipProvider>
             <Toaster />
+            {/* Splash superpuesto hasta que termina la animación */}
+            {!splashDone && <Splash onDone={handleSplashDone} />}
             <Router />
           </TooltipProvider>
         </ScanningProvider>
