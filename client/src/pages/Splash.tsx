@@ -101,7 +101,7 @@ export default function Splash({ onDone }: SplashProps) {
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "#FDF2E2",
+        background: "#FFFFFF",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
