@@ -37,10 +37,3 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
-
-[userenv]
-
-[userenv.shared]
-"Project URL" = "https://hlavmnourbhrqpogmexm.supabase.co"
-"Publishable Key" = "sb_publishable_ajT0zL38Vx9dY51sLYfwAQ_8nMDy8IC"
-"Anon Key" = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhsYXZtbm91cmJocnFwb2dtZXhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODIxNDEsImV4cCI6MjA5MDA1ODE0MX0.MKvFNHLmYB2w3Bt_r_J4Y8OgvLs4gCGOU0y1RS74GyM"
