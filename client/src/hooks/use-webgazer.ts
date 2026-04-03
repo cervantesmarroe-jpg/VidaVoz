@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
 
 // ─── MediaPipe ───────────────────────────────────────────────────────────────
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
@@ -11,9 +12,9 @@ const SMOOTH_SAMPLES  = 10;   // media móvil de N muestras
 const BLINK_THRESHOLD = 0.85;
 const BLINK_COOLDOWN  = 1200;
 
-// Sensibilidad universal (sin calibración)
-const SENSITIVITY_X = -1.8;
-const SENSITIVITY_Y =  1.5;
+// Sensibilidad de fábrica (fallback si no se carga perfil)
+const SENSITIVITY_X = GAZE_PROFILES[DEFAULT_PROFILE_ID].sensitivityX;
+const SENSITIVITY_Y = GAZE_PROFILES[DEFAULT_PROFILE_ID].sensitivityY;
 
 // Aprendizaje continuo: recomputar modelo tras N clics bien distribuidos
 const CONTINUOUS_MIN = 6;
@@ -70,12 +71,14 @@ function estimateGazeNoCalibration(
   eyeLookOutL: number, eyeLookInL:   number,
   eyeLookUpL:  number, eyeLookDownL: number,
   headRotX:    number,
+  sensX:       number,
+  sensY:       number,
 ): { rawX: number; rawY: number } {
   const horizontalGaze = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
   const verticalGaze   = (eyeLookUpL  - eyeLookDownL);
   return {
-    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * SENSITIVITY_X),
-    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * SENSITIVITY_Y),
+    rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * sensX),
+    rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * sensY),
   };
 }
 
@@ -84,6 +87,8 @@ function updateGazePoint(
   eyeLookUpL:  number, eyeLookDownL: number,
   headRotX:    number,
   model:       RegressionModel | null,
+  sensX:       number,
+  sensY:       number,
 ): { rawX: number; rawY: number } {
   if (model) {
     const eyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
@@ -93,7 +98,7 @@ function updateGazePoint(
       rawY: model.alphaY + model.betaY * eyeY,
     };
   }
-  return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX);
+  return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX, sensX, sensY);
 }
 
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
@@ -104,6 +109,11 @@ class GazeTracker {
   private rafId:         number = 0;
   private lastVideoTime: number = -1;
   private lastMpTs:      number = 0;
+
+  // ── Perfil Maestro activo (sensibilidades de fábrica para este dispositivo)
+  private profileSensX: number = SENSITIVITY_X;
+  private profileSensY: number = SENSITIVITY_Y;
+  private activeProfile: GazeProfile = GAZE_PROFILES[DEFAULT_PROFILE_ID];
 
   // ── Media móvil de 10 muestras (sin temblor entre dispositivos)
   private smoothHistory: Array<{ x: number; y: number }> = [];
@@ -206,6 +216,7 @@ class GazeTracker {
             const { rawX, rawY } = updateGazePoint(
               eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL,
               headRotX, this.regressionModel,
+              this.profileSensX, this.profileSensY,
             );
 
             // ── Media móvil de SMOOTH_SAMPLES muestras ────────────────────
@@ -257,6 +268,28 @@ class GazeTracker {
     this.blinkOnCooldown = false;
   }
 
+  // ── Carga un Perfil Maestro de fábrica ───────────────────────────────────
+  // Actualiza las pendientes (slope) del modelo. El offset se ajusta después
+  // con quickCenterCalibrate(). Si se llama antes de la detección, la
+  // estimación sin calibración también usará estas sensibilidades.
+  loadProfile(profile: GazeProfile) {
+    this.activeProfile  = profile;
+    this.profileSensX   = profile.sensitivityX;
+    this.profileSensY   = profile.sensitivityY;
+    // Resetear regresión anterior (nueva pendiente → nuevo ancla)
+    this.regressionModel = null;
+    this.isCalibrated    = false;
+    this.trainingData    = [];
+    this.continuousData  = [];
+    console.log(
+      `GazeTracker: perfil "${profile.label}" cargado`,
+      `| sensX=${profile.sensitivityX} sensY=${profile.sensitivityY}`,
+      `| distancia ~${profile.distanceCm} cm`,
+    );
+  }
+
+  get currentProfile() { return this.activeProfile; }
+
   // ── Calibración rápida: muestra al centro ────────────────────────────────
   recordCalibrationPoint(screenX: number, screenY: number): boolean {
     const shapes    = this.currentResults?.categories;
@@ -285,10 +318,10 @@ class GazeTracker {
     const avgEyeX = this.trainingData.reduce((s, d) => s + d.eyeX, 0) / n;
     const avgEyeY = this.trainingData.reduce((s, d) => s + d.eyeY, 0) / n;
 
-    // Pendiente = sensibilidad universal (calibrada para humano promedio)
-    // Ordenada al origen = ajuste para que el punto central sea el centro de pantalla
-    const betaX = SENSITIVITY_X * window.innerWidth;
-    const betaY = -SENSITIVITY_Y * window.innerHeight;
+    // Pendiente = sensibilidad del Perfil Maestro activo
+    // Ordenada al origen = ajuste de offset individual (este paciente, este momento)
+    const betaX = this.profileSensX * window.innerWidth;
+    const betaY = -this.profileSensY * window.innerHeight;
 
     this.regressionModel = {
       alphaX: cx - betaX * avgEyeX,

@@ -13,6 +13,7 @@ import Messages from "./pages/Messages";
 import Scales from "./pages/Scales";
 import Keyboard from "./pages/Keyboard";
 import Splash from "./pages/Splash";
+import ProfileSelect from "./pages/ProfileSelect";
 
 // Error boundary to prevent white screen crashes
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -60,9 +61,14 @@ function Router() {
   );
 }
 
+// Flujo de arranque:  splash (3s) → profile-select (elegir dispositivo + QuickSync) → ready (app)
+type AppPhase = "splash" | "profile" | "ready";
+
 function App() {
-  const [splashDone, setSplashDone] = useState(false);
-  const handleSplashDone = useCallback(() => setSplashDone(true), []);
+  const [phase, setPhase] = useState<AppPhase>("splash");
+
+  const handleSplashDone  = useCallback(() => setPhase("profile"), []);
+  const handleProfileDone = useCallback(() => setPhase("ready"),   []);
 
   return (
     <ErrorBoundary>
@@ -70,9 +76,19 @@ function App() {
         <ScanningProvider>
           <TooltipProvider>
             <Toaster />
-            {/* Splash superpuesto hasta que termina la animación */}
-            {!splashDone && <Splash onDone={handleSplashDone} />}
-            <Router />
+
+            {/* 1. Splash animado */}
+            {phase === "splash" && (
+              <Splash onDone={handleSplashDone} />
+            )}
+
+            {/* 2. Selección de perfil + QuickSync */}
+            {phase === "profile" && (
+              <ProfileSelect onDone={handleProfileDone} />
+            )}
+
+            {/* 3. App principal (solo cuando perfil+sync completados) */}
+            {phase === "ready" && <Router />}
           </TooltipProvider>
         </ScanningProvider>
       </QueryClientProvider>
