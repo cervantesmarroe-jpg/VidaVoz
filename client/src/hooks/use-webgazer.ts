@@ -269,23 +269,41 @@ class GazeTracker {
   }
 
   // ── Carga un Perfil Maestro de fábrica ───────────────────────────────────
-  // Actualiza las pendientes (slope) del modelo. El offset se ajusta después
-  // con quickCenterCalibrate(). Si se llama antes de la detección, la
-  // estimación sin calibración también usará estas sensibilidades.
+  // Si el perfil incluye un ADN de fábrica (model), inicializa regressionModel
+  // inmediatamente y marca isCalibrated = true: el tracker funciona sin esperar
+  // al QuickSync. Si no hay ADN, el tracker queda en espera (null / uncalibrated).
+  // En ambos casos se limpian los datos del perfil anterior para evitar mezclas.
   loadProfile(profile: GazeProfile) {
     this.activeProfile  = profile;
     this.profileSensX   = profile.sensitivityX;
     this.profileSensY   = profile.sensitivityY;
-    // Resetear regresión anterior (nueva pendiente → nuevo ancla)
-    this.regressionModel = null;
-    this.isCalibrated    = false;
-    this.trainingData    = [];
-    this.continuousData  = [];
-    console.log(
-      `GazeTracker: perfil "${profile.label}" cargado`,
-      `| sensX=${profile.sensitivityX} sensY=${profile.sensitivityY}`,
-      `| distancia ~${profile.distanceCm} cm`,
-    );
+    // Limpiar siempre datos del perfil anterior (evita mezclar ADNs)
+    this.trainingData   = [];
+    this.continuousData = [];
+
+    if (profile.model) {
+      // ─ Perfil con ADN de fábrica: usar sus coeficientes directamente ────────
+      // El QuickSync ajustará solo alphaX/Y (offset del paciente); betaX/Y
+      // quedan bloqueados a los valores maestros grabados de fábrica.
+      this.regressionModel = { ...profile.model };
+      this.isCalibrated    = true;
+      console.log(
+        `%cGazeTracker: perfil "${profile.label}" cargado con ADN de fábrica ✓`,
+        'color:#7DD3A8;font-weight:800',
+        `| sensX=${profile.sensitivityX} sensY=${profile.sensitivityY}`,
+        `| αX=${profile.model.alphaX.toFixed(1)} βX=${profile.model.betaX.toFixed(1)}`,
+        `| αY=${profile.model.alphaY.toFixed(1)} βY=${profile.model.betaY.toFixed(1)}`,
+      );
+    } else {
+      // ─ Sin ADN de fábrica: requiere QuickSync antes de estimar posición ─────
+      this.regressionModel = null;
+      this.isCalibrated    = false;
+      console.log(
+        `GazeTracker: perfil "${profile.label}" cargado (sin ADN; requiere QuickSync)`,
+        `| sensX=${profile.sensitivityX} sensY=${profile.sensitivityY}`,
+        `| distancia ~${profile.distanceCm} cm`,
+      );
+    }
   }
 
   get currentProfile() { return this.activeProfile; }
@@ -343,22 +361,31 @@ class GazeTracker {
 
   // ── Calibración instantánea: ancla centro + pendiente universal ──────────
   // Usa la media de los vectores oculares recogidos durante 3s mirando el centro
-  // para corregir el offset individual sin perder la sensibilidad universal.
+  // para corregir el offset individual (alphaX/Y) sin perder la sensibilidad.
+  //
+  // Si el perfil ya tiene un ADN de fábrica cargado, las pendientes (betaX/Y)
+  // se preservan tal cual — son los valores maestros de 10 muestras y son más
+  // precisos que la aproximación algebraica. Solo se recalcula el offset.
+  //
+  // Si no hay ADN previo, calcula las pendientes desde la sensibilidad del perfil
+  // (comportamiento original, igual que antes).
   quickCenterCalibrate(): boolean {
     if (this.trainingData.length < 5) return false;
 
     const cx = window.innerWidth  / 2;
     const cy = window.innerHeight / 2;
 
-    const n      = this.trainingData.length;
+    const n       = this.trainingData.length;
     const avgEyeX = this.trainingData.reduce((s, d) => s + d.eyeX, 0) / n;
     const avgEyeY = this.trainingData.reduce((s, d) => s + d.eyeY, 0) / n;
 
-    // Pendiente = sensibilidad del Perfil Maestro activo
-    // Ordenada al origen = ajuste de offset individual (este paciente, este momento)
-    const betaX = this.profileSensX * window.innerWidth;
-    const betaY = -this.profileSensY * window.innerHeight;
+    // ── Pendientes (beta) ────────────────────────────────────────────────────
+    // Prioridad: ADN de fábrica ya cargado > algebraica desde sensibilidad.
+    // Los betas del ADN son más precisos (promedio de 10 sesiones reales).
+    const betaX = this.regressionModel?.betaX  ?? this.profileSensX * window.innerWidth;
+    const betaY = this.regressionModel?.betaY  ?? -this.profileSensY * window.innerHeight;
 
+    // ── Offset (alpha): ajuste individual de este paciente/posición ──────────
     this.regressionModel = {
       alphaX: cx - betaX * avgEyeX,
       betaX,
