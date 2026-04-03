@@ -662,10 +662,10 @@ class GazeTracker {
   }
 
   // ── Entrenamiento multi-punto: corre regresión sobre todos los puntos ─────
-  // Llamar cuando el usuario ha completado todas las rondas (5 posiciones × 2).
-  // Devuelve el modelo calculado o null si hay < 10 puntos.
+  // Llamar cuando el usuario ha completado todas las rondas (5 posiciones × 6).
+  // Devuelve el modelo calculado o null si hay < 30 puntos brutos.
   finalizeTraining(): (RegressionModel & { sensitivityX: number; sensitivityY: number }) | null {
-    if (this.trainingData.length < 10) return null;
+    if (this.trainingData.length < 30) return null;
     const model = calculateRegression(this.trainingData);
     this.regressionModel = model;
     this.isCalibrated    = true;

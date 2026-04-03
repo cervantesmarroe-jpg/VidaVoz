@@ -8,7 +8,7 @@ const COLLECT_MS   = 50;
 const WARMUP_MS    = 500;
 const R_RING       = 52;
 const CIRCUMF      = 2 * Math.PI * R_RING;
-const ROUNDS       = 2;
+const ROUNDS       = 6;  // 5 posiciones × 6 vueltas = 30 muestras totales
 
 // ── Posiciones (fracción de pantalla) ────────────────────────────────────────
 const POSITIONS = [
@@ -19,7 +19,7 @@ const POSITIONS = [
   { key: "br", label: "Abajo-Derecha",    fx: 0.88, fy: 0.88 },
 ] as const;
 
-const TOTAL_STEPS = POSITIONS.length * ROUNDS; // 10
+const TOTAL_STEPS = POSITIONS.length * ROUNDS; // 30
 
 // Schedule: Round 1 all positions, then Round 2 all positions
 const SCHEDULE = Array.from({ length: ROUNDS }, (_, r) =>
@@ -254,7 +254,7 @@ export function MasterTrainingOverlay({ onClose }: Props) {
 
   const isFullyDone = phase === "done";
   const stepLabel   = `Vuelta ${currentRound} · ${currentPos.label}`;
-  const stepCounter = `Paso ${step + 1} de ${TOTAL_STEPS}`;
+  const stepCounter = `Muestra ${step + 1} de ${TOTAL_STEPS}`;
 
   return (
     <div style={{
@@ -318,16 +318,17 @@ export function MasterTrainingOverlay({ onClose }: Props) {
             {" — "}
             <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>{stepLabel}</span>
           </p>
-          {/* Barras de vuelta */}
-          <div style={{ display: "flex", gap: 6 }}>
+          {/* Barras de vuelta — compactas para caber en móvil con 30 pasos */}
+          <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", maxWidth: "min(94vw, 380px)" }}>
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
               const done = i < savedSteps.length;
               const cur  = i === step && phase === "syncing";
+              const isSep = i > 0 && i % POSITIONS.length === 0;
               return (
                 <div key={i} style={{
-                  width: i % POSITIONS.length === 0 && i > 0 ? 10 : 22,
+                  width: isSep ? 4 : 8,
                   height: 6, borderRadius: 3, flexShrink: 0,
-                  marginLeft: i > 0 && i % POSITIONS.length === 0 ? 6 : 0,
+                  marginLeft: isSep ? 4 : 0,
                   background: done ? "#7DD3A8"
                     : cur  ? "rgba(125,211,168,0.45)"
                     : "rgba(255,255,255,0.1)",
@@ -356,7 +357,7 @@ export function MasterTrainingOverlay({ onClose }: Props) {
           }}>
             {phase === "idle" && step === 0 && (
               <p style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)", textAlign: "center", lineHeight: 1.7, maxWidth: 320, margin: 0 }}>
-                El círculo verde aparecerá en <strong style={{ color: "rgba(255,255,255,0.7)" }}>5 posiciones</strong> distintas, 2 veces cada una.<br />
+                El círculo verde aparecerá en <strong style={{ color: "rgba(255,255,255,0.7)" }}>5 posiciones</strong> distintas, {ROUNDS} veces cada una.<br />
                 Mantén la mirada fija en él durante 3 segundos.
               </p>
             )}
@@ -413,7 +414,7 @@ export function MasterTrainingOverlay({ onClose }: Props) {
           </div>
         )}
 
-        {/* DONE sin JSON: 10 muestras completadas */}
+        {/* DONE sin JSON: 30 muestras completadas */}
         {phase === "done" && !finalJson && (
           <div style={{
             position: "absolute", inset: 0,
