@@ -1,13 +1,14 @@
 import { ReactNode, useRef, useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Eye, EyeOff, ClipboardCopy, CheckCheck,
+  Eye, EyeOff, ClipboardCopy,
   AlertTriangle, MessageSquareText, ActivitySquare, Keyboard as KeyboardIcon,
 } from "lucide-react";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
+import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 
 const TAB_DWELL_MS = 1500;
 
@@ -140,18 +141,8 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     startCalibration, activateFromProfile, deactivate,
   } = useWebGazer();
 
-  // ── "Copiar Coeficientes" — botón temporal de calibración maestra ─────────
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyCoefs = useCallback(() => {
-    const info = gazeTracker.getDebugInfo();
-    const text  = JSON.stringify(info, null, 2);
-    navigator.clipboard.writeText(text).then(() => {
-      gazeTracker.logDebugInfo('📋 Coeficientes copiados al portapapeles');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2200);
-    });
-  }, []);
+  // ── Entrenamiento Maestro (10 muestras) ──────────────────────────────────
+  const [showTraining, setShowTraining] = useState(false);
 
   // ── Log periódico en consola cuando la mirada está activa (cada 4 s) ─────
   useEffect(() => {
@@ -240,27 +231,22 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           <span>{isActive ? "Mirada activa" : isCalibrating ? "Calibrando…" : "Activar mirada"}</span>
         </button>
 
-        {/* Copiar Coeficientes — botón temporal de calibración maestra */}
+        {/* Entrenamiento Maestro — botón temporal (calibración de fábrica) */}
         <button
-          data-testid="button-copy-coefficients"
-          onClick={handleCopyCoefs}
-          title="Copiar coeficientes de calibración al portapapeles"
+          data-testid="button-master-training"
+          onClick={() => setShowTraining(true)}
+          title="Abrir sistema de entrenamiento maestro (10 muestras)"
           style={{
             display: "flex", alignItems: "center", gap: 6,
             padding: "5px 12px", borderRadius: 10,
             fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.72rem",
             cursor: "pointer", border: "1.5px solid",
             transition: "all 0.2s",
-            ...(copied
-              ? { background: "#D5F5E3", color: "#145A30", borderColor: "#A8E6C8" }
-              : { background: "#F0F4FF", color: "#4455AA", borderColor: "#C8D4F8" }
-            ),
+            background: "#F0F4FF", color: "#4455AA", borderColor: "#C8D4F8",
           }}
         >
-          {copied
-            ? <CheckCheck style={{ width: 13, height: 13 }} />
-            : <ClipboardCopy style={{ width: 13, height: 13 }} />}
-          <span>{copied ? "¡Copiado!" : "Copiar coefs."}</span>
+          <ClipboardCopy style={{ width: 13, height: 13 }} />
+          <span>Calibrar ADN</span>
         </button>
       </header>
 
@@ -296,6 +282,11 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      {/* ── Overlay de Entrenamiento Maestro ─────────────────────────── */}
+      {showTraining && (
+        <MasterTrainingOverlay onClose={() => setShowTraining(false)} />
+      )}
     </div>
   );
 }
