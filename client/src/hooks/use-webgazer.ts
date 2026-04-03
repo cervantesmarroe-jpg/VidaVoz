@@ -10,7 +10,9 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmark
 const DWELL_MS        = 3000;
 const SMOOTH_SAMPLES  = 30;    // media móvil pre-filtro: 30 muestras (~1 s a 30 fps)
 const BLINK_THRESHOLD = 0.85;
-const BLINK_COOLDOWN  = 1200;
+const BLINK_COOLDOWN  = 1200;  // periodo refractario entre blink-clicks (ms)
+const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora involuntarios
+const BLINK_MAX_MS    = 600;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
 const SNAP_RADIUS_PX  = 50;    // imán: si el cursor está a <50 px de un botón, salta al centro
@@ -160,6 +162,25 @@ function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y:
   return { x: bx, y: by };
 }
 
+// ─── Pop sound (Web Audio API — sin ficheros externos) ───────────────────────
+function playPopSound() {
+  try {
+    const ctx  = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.09);
+    gain.gain.setValueAtTime(0.28, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.14);
+    osc.onended = () => ctx.close();
+  } catch (_) {}
+}
+
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
 class GazeTracker {
   private landmarker:    FaceLandmarker | null = null;
@@ -191,9 +212,11 @@ class GazeTracker {
   // aprendizaje continuo (clics de uso real)
   private continuousData: TrainingPoint[] = [];
 
-  // parpadeo
+  // parpadeo — máquina de estados con ventana de duración
   private wasBlinking     = false;
-  private blinkOnCooldown = false;
+  private blinkStartTime: number | null = null;   // cuándo empezó el cierre
+  private lastBlinkEnd    = 0;                    // cuándo acabó el último blink-click
+  private blinkEnabled    = true;                 // false durante calibración
 
   private gazeListeners:  Set<GazeCallback>  = new Set();
   private blinkListeners: Set<BlinkCallback> = new Set();
@@ -317,15 +340,30 @@ class GazeTracker {
 
             this.gazeListeners.forEach(cb => cb(gx, gy));
 
-            // Parpadeo deliberado (ambos ojos)
+            // ── Detección de parpadeo deliberado (ventana de duración) ───────
+            // Solo activa si el cierre de ojos dura entre BLINK_MIN_MS y BLINK_MAX_MS.
+            // Parpadeos involuntarios (<200 ms) e ignorados; sueño/mirada perdida (>600 ms) ignorado.
             const blinkL  = find('eyeBlinkLeft');
             const blinkR  = find('eyeBlinkRight');
             const isBlink = blinkL > BLINK_THRESHOLD && blinkR > BLINK_THRESHOLD;
+            const nowMs   = performance.now();
 
-            if (isBlink && !this.wasBlinking && !this.blinkOnCooldown) {
-              this.blinkOnCooldown = true;
-              this.blinkListeners.forEach(cb => cb(gx, gy));
-              setTimeout(() => { this.blinkOnCooldown = false; }, BLINK_COOLDOWN);
+            if (isBlink && !this.wasBlinking) {
+              // ── Inicio del cierre de ojos ────────────────────────────────
+              this.blinkStartTime = nowMs;
+            } else if (!isBlink && this.wasBlinking && this.blinkStartTime !== null) {
+              // ── Fin del cierre: medir duración ───────────────────────────
+              const dur = nowMs - this.blinkStartTime;
+              this.blinkStartTime = null;
+              if (
+                dur >= BLINK_MIN_MS &&
+                dur <= BLINK_MAX_MS &&
+                nowMs - this.lastBlinkEnd > BLINK_COOLDOWN &&
+                this.blinkEnabled
+              ) {
+                this.lastBlinkEnd = nowMs;
+                this.fireBlinkClick(gx, gy);
+              }
             }
             this.wasBlinking = isBlink;
           }
@@ -357,7 +395,8 @@ class GazeTracker {
     this.lastEmitY      = -1;
     this.currentResults = null;
     this.wasBlinking    = false;
-    this.blinkOnCooldown = false;
+    this.blinkStartTime = null;
+    this.lastBlinkEnd   = 0;
   }
 
   // ── Carga un Perfil Maestro de fábrica ───────────────────────────────────
@@ -542,7 +581,31 @@ class GazeTracker {
     this.lastMpTs        = 0;
     this.smoothHistory   = [];
     this.wasBlinking     = false;
-    this.blinkOnCooldown = false;
+    this.blinkStartTime  = null;
+    this.lastBlinkEnd    = 0;
+  }
+
+  // ── Activa / desactiva el blink-click (false durante calibración) ─────────
+  setBlinkEnabled(v: boolean) { this.blinkEnabled = v; }
+
+  // ── Dispara la acción de blink-click verificado ───────────────────────────
+  // 1. Sonido "pop"  2. Flash del botón  3. Notifica blinkListeners
+  private fireBlinkClick(x: number, y: number) {
+    // Sonido
+    playPopSound();
+
+    // Encontrar el elemento .gaze-target más cercano al punto imantado
+    const snapped = snapToGazeTarget(x, y, SNAP_RADIUS_PX + 20);
+    const topEl   = document.elementFromPoint(snapped.x, snapped.y);
+    const gazeEl  = topEl?.closest<HTMLElement>('.gaze-target') ?? null;
+    if (gazeEl) {
+      gazeEl.classList.add('blink-activated');
+      setTimeout(() => gazeEl.classList.remove('blink-activated'), 500);
+    }
+
+    // Notificar listeners (el callback onBlink en useWebGazer flashea el cursor
+    // y llama a activateTarget, que ejecuta el onClick del botón)
+    this.blinkListeners.forEach(cb => cb(snapped.x, snapped.y));
   }
 
   getModel(): (RegressionModel & { calibrated: boolean }) | null {

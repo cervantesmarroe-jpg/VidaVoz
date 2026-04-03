@@ -2,6 +2,14 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { X } from "lucide-react";
 
+// Desactiva el blink-click durante toda la pantalla de calibración
+function useDisableBlink() {
+  useEffect(() => {
+    gazeTracker.setBlinkEnabled(false);
+    return () => { gazeTracker.setBlinkEnabled(true); };
+  }, []);
+}
+
 // ── Constantes ───────────────────────────────────────────────────────────────
 const DWELL_TOTAL_MS  = 3000;   // duración del foco central
 const COLLECT_RATE_MS = 50;     // muestreo cada 50 ms → 20 fps
@@ -52,6 +60,7 @@ function SyncRing({ progress }: { progress: number }) {
 
 // ── Pantalla de Sincronización Rápida ─────────────────────────────────────────
 export function CalibrationScreen() {
+  useDisableBlink();
   const { finishCalibration, deactivate } = useWebGazerStore();
 
   const [phase, setPhase]       = useState<Phase>("syncing");

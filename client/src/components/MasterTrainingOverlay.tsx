@@ -123,8 +123,9 @@ export function MasterTrainingOverlay({ onClose }: Props) {
   const posX = currentPos.fx * window.innerWidth;
   const posY = currentPos.fy * window.innerHeight;
 
-  // ── Init cámara ───────────────────────────────────────────────────────────
+  // ── Init cámara + desactivar blink durante entrenamiento ─────────────────
   useEffect(() => {
+    gazeTracker.setBlinkEnabled(false);   // seguridad: ningún parpadeo accidental activa botones
     (async () => {
       gazeTracker.clearCalibration();
       if (!gazeTracker.hasFaceModel) await gazeTracker.init();
@@ -132,7 +133,10 @@ export function MasterTrainingOverlay({ onClose }: Props) {
       gazeTracker.startDetection();
       setCameraReady(true);
     })();
-    return clearTimers;
+    return () => {
+      clearTimers();
+      gazeTracker.setBlinkEnabled(true);  // reactivar al salir
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

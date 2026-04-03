@@ -117,6 +117,18 @@
   transform: scale(0.98);
 }
 
+/* ── Blink-click: flash del botón activado por parpadeo deliberado ──────── */
+@keyframes blink-activate {
+  0%   { filter: brightness(1);    box-shadow: inherit; outline: none; }
+  18%  { filter: brightness(2.2);
+         box-shadow: 0 0 0 8px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.7);
+         outline: 3px solid rgba(255,255,255,0.9); outline-offset: 2px; }
+  100% { filter: brightness(1);    box-shadow: inherit; outline: none; }
+}
+.blink-activated {
+  animation: blink-activate 0.5s ease-out forwards !important;
+}
+
 /* ── Modo Barrido Secuencial — botón resaltado ─────────────────────────── */
 .scanning-highlight {
   outline: 5px solid #facc15 !important;
