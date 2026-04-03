@@ -6,21 +6,23 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-const DWELL_MS        = 3000;   // 3 s de mirada fija para activar
-const ALPHA           = 0.3;   // suavizado: 0.7·prev + 0.3·nuevo
-const BLINK_THRESHOLD = 0.85;  // umbral parpadeo deliberado — ambos ojos deben superarlo
-const BLINK_COOLDOWN  = 1200;  // ms entre parpadeos reconocidos
+const DWELL_MS        = 3000;
+const SMOOTH_SAMPLES  = 10;   // media móvil de N muestras
+const BLINK_THRESHOLD = 0.85;
+const BLINK_COOLDOWN  = 1200;
 
-// Sensibilidad de la estimación universal (sin calibración)
-// SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal
+// Sensibilidad universal (sin calibración)
 const SENSITIVITY_X = -1.8;
 const SENSITIVITY_Y =  1.5;
+
+// Aprendizaje continuo: recomputar modelo tras N clics bien distribuidos
+const CONTINUOUS_MIN = 6;
+const CONTINUOUS_MAX = 20;   // buffer FIFO
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
 type NormalizedLandmark  = { x: number; y: number; z: number };
 
-// currentResults: caché del último frame — landmarks + blendshapes
 type DetectionCache = {
   categories: BlendshapeCategory[];
   landmarks:  NormalizedLandmark[];
@@ -35,7 +37,7 @@ interface RegressionModel {
 }
 
 interface TrainingPoint {
-  eyeX: number; eyeY: number;   // incluye corrección de cabeza
+  eyeX: number; eyeY: number;
   screenX: number; screenY: number;
 }
 
@@ -60,36 +62,23 @@ function calculateRegression(data: TrainingPoint[]): RegressionModel {
   const betaY  = (n * sumYSY - sumY * sumSY) / denY;
   const alphaY = (sumSY - betaY * sumY) / n;
 
-  console.log(
-    `GazeTracker: calibración OK (${n} muestras) —`,
-    `X: α=${alphaX.toFixed(1)} β=${betaX.toFixed(1)}`,
-    `Y: α=${alphaY.toFixed(1)} β=${betaY.toFixed(1)}`,
-  );
   return { alphaX, betaX, alphaY, betaY };
 }
 
 // ─── estimateGazeNoCalibration ────────────────────────────────────────────────
-// Fórmula del usuario: combina rotación de cabeza (landmark) + movimiento de iris (blendshape)
-// No necesita clics previos — usa promedio humano estándar
 function estimateGazeNoCalibration(
   eyeLookOutL: number, eyeLookInL:   number,
   eyeLookUpL:  number, eyeLookDownL: number,
-  headRotX:    number,               // landmarks[1].x − landmarks[4].x
+  headRotX:    number,
 ): { rawX: number; rawY: number } {
-  // 1. Vector de mirada universal:
-  //    orientación de la cabeza (Yaw) + movimiento del iris
   const horizontalGaze = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
   const verticalGaze   = (eyeLookUpL  - eyeLookDownL);
-
-  // 2. Proyección a píxeles
-  // SENSITIVITY_X negativo corrige el efecto espejo de la cámara frontal
   return {
     rawX: (window.innerWidth  / 2) + (horizontalGaze * window.innerWidth  * SENSITIVITY_X),
     rawY: (window.innerHeight / 2) - (verticalGaze   * window.innerHeight * SENSITIVITY_Y),
   };
 }
 
-// ─── updateGazePoint: calibrado o estimación universal ───────────────────────
 function updateGazePoint(
   eyeLookOutL: number, eyeLookInL:   number,
   eyeLookUpL:  number, eyeLookDownL: number,
@@ -97,7 +86,6 @@ function updateGazePoint(
   model:       RegressionModel | null,
 ): { rawX: number; rawY: number } {
   if (model) {
-    // Calibrado: usa la regresión entrenada con el vector completo (cabeza + iris)
     const eyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
     const eyeY = (eyeLookUpL  - eyeLookDownL);
     return {
@@ -105,7 +93,6 @@ function updateGazePoint(
       rawY: model.alphaY + model.betaY * eyeY,
     };
   }
-  // Sin calibración: estimación universal con cabeza + iris
   return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX);
 }
 
@@ -118,19 +105,21 @@ class GazeTracker {
   private lastVideoTime: number = -1;
   private lastMpTs:      number = 0;
 
-  private smoothX = window.innerWidth  / 2;
-  private smoothY = window.innerHeight / 2;
+  // ── Media móvil de 10 muestras (sin temblor entre dispositivos)
+  private smoothHistory: Array<{ x: number; y: number }> = [];
 
-  // caché del último frame (blendshapes + landmarks)
   private currentResults: DetectionCache = null;
 
-  // calibración
+  // calibración rápida (punto central)
   private trainingData:    TrainingPoint[]    = [];
   private isCalibrated     = false;
   private regressionModel: RegressionModel | null = null;
 
+  // aprendizaje continuo (clics de uso real)
+  private continuousData: TrainingPoint[] = [];
+
   // parpadeo
-  private wasBlinking    = false;
+  private wasBlinking     = false;
   private blinkOnCooldown = false;
 
   private gazeListeners:  Set<GazeCallback>  = new Set();
@@ -183,7 +172,6 @@ class GazeTracker {
   }
 
   startDetection() {
-    // Detener siempre el loop anterior — evita timestamps no crecientes
     this.stopDetection();
     if (!this.landmarker || !this.video) return;
 
@@ -205,33 +193,32 @@ class GazeTracker {
           const landmarks = results.faceLandmarks?.[0];
 
           if (cats && landmarks) {
-            // Actualizar caché — recordCalibrationPoint lo lee desde aquí
             this.currentResults = { categories: cats, landmarks };
 
             const find = (name: string) => cats.find(s => s.categoryName === name)?.score ?? 0;
 
-            // Blendshapes de dirección de iris
             const eyeLookOutL  = find('eyeLookOutLeft');
             const eyeLookInL   = find('eyeLookInLeft');
             const eyeLookUpL   = find('eyeLookUpLeft');
             const eyeLookDownL = find('eyeLookDownLeft');
-
-            // Rotación horizontal de cabeza: nariz punta (1) vs base nariz (4)
-            const headRotX = landmarks[1].x - landmarks[4].x;
+            const headRotX     = landmarks[1].x - landmarks[4].x;
 
             const { rawX, rawY } = updateGazePoint(
               eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL,
               headRotX, this.regressionModel,
             );
-            this.smoothX = ALPHA * rawX + (1 - ALPHA) * this.smoothX;
-            this.smoothY = ALPHA * rawY + (1 - ALPHA) * this.smoothY;
 
-            const gx = Math.max(0, Math.min(window.innerWidth,  this.smoothX));
-            const gy = Math.max(0, Math.min(window.innerHeight, this.smoothY));
+            // ── Media móvil de SMOOTH_SAMPLES muestras ────────────────────
+            this.smoothHistory.push({ x: rawX, y: rawY });
+            if (this.smoothHistory.length > SMOOTH_SAMPLES) this.smoothHistory.shift();
+            const n   = this.smoothHistory.length;
+            const sum = this.smoothHistory.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y }), { x: 0, y: 0 });
+            const gx  = Math.max(0, Math.min(window.innerWidth,  sum.x / n));
+            const gy  = Math.max(0, Math.min(window.innerHeight, sum.y / n));
+
             this.gazeListeners.forEach(cb => cb(gx, gy));
 
-            // Parpadeo deliberado: ambos ojos deben superar el umbral simultáneamente
-            // AND condition — más intencional, evita falsos positivos
+            // Parpadeo deliberado (ambos ojos)
             const blinkL  = find('eyeBlinkLeft');
             const blinkR  = find('eyeBlinkRight');
             const isBlink = blinkL > BLINK_THRESHOLD && blinkR > BLINK_THRESHOLD;
@@ -264,64 +251,121 @@ class GazeTracker {
     this.video          = null;
     this.lastVideoTime  = -1;
     this.lastMpTs       = 0;
-    this.smoothX        = window.innerWidth  / 2;
-    this.smoothY        = window.innerHeight / 2;
+    this.smoothHistory  = [];
     this.currentResults = null;
     this.wasBlinking    = false;
     this.blinkOnCooldown = false;
   }
 
-  // ── Calibración ─────────────────────────────────────────────────────────────
-  // Devuelve true si grabó la muestra, false si no hay cara detectada (safeRecord)
+  // ── Calibración rápida: muestra al centro ────────────────────────────────
   recordCalibrationPoint(screenX: number, screenY: number): boolean {
     const shapes    = this.currentResults?.categories;
     const landmarks = this.currentResults?.landmarks;
     if (!shapes || !landmarks) return false;
 
     const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
-
-    // Vector de entrenamiento idéntico al de inferencia:
-    // iris + rotación de cabeza → misma feature que usa updateGazePoint calibrado
     const headRotX = landmarks[1].x - landmarks[4].x;
     const eyeX = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
     const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
 
     this.trainingData.push({ eyeX, eyeY, screenX, screenY });
-
-    if (this.trainingData.length >= 27) {  // 9 puntos × 3 clics mínimo
-      this.calculateCalibration();
-    }
     return true;
   }
 
-  private calculateCalibration() {
-    this.regressionModel = calculateRegression(this.trainingData);
-    this.isCalibrated    = true;
+  // ── Calibración instantánea: ancla centro + pendiente universal ──────────
+  // Usa la media de los vectores oculares recogidos durante 3s mirando el centro
+  // para corregir el offset individual sin perder la sensibilidad universal.
+  quickCenterCalibrate(): boolean {
+    if (this.trainingData.length < 5) return false;
+
+    const cx = window.innerWidth  / 2;
+    const cy = window.innerHeight / 2;
+
+    const n      = this.trainingData.length;
+    const avgEyeX = this.trainingData.reduce((s, d) => s + d.eyeX, 0) / n;
+    const avgEyeY = this.trainingData.reduce((s, d) => s + d.eyeY, 0) / n;
+
+    // Pendiente = sensibilidad universal (calibrada para humano promedio)
+    // Ordenada al origen = ajuste para que el punto central sea el centro de pantalla
+    const betaX = SENSITIVITY_X * window.innerWidth;
+    const betaY = -SENSITIVITY_Y * window.innerHeight;
+
+    this.regressionModel = {
+      alphaX: cx - betaX * avgEyeX,
+      betaX,
+      alphaY: cy - betaY * avgEyeY,
+      betaY,
+    };
+    this.isCalibrated = true;
+    this.trainingData = [];
+    this.continuousData = [];
+
+    console.log(
+      'GazeTracker: QuickSync OK —',
+      `αX=${this.regressionModel.alphaX.toFixed(1)} βX=${betaX.toFixed(1)}`,
+      `αY=${this.regressionModel.alphaY.toFixed(1)} βY=${betaY.toFixed(1)}`,
+    );
+    return true;
   }
 
+  // ── Aprendizaje continuo: registra cada clic exitoso en segundo plano ────
+  recordClickCalibration(screenX: number, screenY: number) {
+    const shapes    = this.currentResults?.categories;
+    const landmarks = this.currentResults?.landmarks;
+    if (!shapes || !landmarks || !this.isCalibrated) return;
+
+    const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+    const headRotX = landmarks[1].x - landmarks[4].x;
+    const eyeX = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
+    const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
+
+    // FIFO buffer
+    this.continuousData.push({ eyeX, eyeY, screenX, screenY });
+    if (this.continuousData.length > CONTINUOUS_MAX) this.continuousData.shift();
+
+    // Recomputar si tenemos suficientes datos con dispersión suficiente
+    if (this.continuousData.length >= CONTINUOUS_MIN) {
+      const xVals = this.continuousData.map(d => d.screenX);
+      const spread = Math.max(...xVals) - Math.min(...xVals);
+      if (spread > window.innerWidth * 0.15) {
+        // Mezcla: puntos continuos + 3 anclajes sintéticos al centro
+        const cx = window.innerWidth  / 2;
+        const cy = window.innerHeight / 2;
+        const anchor: TrainingPoint = { eyeX: 0, eyeY: 0, screenX: cx, screenY: cy };
+        const mixed = [...this.continuousData, anchor, anchor, anchor];
+        this.regressionModel = calculateRegression(mixed);
+        console.log('GazeTracker: recalibración continua aplicada');
+      }
+    }
+  }
+
+  // Métodos legacy (UsaCalibrationOverlay los llama)
   computeCalibration() {
-    if (this.trainingData.length >= 4) this.calculateCalibration();
+    if (this.trainingData.length >= 4) {
+      this.regressionModel = calculateRegression(this.trainingData);
+      this.isCalibrated    = true;
+    }
     this.trainingData = [];
   }
 
   clearCalibration() {
     this.trainingData    = [];
+    this.continuousData  = [];
     this.isCalibrated    = false;
     this.regressionModel = null;
     this.currentResults  = null;
     this.lastVideoTime   = -1;
     this.lastMpTs        = 0;
+    this.smoothHistory   = [];
     this.wasBlinking     = false;
     this.blinkOnCooldown = false;
   }
 
-  // ── Modelo público ───────────────────────────────────────────────────────────
   getModel(): (RegressionModel & { calibrated: boolean }) | null {
     if (!this.regressionModel) return null;
     return { ...this.regressionModel, calibrated: this.isCalibrated };
   }
 
-  // ── Listeners ───────────────────────────────────────────────────────────────
   addGazeListener(cb: GazeCallback)     { this.gazeListeners.add(cb); }
   removeGazeListener(cb: GazeCallback)  { this.gazeListeners.delete(cb); }
   addBlinkListener(cb: BlinkCallback)   { this.blinkListeners.add(cb); }
@@ -364,7 +408,7 @@ export function useWebGazer() {
     return () => { document.getElementById('gaze-cursor')?.remove(); };
   }, []);
 
-  // Calibrando → cámara + detección (sin blink listener)
+  // Calibrando → cámara + detección
   useEffect(() => {
     if (!isCalibrating) return;
     gazeTracker.clearCalibration();
@@ -375,7 +419,7 @@ export function useWebGazer() {
     })();
   }, [isCalibrating]);
 
-  // Activo → dwell + parpadeo
+  // Activo → dwell + parpadeo + aprendizaje continuo
   useEffect(() => {
     const cursor = document.getElementById('gaze-cursor');
     if (!isActive) {
@@ -391,6 +435,12 @@ export function useWebGazer() {
     let dwellCooldown = false;
 
     function activateTarget(el: HTMLElement) {
+      // Aprendizaje continuo: registra la posición del botón
+      const rect = el.getBoundingClientRect();
+      const cx   = rect.left + rect.width  / 2;
+      const cy   = rect.top  + rect.height / 2;
+      gazeTracker.recordClickCalibration(cx, cy);
+
       el.click();
       resetProgress(el);
       el.style.transform = 'scale(0.95)';
@@ -450,7 +500,6 @@ export function useWebGazer() {
     };
   }, [isActive]);
 
-  // Ni calibrando ni activo → apagar todo
   useEffect(() => {
     if (!isCalibrating && !isActive) gazeTracker.stopCamera();
   }, [isCalibrating, isActive]);

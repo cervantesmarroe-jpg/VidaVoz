@@ -1,410 +1,293 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { gazeTracker } from "@/hooks/use-webgazer";
-import { useWebGazerStore } from "@/hooks/use-webgazer";
-import { CheckCircle, X } from "lucide-react";
+import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
+import { X } from "lucide-react";
 
-// ── Posiciones de la rejilla 3×3 (relativas al viewport) ────────────────────
-const GRID_POINTS = [
-  { xr: 0.05, yr: 0.05, label: "Superior Izquierda" },
-  { xr: 0.50, yr: 0.05, label: "Superior Centro"    },
-  { xr: 0.95, yr: 0.05, label: "Superior Derecha"   },
-  { xr: 0.05, yr: 0.50, label: "Centro Izquierda"   },
-  { xr: 0.50, yr: 0.50, label: "Centro"              },
-  { xr: 0.95, yr: 0.50, label: "Centro Derecha"      },
-  { xr: 0.05, yr: 0.95, label: "Inferior Izquierda" },
-  { xr: 0.50, yr: 0.95, label: "Inferior Centro"    },
-  { xr: 0.95, yr: 0.95, label: "Inferior Derecha"   },
-];
+// ── Constantes ───────────────────────────────────────────────────────────────
+const DWELL_TOTAL_MS  = 3000;   // duración del foco central
+const COLLECT_RATE_MS = 50;     // muestreo cada 50 ms → 20 fps
+const WARMUP_MS       = 400;    // retardo antes de capturar (parpadeo de adaptación)
+const SUCCESS_SHOW_MS = 1400;   // tiempo que se ve el estado "listo" antes de cerrar
 
-const POINT_MS     = 2500;   // duración de cada punto (ms)
-const WARMUP_MS    = 600;    // retardo antes de capturar (ms)
-const COLLECT_RATE = 30;     // intervalo de muestreo (ms) → ~33 fps
-const CIRC_R       = 44;     // radio del arco SVG de progreso
-const CIRCUMF      = 2 * Math.PI * CIRC_R;
+// Radios del anillo SVG de progreso
+const R_OUTER = 72;             // radio del anillo exterior
+const CIRCUMF  = 2 * Math.PI * R_OUTER;
 
-type Phase = "intro" | "calibrating" | "result" | "validation";
+type Phase = "syncing" | "success";
 
-interface CalibModel {
-  alphaX: number; betaX: number;
-  alphaY: number; betaY: number;
-  calibrated: boolean;
-}
-
-// ── Arco SVG de progreso ─────────────────────────────────────────────────────
-function ProgressArc({ progress }: { progress: number }) {
+// ── Anillo SVG de progreso ────────────────────────────────────────────────────
+function SyncRing({ progress }: { progress: number }) {
   const offset = CIRCUMF * (1 - Math.min(progress, 1));
+  const size   = (R_OUTER + 12) * 2;
   return (
     <svg
-      width={CIRC_R * 2 + 16}
-      height={CIRC_R * 2 + 16}
-      style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%) rotate(-90deg)", pointerEvents: "none" }}
+      width={size} height={size}
+      style={{
+        position: "absolute",
+        top: "50%", left: "50%",
+        transform: "translate(-50%,-50%) rotate(-90deg)",
+        pointerEvents: "none",
+      }}
     >
+      {/* Pista de fondo */}
       <circle
-        cx={CIRC_R + 8} cy={CIRC_R + 8} r={CIRC_R}
-        fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={4}
+        cx={size / 2} cy={size / 2} r={R_OUTER}
+        fill="none"
+        stroke="rgba(125,211,168,0.18)"
+        strokeWidth={7}
       />
+      {/* Arco de progreso */}
       <circle
-        cx={CIRC_R + 8} cy={CIRC_R + 8} r={CIRC_R}
-        fill="none" stroke="#fbbf24" strokeWidth={4}
+        cx={size / 2} cy={size / 2} r={R_OUTER}
+        fill="none"
+        stroke="#7DD3A8"
+        strokeWidth={7}
         strokeLinecap="round"
         strokeDasharray={CIRCUMF}
         strokeDashoffset={offset}
-        style={{ transition: "stroke-dashoffset 0.05s linear" }}
+        style={{ transition: "stroke-dashoffset 0.06s linear" }}
       />
     </svg>
   );
 }
 
-// ── Pantalla principal de calibración ────────────────────────────────────────
+// ── Pantalla de Sincronización Rápida ─────────────────────────────────────────
 export function CalibrationScreen() {
   const { finishCalibration, deactivate } = useWebGazerStore();
 
-  const [phase, setPhase]       = useState<Phase>("intro");
-  const [currentPt, setCurrentPt] = useState(0);
+  const [phase, setPhase]       = useState<Phase>("syncing");
   const [progress, setProgress] = useState(0);
   const [samples, setSamples]   = useState(0);
-  const [model, setModel]       = useState<CalibModel | null>(null);
-  const [countDown, setCountDown] = useState(3);
 
-  const validCursorRef  = useRef<HTMLDivElement>(null);
-  const donePtsRef      = useRef<Set<number>>(new Set());
+  // Para cancelar los timers al desmontar
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const ivsRef    = useRef<ReturnType<typeof setInterval>[]>([]);
 
-  // ── Fase intro: cuenta atrás 3-2-1 ──────────────────────────────────────
+  const clearAll = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    ivsRef.current.forEach(clearInterval);
+    timersRef.current = [];
+    ivsRef.current    = [];
+  }, []);
+
+  // ── Fase syncing: recoger muestras del punto central ──────────────────────
   useEffect(() => {
-    if (phase !== "intro") return;
-    donePtsRef.current = new Set();
-    setCurrentPt(0);
+    if (phase !== "syncing") return;
     setProgress(0);
     setSamples(0);
-    setModel(null);
     gazeTracker.clearCalibration();
 
-    const iv = setInterval(() => setCountDown((c) => {
-      if (c <= 1) { clearInterval(iv); setPhase("calibrating"); return 3; }
-      return c - 1;
-    }), 1000);
-    return () => clearInterval(iv);
-  }, [phase]);
-
-  // ── Fase calibrating: captura por punto ──────────────────────────────────
-  useEffect(() => {
-    if (phase !== "calibrating") return;
-
-    // Si terminamos todos los puntos → calcular modelo
-    if (currentPt >= GRID_POINTS.length) {
-      gazeTracker.computeCalibration();
-      const m = gazeTracker.getModel();
-      if (m) {
-        setModel(m);
-        // Imprimir en consola
-        const out = {
-          version:  1,
-          points:   GRID_POINTS.length,
-          alphaX:   +m.alphaX.toFixed(4),
-          betaX:    +m.betaX.toFixed(4),
-          alphaY:   +m.alphaY.toFixed(4),
-          betaY:    +m.betaY.toFixed(4),
-          widthPx:  window.innerWidth,
-          heightPx: window.innerHeight,
-          calibrated: m.calibrated,
-        };
-        console.log("USER_CALIBRATION_MODEL =", JSON.stringify(out, null, 2));
-      }
-      setPhase("result");
-      return;
-    }
-
-    const pt      = GRID_POINTS[currentPt];
-    const screenX = pt.xr * window.innerWidth;
-    const screenY = pt.yr * window.innerHeight;
-    let   localSamples = 0;
-    let   collecting   = false;
-    setProgress(0);
+    const centerX = window.innerWidth  / 2;
+    const centerY = window.innerHeight / 2;
 
     const startTime = Date.now();
 
-    // Retardo de calentamiento
+    // Retardo de calentamiento → ignorar primeras muestras
+    let collecting = false;
     const warmup = setTimeout(() => { collecting = true; }, WARMUP_MS);
+    timersRef.current.push(warmup);
 
-    // Muestreo a ~33 fps
+    // Muestreo
     const collector = setInterval(() => {
       if (!collecting) return;
-      const ok = gazeTracker.recordCalibrationPoint(screenX, screenY);
-      if (ok) { localSamples++; setSamples((s) => s + 1); }
-    }, COLLECT_RATE);
+      const ok = gazeTracker.recordCalibrationPoint(centerX, centerY);
+      if (ok) setSamples(s => s + 1);
+    }, COLLECT_RATE_MS);
+    ivsRef.current.push(collector);
 
-    // Actualizar barra de progreso
+    // Progreso visual
     const progressIv = setInterval(() => {
-      setProgress(Math.min((Date.now() - startTime) / POINT_MS, 1));
+      const p = Math.min((Date.now() - startTime) / DWELL_TOTAL_MS, 1);
+      setProgress(p);
     }, 40);
+    ivsRef.current.push(progressIv);
 
-    // Avanzar al siguiente punto
-    const advance = setTimeout(() => {
-      clearInterval(collector);
-      clearInterval(progressIv);
-      clearTimeout(warmup);
-      donePtsRef.current = new Set(donePtsRef.current).add(currentPt);
-      setCurrentPt((p) => p + 1);
-    }, POINT_MS);
-
-    return () => {
-      clearInterval(collector);
-      clearInterval(progressIv);
-      clearTimeout(advance);
-      clearTimeout(warmup);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentPt]);
-
-  // ── Fase validation: cursor sigue la mirada ──────────────────────────────
-  useEffect(() => {
-    if (phase !== "validation") return;
-    gazeTracker.startDetection();
-    const onGaze = (x: number, y: number) => {
-      if (validCursorRef.current) {
-        validCursorRef.current.style.transform = `translate(${x - 28}px, ${y - 28}px)`;
+    // Fin del dwell
+    const done = setTimeout(() => {
+      clearAll();
+      const ok = gazeTracker.quickCenterCalibrate();
+      if (ok) {
+        setPhase("success");
+      } else {
+        // Sin cara detectada → reintentar
+        setPhase("syncing");
       }
-    };
-    gazeTracker.addGazeListener(onGaze);
-    return () => gazeTracker.removeGazeListener(onGaze);
+    }, DWELL_TOTAL_MS);
+    timersRef.current.push(done);
+
+    return clearAll;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  const handleFinish = useCallback(() => {
-    finishCalibration();
-    gazeTracker.startDetection();
-  }, [finishCalibration]);
+  // ── Fase success: activar tracking y cerrar ───────────────────────────────
+  useEffect(() => {
+    if (phase !== "success") return;
+    const t = setTimeout(() => {
+      finishCalibration();
+      gazeTracker.startDetection();
+    }, SUCCESS_SHOW_MS);
+    return () => clearTimeout(t);
+  }, [phase, finishCalibration]);
 
   const handleCancel = useCallback(() => {
+    clearAll();
     deactivate();
     gazeTracker.stopCamera();
-  }, [deactivate]);
+  }, [clearAll, deactivate]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 9999,
-      background: "#000", color: "#fff",
-      fontFamily: "'Lexend', sans-serif",
-      userSelect: "none",
-    }}>
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "#000000",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        fontFamily: "'Lexend', sans-serif",
+        userSelect: "none",
+        overflow: "hidden",
+      }}
+    >
       <style>{`
-        @keyframes pulse-dot {
-          0%,100% { transform: scale(1);   box-shadow: 0 0 0 0 rgba(251,191,36,0.6); }
-          50%      { transform: scale(1.35); box-shadow: 0 0 0 18px rgba(251,191,36,0); }
+        @keyframes heartbeat {
+          0%,100% { transform: scale(1);     opacity: 1; }
+          14%      { transform: scale(1.18);  opacity: 0.95; }
+          28%      { transform: scale(1);     opacity: 1; }
+          42%      { transform: scale(1.10);  opacity: 0.95; }
+          70%      { transform: scale(1);     opacity: 1; }
         }
-        @keyframes fadeIn { from { opacity:0; transform:scale(0.8); } to { opacity:1; transform:scale(1); } }
+        @keyframes popIn {
+          0%   { transform: scale(0.4); opacity: 0; }
+          70%  { transform: scale(1.08); opacity: 1; }
+          100% { transform: scale(1);   opacity: 1; }
+        }
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
 
-      {/* Botón cancelar */}
+      {/* Botón cancelar (esquina superior derecha) */}
       <button
         onClick={handleCancel}
+        data-testid="button-cancel-calibration"
         style={{
-          position: "absolute", top: 16, right: 16, zIndex: 10,
-          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
-          borderRadius: 10, color: "rgba(255,255,255,0.55)", padding: "8px 14px",
-          cursor: "pointer", fontSize: "0.75rem", fontWeight: 700,
+          position: "absolute", top: 20, right: 20,
+          background: "rgba(255,255,255,0.07)",
+          border: "1px solid rgba(255,255,255,0.14)",
+          borderRadius: 10, color: "rgba(255,255,255,0.45)",
+          padding: "8px 14px", cursor: "pointer",
+          fontSize: "0.75rem", fontWeight: 700,
           display: "flex", alignItems: "center", gap: 6,
-          fontFamily: "'Lexend', sans-serif",
         }}
       >
-        <X size={14} /> Cancelar
+        <X size={13} /> Cancelar
       </button>
 
-      {/* ─── INTRO ───────────────────────────────────────────────────────── */}
-      {phase === "intro" && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 32, padding: 40 }}>
-          <div style={{ fontSize: "clamp(1.4rem,3vw,2rem)", fontWeight: 900, color: "#fbbf24", letterSpacing: ".05em", textAlign: "center" }}>
-            CALIBRACIÓN DE MIRADA
-          </div>
-          <div style={{ fontSize: "clamp(.9rem,2vw,1.2rem)", color: "rgba(255,255,255,0.7)", textAlign: "center", maxWidth: 560, lineHeight: 1.7 }}>
-            Aparecerán <strong style={{ color: "#fff" }}>9 puntos dorados</strong> en pantalla.<br />
-            Mira cada punto fijamente hasta que desaparezca.<br />
-            No muevas la cabeza, solo los ojos.
-          </div>
-          <div style={{
-            width: 110, height: 110, borderRadius: "50%",
-            background: "rgba(251,191,36,0.15)", border: "3px solid #fbbf24",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "3.5rem", fontWeight: 900, color: "#fbbf24",
-          }}>
-            {countDown}
-          </div>
-          <div style={{ fontSize: ".75rem", color: "rgba(255,255,255,0.4)", letterSpacing: ".12em", textTransform: "uppercase" }}>
-            Comenzando…
-          </div>
-        </div>
-      )}
-
-      {/* ─── CALIBRATING ─────────────────────────────────────────────────── */}
-      {phase === "calibrating" && currentPt < GRID_POINTS.length && (
+      {/* ── Estado: SINCRONIZANDO ─────────────────────────────────────────── */}
+      {phase === "syncing" && (
         <>
-          {/* Indicador superior */}
-          <div style={{ position: "absolute", top: 18, left: 0, right: 0, textAlign: "center", fontSize: ".8rem", fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: ".1em", textTransform: "uppercase" }}>
-            Punto {currentPt + 1} de {GRID_POINTS.length} — {GRID_POINTS[currentPt].label}
-          </div>
-          <div style={{ position: "absolute", top: 42, left: 0, right: 0, textAlign: "center", fontSize: ".68rem", color: "rgba(255,255,255,0.3)" }}>
-            {samples} muestras capturadas
-          </div>
+          {/* Texto superior */}
+          <p style={{
+            position: "absolute", top: "18%", left: 0, right: 0,
+            textAlign: "center",
+            fontSize: "clamp(1rem,3.5vw,1.35rem)",
+            fontWeight: 600,
+            color: "rgba(255,255,255,0.55)",
+            letterSpacing: ".04em",
+            animation: "fadeSlideUp .5s ease both",
+          }}>
+            Sincronización Rápida
+          </p>
 
-          {/* Todos los puntos de la rejilla */}
-          {GRID_POINTS.map((pt, i) => {
-            const px = pt.xr * window.innerWidth;
-            const py = pt.yr * window.innerHeight;
-            const isActive = i === currentPt;
-            const isDone   = donePtsRef.current.has(i);
-            return (
-              <div key={i} style={{
-                position: "absolute",
-                left: px, top: py,
-                transform: "translate(-50%,-50%)",
-                zIndex: isActive ? 5 : 2,
-              }}>
-                {/* Arco de progreso (solo punto activo) */}
-                {isActive && <ProgressArc progress={progress} />}
+          {/* Instrucción */}
+          <p style={{
+            position: "absolute", top: "calc(18% + 3rem)", left: 0, right: 0,
+            textAlign: "center",
+            fontSize: "clamp(.8rem,2.5vw,1rem)",
+            color: "rgba(255,255,255,0.28)",
+            animation: "fadeSlideUp .6s ease .1s both",
+          }}>
+            Mira el círculo verde
+          </p>
 
-                {/* Punto */}
-                <div style={{
-                  width:  isActive ? 24 : isDone ? 12 : 10,
-                  height: isActive ? 24 : isDone ? 12 : 10,
-                  borderRadius: "50%",
-                  background: isActive ? "#fbbf24" : isDone ? "rgba(251,191,36,0.35)" : "rgba(255,255,255,0.15)",
-                  border: isActive ? "3px solid rgba(255,255,255,0.9)" : isDone ? "2px solid rgba(251,191,36,0.4)" : "1px solid rgba(255,255,255,0.2)",
-                  transition: "all .2s",
-                  animation: isActive ? "pulse-dot 0.9s ease-in-out infinite" : "none",
-                }} />
-              </div>
-            );
-          })}
+          {/* Círculo central con anillo de progreso */}
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {/* Anillo SVG */}
+            <SyncRing progress={progress} />
 
-          {/* Instrucción centrada */}
-          <div style={{ position: "absolute", bottom: 28, left: 0, right: 0, textAlign: "center", fontSize: ".78rem", fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: ".08em", textTransform: "uppercase" }}>
-            Mira el punto dorado
-          </div>
-        </>
-      )}
-
-      {/* ─── RESULT ──────────────────────────────────────────────────────── */}
-      {phase === "result" && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 24, padding: 40 }}>
-          <CheckCircle size={52} color="#4ade80" />
-          <div style={{ fontSize: "clamp(1.3rem,3vw,1.8rem)", fontWeight: 900, color: "#4ade80" }}>
-            Calibración completada
-          </div>
-          <div style={{ fontSize: ".8rem", color: "rgba(255,255,255,0.45)" }}>
-            {samples} muestras totales · {GRID_POINTS.length} puntos
-          </div>
-
-          {/* Modelo */}
-          {model && (
+            {/* Halo exterior */}
             <div style={{
-              background: "#0d0d0d", borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)",
-              padding: "18px 28px", maxWidth: 420, width: "100%",
-            }}>
-              <div style={{ fontSize: ".65rem", fontWeight: 800, letterSpacing: ".15em", color: "#fbbf24", textTransform: "uppercase", marginBottom: 12 }}>
-                USER_CALIBRATION_MODEL
-              </div>
-              <pre style={{ margin: 0, fontFamily: "monospace", fontSize: ".78rem", color: "#a3e635", lineHeight: 1.7 }}>{JSON.stringify({
-                version:   1,
-                points:    GRID_POINTS.length,
-                alphaX:    +model.alphaX.toFixed(3),
-                betaX:     +model.betaX.toFixed(3),
-                alphaY:    +model.alphaY.toFixed(3),
-                betaY:     +model.betaY.toFixed(3),
-                widthPx:   window.innerWidth,
-                heightPx:  window.innerHeight,
-                calibrated: model.calibrated,
-              }, null, 2)}</pre>
-            </div>
-          )}
+              position: "absolute",
+              width: 110, height: 110,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(125,211,168,0.15) 0%, transparent 70%)",
+            }} />
 
-          {/* Botones */}
-          <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
-            <button onClick={() => setPhase("validation")} style={{
-              background: "#1a3a1a", border: "2px solid #4ade80", borderRadius: 12,
-              color: "#4ade80", padding: "12px 28px", cursor: "pointer",
-              fontFamily: "'Lexend',sans-serif", fontWeight: 800, fontSize: ".85rem", letterSpacing: ".06em",
-            }}>
-              👁  Probar precisión
-            </button>
-            <button onClick={handleFinish} style={{
-              background: "rgba(251,191,36,0.12)", border: "2px solid #fbbf24", borderRadius: 12,
-              color: "#fbbf24", padding: "12px 28px", cursor: "pointer",
-              fontFamily: "'Lexend',sans-serif", fontWeight: 800, fontSize: ".85rem", letterSpacing: ".06em",
-            }}>
-              ✓  Usar calibración
-            </button>
+            {/* Círculo interior con latido */}
+            <div style={{
+              width:  60, height: 60,
+              borderRadius: "50%",
+              background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 55%, #4db88a 100%)",
+              boxShadow: "0 0 32px rgba(125,211,168,0.55), 0 0 8px rgba(125,211,168,0.3)",
+              animation: "heartbeat 1.1s ease-in-out infinite",
+              position: "relative", zIndex: 2,
+            }} />
           </div>
-          <button onClick={() => setPhase("intro")} style={{
-            background: "transparent", border: "none", color: "rgba(255,255,255,0.3)",
-            cursor: "pointer", fontFamily: "'Lexend',sans-serif", fontWeight: 600, fontSize: ".72rem",
-          }}>
-            ↺ Repetir calibración
-          </button>
-        </div>
+
+          {/* Contador de muestras (debug discreto) */}
+          {samples > 0 && (
+            <p style={{
+              position: "absolute", bottom: "22%",
+              fontSize: ".68rem", color: "rgba(125,211,168,0.35)",
+              letterSpacing: ".08em",
+            }}>
+              {samples} muestras
+            </p>
+          )}
+        </>
       )}
 
-      {/* ─── VALIDATION ──────────────────────────────────────────────────── */}
-      {phase === "validation" && (
-        <>
-          {/* Cursor de validación */}
-          <div ref={validCursorRef} style={{
-            position: "fixed", top: 0, left: 0,
-            width: 56, height: 56, borderRadius: "50%",
-            pointerEvents: "none", zIndex: 10,
-            background: "rgba(74,222,128,0.15)",
-            border: "3px solid #4ade80",
-            boxShadow: "0 0 20px rgba(74,222,128,0.5)",
-            transition: "transform 0.07s linear",
-          }} />
-
-          {/* Panel de instrucciones (esquina superior izquierda) */}
+      {/* ── Estado: LISTO ────────────────────────────────────────────────── */}
+      {phase === "success" && (
+        <div style={{
+          display: "flex", flexDirection: "column",
+          alignItems: "center", gap: 20,
+          animation: "popIn .45s cubic-bezier(.34,1.56,.64,1) both",
+        }}>
+          {/* Círculo con check */}
           <div style={{
-            position: "absolute", top: 20, left: 20,
-            background: "rgba(0,0,0,0.8)", border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: 12, padding: "14px 20px",
+            width: 96, height: 96, borderRadius: "50%",
+            background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 60%, #4db88a 100%)",
+            boxShadow: "0 0 48px rgba(125,211,168,0.7)",
+            display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <div style={{ fontSize: ".75rem", fontWeight: 800, color: "#4ade80", letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
-              Prueba de precisión
-            </div>
-            <div style={{ fontSize: ".7rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>
-              Mueve la mirada por la pantalla.<br />El cursor verde debe seguir tus ojos.
-            </div>
+            <svg width={46} height={46} viewBox="0 0 46 46" fill="none">
+              <polyline
+                points="9,24 19,34 37,13"
+                stroke="#fff" strokeWidth={4.5}
+                strokeLinecap="round" strokeLinejoin="round"
+              />
+            </svg>
           </div>
 
-          {/* Cruces de referencia en las 9 posiciones */}
-          {GRID_POINTS.map((pt, i) => (
-            <div key={i} style={{
-              position: "absolute",
-              left: pt.xr * window.innerWidth,
-              top: pt.yr * window.innerHeight,
-              transform: "translate(-50%,-50%)",
-              width: 20, height: 20,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <div style={{ position: "absolute", width: 20, height: 1, background: "rgba(255,255,255,0.2)" }} />
-              <div style={{ position: "absolute", width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
-              <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(255,255,255,0.3)" }} />
-            </div>
-          ))}
+          <p style={{
+            fontSize: "clamp(1.1rem,3vw,1.5rem)",
+            fontWeight: 800,
+            color: "#7DD3A8",
+            letterSpacing: ".04em",
+            textAlign: "center",
+          }}>
+            ¡Listo!
+          </p>
 
-          {/* Botones inferiores */}
-          <div style={{ position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 14 }}>
-            <button onClick={() => setPhase("result")} style={{
-              background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)",
-              borderRadius: 12, color: "rgba(255,255,255,0.7)", padding: "10px 22px",
-              cursor: "pointer", fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: ".78rem",
-            }}>
-              ← Volver
-            </button>
-            <button onClick={handleFinish} style={{
-              background: "#1a3a1a", border: "2px solid #4ade80", borderRadius: 12,
-              color: "#4ade80", padding: "10px 28px", cursor: "pointer",
-              fontFamily: "'Lexend',sans-serif", fontWeight: 800, fontSize: ".82rem",
-            }}>
-              ✓ Confirmar y activar mirada
-            </button>
-          </div>
-        </>
+          <p style={{
+            fontSize: ".85rem",
+            color: "rgba(255,255,255,0.4)",
+            textAlign: "center",
+          }}>
+            Activando seguimiento de mirada…
+          </p>
+        </div>
       )}
     </div>
   );
