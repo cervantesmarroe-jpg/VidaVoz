@@ -290,6 +290,42 @@ class GazeTracker {
 
   get currentProfile() { return this.activeProfile; }
 
+  // ── Debug: copia todo el estado de calibración ────────────────────────────
+  getDebugInfo(): object {
+    const model = this.regressionModel;
+    return {
+      timestamp:    new Date().toISOString(),
+      profile: {
+        id:           this.activeProfile.id,
+        label:        this.activeProfile.label,
+        distanceCm:   this.activeProfile.distanceCm,
+        sensitivityX: this.activeProfile.sensitivityX,
+        sensitivityY: this.activeProfile.sensitivityY,
+      },
+      calibrated: this.isCalibrated,
+      model: model ? {
+        alphaX: +model.alphaX.toFixed(4),
+        betaX:  +model.betaX.toFixed(4),
+        alphaY: +model.alphaY.toFixed(4),
+        betaY:  +model.betaY.toFixed(4),
+      } : null,
+      screen: {
+        widthPx:  window.innerWidth,
+        heightPx: window.innerHeight,
+        pixelRatio: window.devicePixelRatio,
+      },
+      continuousSamples: this.continuousData.length,
+    };
+  }
+
+  // Imprime el estado actual en consola (útil para calibración maestra)
+  logDebugInfo(label = 'GazeTracker debug') {
+    const info = this.getDebugInfo();
+    console.groupCollapsed(`%c${label}`, 'color:#7DD3A8;font-weight:800;font-size:12px');
+    console.log(JSON.stringify(info, null, 2));
+    console.groupEnd();
+  }
+
   // ── Calibración rápida: muestra al centro ────────────────────────────────
   recordCalibrationPoint(screenX: number, screenY: number): boolean {
     const shapes    = this.currentResults?.categories;
@@ -333,11 +369,7 @@ class GazeTracker {
     this.trainingData = [];
     this.continuousData = [];
 
-    console.log(
-      'GazeTracker: QuickSync OK —',
-      `αX=${this.regressionModel.alphaX.toFixed(1)} βX=${betaX.toFixed(1)}`,
-      `αY=${this.regressionModel.alphaY.toFixed(1)} βY=${betaY.toFixed(1)}`,
-    );
+    this.logDebugInfo('GazeTracker: QuickSync completado ✓');
     return true;
   }
 

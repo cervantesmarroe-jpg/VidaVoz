@@ -39,8 +39,11 @@ export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
     id:           'mobile',
     label:        'Modo Móvil',
     distanceCm:   25,
-    sensitivityX: -2.10,
-    sensitivityY:  1.75,
+    // Gain aumentado para pantalla pequeña: el ojo cubre menos píxeles/grado
+    // a 25 cm → necesitamos mayor amplificación para que la mirada alcance
+    // los bordes de la pantalla sin girar la cabeza.
+    sensitivityX: -2.40,
+    sensitivityY:  2.00,
   },
 };
 
