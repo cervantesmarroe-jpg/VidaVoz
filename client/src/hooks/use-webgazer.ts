@@ -8,7 +8,8 @@ const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
 const DWELL_MS        = 3000;
-const SMOOTH_SAMPLES  = 30;    // media móvil pre-filtro: 30 muestras (~1 s a 30 fps)
+const SMOOTH_SAMPLES  = 30;    // tamaño fijo del ring-buffer MA
+const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
 const BLINK_THRESHOLD = 0.85;
 const BLINK_COOLDOWN  = 1200;  // periodo refractario entre blink-clicks (ms)
 const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora involuntarios
@@ -17,6 +18,11 @@ const BLINK_MAX_MS    = 600;   // parpadeo máximo válido (ms) — ignora sueñ
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
 const SNAP_RADIUS_PX  = 50;    // imán: si el cursor está a <50 px de un botón, salta al centro
 const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-temblor)
+
+// ── One-Euro: parámetros clínicos (máximo suavizado en reposo) ────────────────
+const OEF_MIN_CUTOFF  = 0.20;  // Hz — más bajo = más inercial/pesado en reposo
+const OEF_BETA        = 0.004; // baja sensibilidad a velocidad → más suave en transiciones
+const OEF_D_CUTOFF    = 1.0;
 
 // Sensibilidad de fábrica (fallback si no se carga perfil)
 const SENSITIVITY_X = GAZE_PROFILES[DEFAULT_PROFILE_ID].sensitivityX;
@@ -196,11 +202,16 @@ class GazeTracker {
   private activeProfile: GazeProfile = GAZE_PROFILES[DEFAULT_PROFILE_ID];
 
   // ── Pipeline de suavizado de 3 etapas ────────────────────────────────────
-  private smoothHistory: Array<{ x: number; y: number }> = [];   // MA(30)
-  private filterX = new OneEuroFilter(0.35, 0.006);               // One-Euro X
-  private filterY = new OneEuroFilter(0.35, 0.006);               // One-Euro Y
+  // Ring-buffer fijo de SMOOTH_SAMPLES slots. Empieza pre-relleno con ceros;
+  // el puntero writeIdx avanza cíclicamente sin usar shift() (O(1) en lugar de O(n)).
+  private smoothBuf: Array<{ x: number; y: number }> = Array.from({ length: SMOOTH_SAMPLES }, () => ({ x: 0, y: 0 }));
+  private smoothIdx  = 0;                                         // puntero de escritura
+  private smoothFill = 0;                                         // muestras reales escritas (0..30)
+  private filterX = new OneEuroFilter(OEF_MIN_CUTOFF, OEF_BETA, OEF_D_CUTOFF);
+  private filterY = new OneEuroFilter(OEF_MIN_CUTOFF, OEF_BETA, OEF_D_CUTOFF);
   private lastEmitX = -1;                                         // zona muerta
   private lastEmitY = -1;
+  private debugLogAt = 0;                                         // para log periódico del buffer
 
   private currentResults: DetectionCache = null;
 
@@ -305,13 +316,35 @@ class GazeTracker {
               this.profileSensX, this.profileSensY,
             );
 
-            // ── Etapa 1: Media Móvil (30 muestras) — elimina outliers ────────
-            this.smoothHistory.push({ x: rawX, y: rawY });
-            if (this.smoothHistory.length > SMOOTH_SAMPLES) this.smoothHistory.shift();
-            const smN = this.smoothHistory.length;
-            const smS = this.smoothHistory.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y }), { x: 0, y: 0 });
-            const maX = smS.x / smN;
-            const maY = smS.y / smN;
+            // ── Etapa 1: Ring-buffer MA(30) fijo — O(1), sin shift() ─────────
+            // Primera muestra: pre-rellena todo el buffer con rawX/rawY para
+            // evitar que el cursor salte desde (0,0) mientras se llena.
+            if (this.smoothFill === 0) {
+              for (let i = 0; i < SMOOTH_SAMPLES; i++) {
+                this.smoothBuf[i] = { x: rawX, y: rawY };
+              }
+              this.smoothFill = SMOOTH_SAMPLES;
+            } else {
+              this.smoothBuf[this.smoothIdx] = { x: rawX, y: rawY };
+              this.smoothIdx = (this.smoothIdx + 1) % SMOOTH_SAMPLES;
+              if (this.smoothFill < SMOOTH_SAMPLES) this.smoothFill++;
+            }
+
+            // Diagnóstico: muestra el tamaño real del buffer en consola cada 3 s
+            const nowDebug = performance.now();
+            if (nowDebug - this.debugLogAt > 3000) {
+              console.log('[VozUCI] Buffer MA:', this.smoothFill, '/ 30 muestras | One-Euro minCutoff:', OEF_MIN_CUTOFF, 'Hz');
+              this.debugLogAt = nowDebug;
+            }
+
+            // Barrera de calentamiento: no emite hasta tener SMOOTH_WARMUP muestras reales
+            if (this.smoothFill < SMOOTH_WARMUP) return;
+
+            // Media de los SMOOTH_SAMPLES slots (pre-relleno = son todos válidos)
+            let sumX = 0, sumY = 0;
+            for (let i = 0; i < SMOOTH_SAMPLES; i++) { sumX += this.smoothBuf[i].x; sumY += this.smoothBuf[i].y; }
+            const maX = sumX / SMOOTH_SAMPLES;
+            const maY = sumY / SMOOTH_SAMPLES;
 
             // ── Etapa 2: One-Euro Filter — suaviza, responde al movimiento ────
             const tSec = performance.now() / 1000;
@@ -388,7 +421,9 @@ class GazeTracker {
     this.video          = null;
     this.lastVideoTime  = -1;
     this.lastMpTs       = 0;
-    this.smoothHistory  = [];
+    this.smoothFill     = 0;    // ring-buffer: la 1ª muestra real pre-rellena
+    this.smoothIdx      = 0;
+    this.debugLogAt     = 0;
     this.filterX.reset();
     this.filterY.reset();
     this.lastEmitX      = -1;
@@ -579,7 +614,9 @@ class GazeTracker {
     this.currentResults  = null;
     this.lastVideoTime   = -1;
     this.lastMpTs        = 0;
-    this.smoothHistory   = [];
+    this.smoothFill      = 0;   // ring-buffer reset: pre-relleno en 1ª muestra real
+    this.smoothIdx       = 0;
+    this.debugLogAt      = 0;
     this.wasBlinking     = false;
     this.blinkStartTime  = null;
     this.lastBlinkEnd    = 0;
