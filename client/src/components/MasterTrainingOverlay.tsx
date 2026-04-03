@@ -3,82 +3,127 @@ import { gazeTracker } from "@/hooks/use-webgazer";
 import { X, ClipboardCopy, CheckCheck, Dna, RotateCcw, ChevronRight } from "lucide-react";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
-const MAX_SAMPLES    = 10;
-const DWELL_MS       = 3000;
-const COLLECT_MS     = 50;
-const WARMUP_MS      = 400;
-const R_RING         = 60;
-const CIRCUMF        = 2 * Math.PI * R_RING;
+const DWELL_MS     = 3000;
+const COLLECT_MS   = 50;
+const WARMUP_MS    = 500;
+const R_RING       = 52;
+const CIRCUMF      = 2 * Math.PI * R_RING;
+const ROUNDS       = 2;
 
-interface ModelSnapshot {
-  alphaX: number; betaX: number;
-  alphaY: number; betaY: number;
-}
+// ── Posiciones (fracción de pantalla) ────────────────────────────────────────
+const POSITIONS = [
+  { key: "tl", label: "Arriba-Izquierda", fx: 0.12, fy: 0.12 },
+  { key: "tr", label: "Arriba-Derecha",   fx: 0.88, fy: 0.12 },
+  { key: "cx", label: "Centro",           fx: 0.50, fy: 0.50 },
+  { key: "bl", label: "Abajo-Izquierda",  fx: 0.12, fy: 0.88 },
+  { key: "br", label: "Abajo-Derecha",    fx: 0.88, fy: 0.88 },
+] as const;
+
+const TOTAL_STEPS = POSITIONS.length * ROUNDS; // 10
+
+// Schedule: Round 1 all positions, then Round 2 all positions
+const SCHEDULE = Array.from({ length: ROUNDS }, (_, r) =>
+  POSITIONS.map((_, p) => ({ posIdx: p, round: r }))
+).flat();
+// = [{posIdx:0,round:0},{posIdx:1,round:0},...,{posIdx:4,round:1}]
 
 type Phase = "idle" | "syncing" | "captured" | "done";
 
-// ── Anillo SVG ────────────────────────────────────────────────────────────────
-function SyncRing({ progress }: { progress: number }) {
-  const offset = CIRCUMF * (1 - Math.min(progress, 1));
-  const sz     = (R_RING + 12) * 2;
+// ── Anillo SVG de progreso ────────────────────────────────────────────────────
+function SyncRing({ progress, r = R_RING }: { progress: number; r?: number }) {
+  const circ   = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.min(progress, 1));
+  const sz     = (r + 14) * 2;
   return (
     <svg width={sz} height={sz}
-      style={{ position:"absolute", top:"50%", left:"50%",
-        transform:"translate(-50%,-50%) rotate(-90deg)", pointerEvents:"none" }}
+      style={{ position: "absolute", top: "50%", left: "50%",
+        transform: "translate(-50%,-50%) rotate(-90deg)", pointerEvents: "none" }}
     >
-      <circle cx={sz/2} cy={sz/2} r={R_RING}
-        fill="none" stroke="rgba(125,211,168,0.18)" strokeWidth={7} />
-      <circle cx={sz/2} cy={sz/2} r={R_RING}
-        fill="none" stroke="#7DD3A8" strokeWidth={7}
+      <circle cx={sz/2} cy={sz/2} r={r}
+        fill="none" stroke="rgba(125,211,168,0.18)" strokeWidth={6} />
+      <circle cx={sz/2} cy={sz/2} r={r}
+        fill="none" stroke="#7DD3A8" strokeWidth={6}
         strokeLinecap="round"
-        strokeDasharray={CIRCUMF}
+        strokeDasharray={circ}
         strokeDashoffset={offset}
-        style={{ transition:"stroke-dashoffset 0.06s linear" }}
+        style={{ transition: "stroke-dashoffset 0.06s linear" }}
       />
     </svg>
   );
 }
 
-// ── Indicador de muestra ──────────────────────────────────────────────────────
-function SampleDots({ total, count }: { total: number; count: number }) {
+// ── Mini mapa de 5 posiciones ────────────────────────────────────────────────
+function PositionMap({ done, current }: { done: number[]; current: number }) {
+  // done = array of posIdx que ya están guardados (en cualquier vuelta completa)
+  const positions = [
+    { posIdx: 0, gridCol: 1, gridRow: 1 },   // TL
+    { posIdx: 1, gridCol: 3, gridRow: 1 },   // TR
+    { posIdx: 2, gridCol: 2, gridRow: 2 },   // C
+    { posIdx: 3, gridCol: 1, gridRow: 3 },   // BL
+    { posIdx: 4, gridCol: 3, gridRow: 3 },   // BR
+  ];
   return (
-    <div style={{ display:"flex", gap:6, flexWrap:"wrap", justifyContent:"center", maxWidth:260 }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div key={i} style={{
-          width: 14, height: 14, borderRadius: "50%",
-          background: i < count ? "#7DD3A8" : "rgba(255,255,255,0.12)",
-          border: `2px solid ${i < count ? "#7DD3A8" : "rgba(255,255,255,0.2)"}`,
-          transition: "background 0.25s, border-color 0.25s",
-        }} />
-      ))}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,22px)", gridTemplateRows: "repeat(3,22px)", gap: 4 }}>
+      {positions.map(({ posIdx, gridCol, gridRow }) => {
+        const doneCount = done.filter(d => d === posIdx).length;
+        const isCurrent = posIdx === current;
+        return (
+          <div key={posIdx} style={{
+            gridColumn: gridCol, gridRow,
+            width: 22, height: 22, borderRadius: "50%",
+            background: isCurrent
+              ? "#7DD3A8"
+              : doneCount >= ROUNDS ? "rgba(125,211,168,0.55)"
+              : doneCount === 1     ? "rgba(125,211,168,0.25)"
+              : "rgba(255,255,255,0.07)",
+            border: `2px solid ${isCurrent ? "#7DD3A8" : doneCount > 0 ? "rgba(125,211,168,0.5)" : "rgba(255,255,255,0.15)"}`,
+            boxShadow: isCurrent ? "0 0 10px rgba(125,211,168,0.7)" : "none",
+            transition: "all 0.25s",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "9px", fontWeight: 800,
+            color: isCurrent ? "#0A2018" : doneCount > 0 ? "#7DD3A8" : "rgba(255,255,255,0.2)",
+          }}>
+            {doneCount > 0 && !isCurrent ? doneCount : ""}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 // ── MasterTrainingOverlay ─────────────────────────────────────────────────────
-interface Props {
-  onClose: () => void;
-}
+interface Props { onClose: () => void; }
 
 export function MasterTrainingOverlay({ onClose }: Props) {
-  const [phase, setPhase]       = useState<Phase>("idle");
-  const [samples, setSamples]   = useState<ModelSnapshot[]>([]);
-  const [progress, setProgress] = useState(0);
-  const [rawSamples, setRawSamples] = useState(0);  // muestras capturadas en la ronda
-  const [copied, setCopied]     = useState(false);
-  const [finalJson, setFinalJson] = useState<string>("");
+  const [phase, setPhase]         = useState<Phase>("idle");
+  const [step, setStep]           = useState(0);          // 0–9
+  const [savedSteps, setSavedSteps] = useState<number[]>([]); // posIdx de cada guardado
+  const [progress, setProgress]   = useState(0);
+  const [rawCount, setRawCount]   = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
+  const [finalJson, setFinalJson] = useState<string>("");
+  const [copied, setCopied]       = useState(false);
 
+  const dataLenBefore = useRef(0);   // training data length antes de cada ronda
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const ivs    = useRef<ReturnType<typeof setInterval>[]>([]);
 
-  const clearAll = useCallback(() => {
+  const clearTimers = useCallback(() => {
     timers.current.forEach(clearTimeout);
     ivs.current.forEach(clearInterval);
     timers.current = []; ivs.current = [];
   }, []);
 
-  // ── Iniciar cámara al montar ──────────────────────────────────────────────
+  // Datos del step actual
+  const currentSched  = SCHEDULE[step] ?? SCHEDULE[0];
+  const currentPos    = POSITIONS[currentSched.posIdx];
+  const currentRound  = currentSched.round + 1;   // 1-based para UI
+
+  // Posición en píxeles (para el círculo)
+  const posX = currentPos.fx * window.innerWidth;
+  const posY = currentPos.fy * window.innerHeight;
+
+  // ── Init cámara ───────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       gazeTracker.clearCalibration();
@@ -87,32 +132,28 @@ export function MasterTrainingOverlay({ onClose }: Props) {
       gazeTracker.startDetection();
       setCameraReady(true);
     })();
-    return () => {
-      clearAll();
-    };
+    return clearTimers;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Fase syncing: recoger muestras 3 s en el centro ──────────────────────
+  // ── Fase syncing ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== "syncing" || !cameraReady) return;
 
     setProgress(0);
-    setRawSamples(0);
-    gazeTracker.clearCalibration();  // limpia datos anteriores de esta ronda
+    setRawCount(0);
+    dataLenBefore.current = gazeTracker.getTrainingDataLength();
 
-    const cx = window.innerWidth  / 2;
-    const cy = window.innerHeight / 2;
     const t0 = Date.now();
     let collecting = false;
 
-    const warmup = setTimeout(() => { collecting = true; }, WARMUP_MS);
-    timers.current.push(warmup);
+    const wup = setTimeout(() => { collecting = true; }, WARMUP_MS);
+    timers.current.push(wup);
 
     const collector = setInterval(() => {
       if (!collecting) return;
-      const ok = gazeTracker.recordCalibrationPoint(cx, cy);
-      if (ok) setRawSamples(s => s + 1);
+      const ok = gazeTracker.recordCalibrationPoint(posX, posY);
+      if (ok) setRawCount(n => n + 1);
     }, COLLECT_MS);
     ivs.current.push(collector);
 
@@ -122,106 +163,75 @@ export function MasterTrainingOverlay({ onClose }: Props) {
     ivs.current.push(progressIv);
 
     const done = setTimeout(() => {
-      clearAll();
-      const ok = gazeTracker.quickCenterCalibrate();
-      if (ok) {
+      clearTimers();
+      const pts = gazeTracker.getTrainingDataLength() - dataLenBefore.current;
+      if (pts >= 3) {
         setPhase("captured");
       } else {
-        // Sin cara detectada → reintentar automáticamente
+        // Cara no detectada → repetir automáticamente
+        gazeTracker.trimTrainingData(dataLenBefore.current);
         setPhase("syncing");
       }
     }, DWELL_MS);
     timers.current.push(done);
 
-    return clearAll;
+    return clearTimers;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cameraReady]);
+  }, [phase, cameraReady, step]);
 
   // ── Guardar muestra ───────────────────────────────────────────────────────
   const handleSave = useCallback(() => {
-    const m = gazeTracker.getModel();
-    if (!m) return;
-    const snap: ModelSnapshot = {
-      alphaX: m.alphaX, betaX: m.betaX,
-      alphaY: m.alphaY, betaY: m.betaY,
-    };
-    setSamples(prev => {
-      const next = [...prev, snap];
-      console.log(
-        `%c[MasterTraining] Muestra ${next.length}/${MAX_SAMPLES} guardada`,
-        'color:#7DD3A8;font-weight:800',
-        snap,
-      );
-      return next;
-    });
-    // Siguiente ronda (o fin)
-    setSamples(prev => {
-      if (prev.length >= MAX_SAMPLES) {
-        setPhase("done");
-      } else {
-        setPhase("idle");
-      }
-      return prev;
-    });
-  }, []);
+    const posIdx = SCHEDULE[step].posIdx;
+    setSavedSteps(prev => [...prev, posIdx]);
+    const nextStep = step + 1;
+    if (nextStep >= TOTAL_STEPS) {
+      setPhase("done");
+    } else {
+      setStep(nextStep);
+      setPhase("idle");
+    }
+  }, [step]);
 
   // ── Repetir ronda sin guardar ─────────────────────────────────────────────
   const handleRepeat = useCallback(() => {
+    gazeTracker.trimTrainingData(dataLenBefore.current);
     setPhase("syncing");
   }, []);
 
   // ── Iniciar siguiente muestra ─────────────────────────────────────────────
   const handleStart = useCallback(() => {
-    if (samples.length >= MAX_SAMPLES) return;
     setPhase("syncing");
-  }, [samples.length]);
+  }, []);
 
-  // ── Generar ADN Final ────────────────────────────────────────────────────
+  // ── Generar ADN Final ─────────────────────────────────────────────────────
   const handleGenerate = useCallback(() => {
-    if (samples.length === 0) return;
-    const n = samples.length;
-    const avg = (key: keyof ModelSnapshot) =>
-      +(samples.reduce((s, m) => s + m[key], 0) / n).toFixed(4);
-
-    const avgAlphaX = avg("alphaX");
-    const avgBetaX  = avg("betaX");
-    const avgAlphaY = avg("alphaY");
-    const avgBetaY  = avg("betaY");
-
+    const result = gazeTracker.finalizeTraining();
+    if (!result) return;
     const W = window.innerWidth;
     const H = window.innerHeight;
-
-    const result = {
+    const json = JSON.stringify({
       _instruccion: "Copia este bloque y pégalo en gazeProfiles.ts para grabarlo de fábrica",
-      profile: gazeTracker.currentProfile.id,
-      generatedAt: new Date().toISOString(),
-      samples: n,
-      screen: { widthPx: W, heightPx: H, pixelRatio: window.devicePixelRatio },
-      averageModel: {
-        alphaX: avgAlphaX,
-        betaX:  avgBetaX,
-        alphaY: avgAlphaY,
-        betaY:  avgBetaY,
+      profile:      gazeTracker.currentProfile.id,
+      generatedAt:  new Date().toISOString(),
+      totalPoints:  TOTAL_STEPS,
+      screen:       { widthPx: W, heightPx: H, pixelRatio: window.devicePixelRatio },
+      model: {
+        alphaX: +result.alphaX.toFixed(4),
+        betaX:  +result.betaX.toFixed(4),
+        alphaY: +result.alphaY.toFixed(4),
+        betaY:  +result.betaY.toFixed(4),
       },
       derivedSensitivities: {
-        sensitivityX: +(avgBetaX / W).toFixed(4),
-        sensitivityY: +(-avgBetaY / H).toFixed(4),
-        _nota: "Reemplaza los valores en GAZE_PROFILES['" +
-          gazeTracker.currentProfile.id + "'].sensitivityX/Y",
+        sensitivityX: result.sensitivityX,
+        sensitivityY: result.sensitivityY,
+        _nota: `Reemplaza los valores en GAZE_PROFILES['${gazeTracker.currentProfile.id}'].sensitivityX/Y`,
       },
-      allSamples: samples.map((s, i) => ({
-        i: i + 1,
-        alphaX: +s.alphaX.toFixed(3), betaX: +s.betaX.toFixed(3),
-        alphaY: +s.alphaY.toFixed(3), betaY: +s.betaY.toFixed(3),
-      })),
-    };
-
-    const json = JSON.stringify(result, null, 2);
+    }, null, 2);
     setFinalJson(json);
-    console.groupCollapsed('%c[MasterTraining] ADN FINAL generado', 'color:#7DD3A8;font-weight:900;font-size:14px');
+    console.groupCollapsed("%c[MasterTraining] ADN multi-punto generado", "color:#7DD3A8;font-weight:900;font-size:14px");
     console.log(json);
     console.groupEnd();
-  }, [samples]);
+  }, []);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(finalJson).then(() => {
@@ -230,250 +240,304 @@ export function MasterTrainingOverlay({ onClose }: Props) {
     });
   }, [finalJson]);
 
-  const handleClose = useCallback(() => {
-    clearAll();
-    if (!gazeTracker.hasCamera) return;  // ya parada
-    onClose();
-  }, [clearAll, onClose]);
+  const handleReset = useCallback(() => {
+    gazeTracker.clearCalibration();
+    setSavedSteps([]);
+    setStep(0);
+    setFinalJson("");
+    setPhase("idle");
+  }, []);
 
-  const count = samples.length;
-  const isFullyDone = phase === "done" && finalJson !== "";
+  const isFullyDone = phase === "done";
+  const stepLabel   = `Vuelta ${currentRound} · ${currentPos.label}`;
+  const stepCounter = `Paso ${step + 1} de ${TOTAL_STEPS}`;
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 10000,
       background: "#060B10",
       display: "flex", flexDirection: "column",
-      alignItems: "center",
-      fontFamily: "'Lexend', 'Inter', sans-serif",
+      fontFamily: "'Lexend','Inter',sans-serif",
       userSelect: "none", overflow: "hidden",
     }}>
       <style>{`
-        @keyframes hb { 0%,100%{transform:scale(1)} 14%{transform:scale(1.2)} 28%{transform:scale(1)} 42%{transform:scale(1.12)} 70%{transform:scale(1)} }
+        @keyframes hbMT  { 0%,100%{transform:scale(1)} 14%{transform:scale(1.22)} 28%{transform:scale(1)} 42%{transform:scale(1.12)} 70%{transform:scale(1)} }
         @keyframes popMT { 0%{transform:scale(0.4);opacity:0} 70%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
-        @keyframes fadeMT { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        .mt-btn { transition: transform 0.12s, opacity 0.12s; cursor:pointer; border:none; }
-        .mt-btn:active { transform: scale(0.94) !important; }
+        @keyframes fadeMT{ from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        .mt-btn { transition:transform .12s,opacity .12s;cursor:pointer;border:none; }
+        .mt-btn:active { transform:scale(0.93) !important; }
       `}</style>
 
-      {/* ── Cabecera ─────────────────────────────────────────────────────── */}
+      {/* ── Cabecera ──────────────────────────────────────────────────────── */}
       <div style={{
-        width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
-        padding:"16px 20px 10px", borderBottom:"1px solid rgba(255,255,255,0.07)", flexShrink:0,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 18px 10px",
+        borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0,
       }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <Dna size={20} color="#7DD3A8" />
-          <span style={{ fontSize:"0.9rem", fontWeight:800, color:"#FFFFFF", letterSpacing:".04em" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Dna size={18} color="#7DD3A8" />
+          <span style={{ fontSize: ".88rem", fontWeight: 800, color: "#fff", letterSpacing: ".04em" }}>
             Entrenamiento Maestro
           </span>
           <span style={{
-            fontSize:"0.68rem", fontWeight:700, letterSpacing:".1em",
-            textTransform:"uppercase",
-            color: gazeTracker.currentProfile.id === "mobile" ? "#8BA7CC" : "#a78bfa",
-            background: gazeTracker.currentProfile.id === "mobile" ? "rgba(139,167,204,0.12)" : "rgba(167,139,250,0.12)",
-            border: `1px solid ${gazeTracker.currentProfile.id === "mobile" ? "rgba(139,167,204,0.3)" : "rgba(167,139,250,0.3)"}`,
-            borderRadius:6, padding:"2px 8px",
+            fontSize: ".65rem", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase",
+            color: "#8BA7CC", background: "rgba(139,167,204,0.12)",
+            border: "1px solid rgba(139,167,204,0.3)", borderRadius: 6, padding: "2px 8px",
           }}>
             {gazeTracker.currentProfile.label}
           </span>
         </div>
-        <button className="mt-btn" onClick={handleClose} style={{
-          background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.14)",
-          borderRadius:8, color:"rgba(255,255,255,0.45)", padding:"6px 12px",
-          display:"flex", alignItems:"center", gap:5, fontSize:"0.72rem", fontWeight:700,
-        }}>
-          <X size={12} /> Cerrar
-        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Mini mapa de posiciones */}
+          <PositionMap done={savedSteps} current={currentSched.posIdx} />
+
+          <button className="mt-btn" onClick={() => { clearTimers(); onClose(); }} style={{
+            background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.14)",
+            borderRadius: 8, color: "rgba(255,255,255,0.4)",
+            padding: "6px 12px", display: "flex", alignItems: "center", gap: 5,
+            fontSize: ".7rem", fontWeight: 700,
+          }}>
+            <X size={11} /> Cerrar
+          </button>
+        </div>
       </div>
 
-      {/* ── Contador + dots ──────────────────────────────────────────────── */}
-      <div style={{
-        display:"flex", flexDirection:"column", alignItems:"center", gap:12,
-        padding:"18px 0 10px", flexShrink:0,
-      }}>
-        <p style={{
-          fontSize:"clamp(1rem,3.5vw,1.3rem)", fontWeight:900, color:"#FFFFFF",
-          margin:0, letterSpacing:".04em",
+      {/* ── Contador de pasos ──────────────────────────────────────────────── */}
+      {!isFullyDone && (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 6, padding: "12px 0 6px", flexShrink: 0,
         }}>
-          Muestra{" "}
-          <span style={{ color:"#7DD3A8" }}>{Math.min(count + (phase === "captured" ? 0 : 0), MAX_SAMPLES)}</span>
-          {" "}de{" "}
-          <span style={{ color:"rgba(255,255,255,0.5)" }}>{MAX_SAMPLES}</span>
-        </p>
-        <SampleDots total={MAX_SAMPLES} count={count} />
-      </div>
+          <p style={{ margin: 0, fontSize: "clamp(.9rem,3vw,1.15rem)", fontWeight: 900, color: "#fff", letterSpacing: ".03em" }}>
+            <span style={{ color: "#7DD3A8" }}>{stepCounter}</span>
+            {" — "}
+            <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700 }}>{stepLabel}</span>
+          </p>
+          {/* Barras de vuelta */}
+          <div style={{ display: "flex", gap: 6 }}>
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+              const done = i < savedSteps.length;
+              const cur  = i === step && phase === "syncing";
+              return (
+                <div key={i} style={{
+                  width: i % POSITIONS.length === 0 && i > 0 ? 10 : 22,
+                  height: 6, borderRadius: 3, flexShrink: 0,
+                  marginLeft: i > 0 && i % POSITIONS.length === 0 ? 6 : 0,
+                  background: done ? "#7DD3A8"
+                    : cur  ? "rgba(125,211,168,0.45)"
+                    : "rgba(255,255,255,0.1)",
+                  transition: "background .25s",
+                }} />
+              );
+            })}
+          </div>
+          <p style={{ margin: 0, fontSize: ".72rem", color: "rgba(255,255,255,0.3)", letterSpacing: ".06em" }}>
+            {POSITIONS.length} puntos × {ROUNDS} vueltas = {TOTAL_STEPS} muestras
+          </p>
+        </div>
+      )}
 
-      {/* ── Contenido central ────────────────────────────────────────────── */}
-      <div style={{
-        flex:1, display:"flex", flexDirection:"column",
-        alignItems:"center", justifyContent:"center",
-        padding:"0 24px", gap:28, width:"100%", maxWidth:460,
-        overflow: isFullyDone ? "auto" : "hidden",
-      }}>
+      {/* ── Área principal — posición libre para los 4 puntos extremos ─────── */}
+      <div style={{ flex: 1, position: "relative" }}>
 
-        {/* IDLE: listo para siguiente muestra */}
-        {phase === "idle" && (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:24, animation:"fadeMT .35s ease both" }}>
-            {count === 0 && (
-              <p style={{ fontSize:".9rem", color:"rgba(255,255,255,0.45)", textAlign:"center", lineHeight:1.6, maxWidth:320 }}>
-                Mira el círculo verde durante 3 segundos.<br />
-                Repite desde distintas posiciones de cabeza para obtener un promedio robusto.
+        {/* IDLE / CAPTURED: instrucciones en el centro */}
+        {(phase === "idle" || phase === "captured") && (
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            gap: 20, padding: "0 24px",
+            animation: "fadeMT .35s ease both",
+          }}>
+            {phase === "idle" && step === 0 && (
+              <p style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)", textAlign: "center", lineHeight: 1.7, maxWidth: 320, margin: 0 }}>
+                El círculo verde aparecerá en <strong style={{ color: "rgba(255,255,255,0.7)" }}>5 posiciones</strong> distintas, 2 veces cada una.<br />
+                Mantén la mirada fija en él durante 3 segundos.
               </p>
             )}
-            <button className="mt-btn" onClick={handleStart} style={{
-              background:"#7DD3A8", color:"#0A2018",
-              fontWeight:900, fontSize:"1rem", letterSpacing:".04em",
-              padding:"14px 36px", borderRadius:16,
-              boxShadow:"0 0 24px rgba(125,211,168,0.35)",
-              display:"flex", alignItems:"center", gap:10,
-            }}>
-              <ChevronRight size={18} />
-              {count === 0 ? "Iniciar muestra 1" : `Iniciar muestra ${count + 1}`}
-            </button>
-          </div>
-        )}
 
-        {/* SYNCING: círculo verde + anillo de progreso */}
-        {phase === "syncing" && (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20, animation:"fadeMT .3s ease both" }}>
-            <p style={{ fontSize:".85rem", color:"rgba(255,255,255,0.35)", letterSpacing:".06em", margin:0 }}>
-              {rawSamples > 0 ? `${rawSamples} muestras capturadas` : "Mira el círculo…"}
-            </p>
-            <div style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <SyncRing progress={progress} />
-              <div style={{
-                position:"absolute", width:100, height:100, borderRadius:"50%",
-                background:"radial-gradient(circle, rgba(125,211,168,0.1) 0%, transparent 70%)",
-              }} />
-              <div style={{
-                width:52, height:52, borderRadius:"50%",
-                background:"radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 55%, #4db88a 100%)",
-                boxShadow:"0 0 30px rgba(125,211,168,0.55)",
-                animation:"hb 1.1s ease-in-out infinite",
-                position:"relative", zIndex:2,
-              }} />
-            </div>
-          </div>
-        )}
+            {phase === "captured" && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, animation: "popMT .4s cubic-bezier(.34,1.56,.64,1) both" }}>
+                <div style={{
+                  width: 60, height: 60, borderRadius: "50%",
+                  background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 60%, #4db88a 100%)",
+                  boxShadow: "0 0 28px rgba(125,211,168,0.6)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <svg width={28} height={28} viewBox="0 0 28 28" fill="none">
+                    <polyline points="5,14 11,20 23,8" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <p style={{ fontSize: ".82rem", color: "rgba(255,255,255,0.5)", margin: 0 }}>
+                  {rawCount} puntos capturados en <strong style={{ color: "#7DD3A8" }}>{currentPos.label}</strong>
+                </p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="mt-btn" onClick={handleRepeat} style={{
+                    background: "rgba(255,255,255,0.06)", border: "1.5px solid rgba(255,255,255,0.18)",
+                    borderRadius: 12, color: "rgba(255,255,255,0.6)",
+                    padding: "10px 20px", fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: ".8rem",
+                    display: "flex", alignItems: "center", gap: 7,
+                  }}>
+                    <RotateCcw size={13} /> Repetir
+                  </button>
+                  <button className="mt-btn" onClick={handleSave} style={{
+                    background: "rgba(125,211,168,0.18)", border: "2px solid #7DD3A8",
+                    borderRadius: 12, color: "#7DD3A8",
+                    padding: "10px 24px", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: ".85rem",
+                    display: "flex", alignItems: "center", gap: 7,
+                  }}>
+                    <CheckCheck size={14} />
+                    {step + 1 === TOTAL_STEPS ? "Guardar última muestra" : "Guardar muestra"}
+                  </button>
+                </div>
+              </div>
+            )}
 
-        {/* CAPTURED: sync completado, elegir guardar o repetir */}
-        {phase === "captured" && (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20, animation:"popMT .4s cubic-bezier(.34,1.56,.64,1) both" }}>
-            {/* Icono check */}
-            <div style={{
-              width:70, height:70, borderRadius:"50%",
-              background:"radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 60%, #4db88a 100%)",
-              boxShadow:"0 0 32px rgba(125,211,168,0.6)",
-              display:"flex", alignItems:"center", justifyContent:"center",
-            }}>
-              <svg width={32} height={32} viewBox="0 0 32 32" fill="none">
-                <polyline points="6,16 13,23 26,9" stroke="#fff" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-
-            <p style={{ fontSize:".85rem", color:"rgba(255,255,255,0.5)", margin:0 }}>
-              Muestra {count + 1} lista — ¿guardar o repetir?
-            </p>
-
-            <div style={{ display:"flex", gap:12 }}>
-              {/* Repetir */}
-              <button className="mt-btn" onClick={handleRepeat} style={{
-                background:"rgba(255,255,255,0.06)", border:"1.5px solid rgba(255,255,255,0.18)",
-                borderRadius:12, color:"rgba(255,255,255,0.6)",
-                padding:"11px 22px", fontFamily:"'Lexend',sans-serif", fontWeight:700, fontSize:".82rem",
-                display:"flex", alignItems:"center", gap:7,
+            {phase === "idle" && (
+              <button className="mt-btn" onClick={handleStart} style={{
+                background: "#7DD3A8", color: "#0A2018",
+                fontWeight: 900, fontSize: ".95rem", letterSpacing: ".04em",
+                padding: "13px 32px", borderRadius: 14,
+                boxShadow: "0 0 22px rgba(125,211,168,0.4)",
+                display: "flex", alignItems: "center", gap: 10,
               }}>
-                <RotateCcw size={14} /> Repetir
+                <ChevronRight size={17} />
+                {step === 0 ? `Comenzar — ${currentPos.label}` : `Continuar — ${currentPos.label}`}
               </button>
-
-              {/* Guardar muestra */}
-              <button className="mt-btn" onClick={handleSave} style={{
-                background:"rgba(125,211,168,0.18)", border:"2px solid #7DD3A8",
-                borderRadius:12, color:"#7DD3A8",
-                padding:"11px 26px", fontFamily:"'Lexend',sans-serif", fontWeight:900, fontSize:".88rem",
-                display:"flex", alignItems:"center", gap:7,
-              }}>
-                <CheckCheck size={15} />
-                {count + 1 === MAX_SAMPLES ? "Guardar muestra final" : `Guardar muestra ${count + 1}`}
-              </button>
-            </div>
+            )}
           </div>
         )}
 
-        {/* DONE: 10 muestras guardadas */}
+        {/* DONE sin JSON: 10 muestras completadas */}
         {phase === "done" && !finalJson && (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:24, animation:"fadeMT .4s ease both" }}>
-            <p style={{ fontSize:".9rem", color:"rgba(255,255,255,0.55)", textAlign:"center", lineHeight:1.7 }}>
-              ¡{MAX_SAMPLES} muestras completadas!<br />
-              Pulsa el botón para calcular los coeficientes promedio.
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            gap: 24, padding: "0 24px",
+            animation: "fadeMT .4s ease both",
+          }}>
+            <p style={{ fontSize: ".9rem", color: "rgba(255,255,255,0.55)", textAlign: "center", lineHeight: 1.7, margin: 0 }}>
+              ¡{TOTAL_STEPS} muestras completadas en {POSITIONS.length} posiciones!<br />
+              La regresión usará todos los puntos para calcular el modelo exacto.
             </p>
             <button className="mt-btn" onClick={handleGenerate} style={{
-              background:"linear-gradient(135deg, #7DD3A8 0%, #4db88a 100%)",
-              border:"none", borderRadius:16,
-              color:"#0A2018", fontFamily:"'Lexend',sans-serif", fontWeight:900,
-              fontSize:"clamp(.9rem,3vw,1.1rem)", letterSpacing:".05em",
-              padding:"16px 36px",
-              boxShadow:"0 0 36px rgba(125,211,168,0.55), 0 4px 20px rgba(0,0,0,0.4)",
-              display:"flex", alignItems:"center", gap:12,
-              animation:"hb 1.6s ease-in-out infinite",
+              background: "linear-gradient(135deg, #7DD3A8 0%, #4db88a 100%)",
+              border: "none", borderRadius: 16,
+              color: "#0A2018", fontFamily: "'Lexend',sans-serif", fontWeight: 900,
+              fontSize: "clamp(.9rem,3vw,1.1rem)", letterSpacing: ".05em",
+              padding: "15px 34px",
+              boxShadow: "0 0 34px rgba(125,211,168,0.55), 0 4px 18px rgba(0,0,0,0.4)",
+              display: "flex", alignItems: "center", gap: 11,
+              animation: "hbMT 1.6s ease-in-out infinite",
             }}>
-              <Dna size={22} />
-              GENERAR ADN FINAL
+              <Dna size={21} /> GENERAR ADN FINAL
             </button>
           </div>
         )}
 
-        {/* DONE + JSON generado */}
+        {/* DONE con JSON */}
         {phase === "done" && finalJson && (
-          <div style={{ display:"flex", flexDirection:"column", gap:16, width:"100%", animation:"fadeMT .4s ease both" }}>
-            {/* Instrucción */}
+          <div style={{
+            position: "absolute", inset: 0, overflow: "auto",
+            display: "flex", flexDirection: "column",
+            gap: 14, padding: "16px 20px",
+            animation: "fadeMT .4s ease both",
+          }}>
             <p style={{
-              fontSize:".78rem", color:"rgba(255,255,255,0.45)", textAlign:"center",
-              lineHeight:1.6, margin:0,
-              background:"rgba(125,211,168,0.08)", border:"1px solid rgba(125,211,168,0.2)",
-              borderRadius:10, padding:"10px 14px",
+              fontSize: ".77rem", color: "rgba(255,255,255,0.45)", textAlign: "center",
+              lineHeight: 1.6, margin: 0,
+              background: "rgba(125,211,168,0.08)", border: "1px solid rgba(125,211,168,0.2)",
+              borderRadius: 10, padding: "10px 14px",
             }}>
-              Copia este código y pégalo en el archivo de configuración
-              <span style={{ color:"#7DD3A8", fontWeight:800 }}> gazeProfiles.ts </span>
+              Copia este código y pégalo en{" "}
+              <span style={{ color: "#7DD3A8", fontWeight: 800 }}>gazeProfiles.ts</span>{" "}
               para grabarlo de fábrica.
             </p>
-
-            {/* JSON */}
             <div style={{
-              background:"#0D1520", border:"1px solid rgba(125,211,168,0.2)",
-              borderRadius:12, padding:"14px 16px", overflow:"auto", maxHeight:"42vh",
-              position:"relative",
+              background: "#0D1520", border: "1px solid rgba(125,211,168,0.2)",
+              borderRadius: 12, padding: "14px 16px", flex: 1, overflow: "auto",
             }}>
               <pre style={{
-                margin:0, fontFamily:"'Courier New',monospace", fontSize:".72rem",
-                color:"#a3e635", lineHeight:1.75, whiteSpace:"pre-wrap", wordBreak:"break-all",
+                margin: 0, fontFamily: "'Courier New',monospace", fontSize: ".71rem",
+                color: "#a3e635", lineHeight: 1.75, whiteSpace: "pre-wrap", wordBreak: "break-all",
               }}>
                 {finalJson}
               </pre>
             </div>
-
-            {/* Botones */}
-            <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexShrink: 0 }}>
               <button className="mt-btn" onClick={handleCopy} style={{
                 background: copied ? "rgba(125,211,168,0.18)" : "rgba(255,255,255,0.08)",
                 border: `1.5px solid ${copied ? "#7DD3A8" : "rgba(255,255,255,0.2)"}`,
-                borderRadius:12, color: copied ? "#7DD3A8" : "rgba(255,255,255,0.65)",
-                padding:"10px 22px", fontFamily:"'Lexend',sans-serif", fontWeight:800, fontSize:".82rem",
-                display:"flex", alignItems:"center", gap:8,
+                borderRadius: 12, color: copied ? "#7DD3A8" : "rgba(255,255,255,0.65)",
+                padding: "10px 22px", fontFamily: "'Lexend',sans-serif", fontWeight: 800, fontSize: ".82rem",
+                display: "flex", alignItems: "center", gap: 8,
               }}>
-                {copied ? <CheckCheck size={15} /> : <ClipboardCopy size={15} />}
+                {copied ? <CheckCheck size={14} /> : <ClipboardCopy size={14} />}
                 {copied ? "¡Copiado!" : "Copiar JSON"}
               </button>
-
-              <button className="mt-btn" onClick={() => { setSamples([]); setFinalJson(""); setPhase("idle"); }} style={{
-                background:"transparent", border:"1.5px solid rgba(255,255,255,0.15)",
-                borderRadius:12, color:"rgba(255,255,255,0.35)",
-                padding:"10px 18px", fontFamily:"'Lexend',sans-serif", fontWeight:700, fontSize:".75rem",
-                display:"flex", alignItems:"center", gap:7,
+              <button className="mt-btn" onClick={handleReset} style={{
+                background: "transparent", border: "1.5px solid rgba(255,255,255,0.15)",
+                borderRadius: 12, color: "rgba(255,255,255,0.35)",
+                padding: "10px 18px", fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: ".75rem",
+                display: "flex", alignItems: "center", gap: 7,
               }}>
-                <RotateCcw size={13} /> Nueva sesión
+                <RotateCcw size={12} /> Nueva sesión
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Círculo sincronizador (posición libre en pantalla) ────────── */}
+        {phase === "syncing" && (
+          <div style={{
+            position: "absolute",
+            left: posX, top: posY,
+            transform: "translate(-50%, -50%)",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+          }}>
+            {/* Etiqueta de posición */}
+            <div style={{
+              fontSize: ".68rem", fontWeight: 800, letterSpacing: ".07em", textTransform: "uppercase",
+              color: "rgba(125,211,168,0.7)",
+              background: "rgba(6,11,16,0.75)", borderRadius: 6, padding: "3px 10px",
+              marginBottom: 8, whiteSpace: "nowrap",
+            }}>
+              {currentPos.label}
+            </div>
+
+            {/* Círculo + anillo */}
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <SyncRing progress={progress} />
+              <div style={{
+                width: 44, height: 44, borderRadius: "50%",
+                background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 55%, #4db88a 100%)",
+                boxShadow: "0 0 28px rgba(125,211,168,0.6)",
+                animation: "hbMT 1.1s ease-in-out infinite",
+                position: "relative", zIndex: 2,
+              }} />
+            </div>
+
+            {/* Puntos capturados */}
+            <div style={{ fontSize: ".65rem", color: "rgba(255,255,255,0.28)", marginTop: 6 }}>
+              {rawCount > 0 ? `${rawCount} puntos` : "Mira aquí…"}
+            </div>
+          </div>
+        )}
+
+        {/* Instrucción flotante durante syncing */}
+        {phase === "syncing" && (
+          <div style={{
+            position: "absolute", bottom: 32, left: 0, right: 0,
+            display: "flex", justifyContent: "center",
+          }}>
+            <div style={{
+              fontSize: ".78rem", fontWeight: 700, color: "rgba(255,255,255,0.35)",
+              background: "rgba(6,11,16,0.7)", borderRadius: 10, padding: "8px 18px",
+              letterSpacing: ".04em",
+            }}>
+              Mantén la mirada fija en el círculo verde
             </div>
           </div>
         )}

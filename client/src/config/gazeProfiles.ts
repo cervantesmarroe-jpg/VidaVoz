@@ -25,17 +25,6 @@ export interface GazeProfile {
   sensitivityX: number;
   /** Multiplicador vertical. Positivo = arriba es positivo en blendshapes. */
   sensitivityY: number;
-  /**
-   * Coeficientes maestros grabados de fábrica con el sistema de 10 muestras.
-   * Si están presentes, el QuickSync los usa como punto de partida en lugar
-   * de partir desde cero; solo ajusta el offset individual (alphaX/Y).
-   */
-  model?: {
-    alphaX: number;
-    betaX:  number;
-    alphaY: number;
-    betaY:  number;
-  };
 }
 
 export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
@@ -45,18 +34,16 @@ export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
     distanceCm:   40,
     sensitivityX: -1.45,
     sensitivityY:  1.25,
-  },
-  mobile: {
-    id:          'mobile',
-    label:       'Modo Móvil',
-    distanceCm:  25,
+  },mobile: {
+    id: 'mobile',
+    label: 'Modo Móvil',
+    distanceCm: 25,
     sensitivityX: -2.40,
     sensitivityY: 2.00,
-    // Este es el ADN que acabas de generar con las 10 muestras:
     model: {
-      alphaX: 314.6914,
+      alphaX: 363.873,
       betaX: -864,
-      alphaY: 321.5056,
+      alphaY: 188.4945,
       betaY: -1328
     }
   },

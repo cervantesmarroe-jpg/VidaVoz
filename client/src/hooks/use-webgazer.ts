@@ -458,6 +458,37 @@ class GazeTracker {
     return { ...this.regressionModel, calibrated: this.isCalibrated };
   }
 
+  // ── Entrenamiento multi-punto: número de muestras acumuladas ─────────────
+  getTrainingDataLength(): number {
+    return this.trainingData.length;
+  }
+
+  // ── Entrenamiento multi-punto: descarta muestras añadidas después de `n` ─
+  // Permite al overlay "Repetir" una ronda sin perder las anteriores.
+  trimTrainingData(toLength: number) {
+    this.trainingData = this.trainingData.slice(0, toLength);
+  }
+
+  // ── Entrenamiento multi-punto: corre regresión sobre todos los puntos ─────
+  // Llamar cuando el usuario ha completado todas las rondas (5 posiciones × 2).
+  // Devuelve el modelo calculado o null si hay < 10 puntos.
+  finalizeTraining(): (RegressionModel & { sensitivityX: number; sensitivityY: number }) | null {
+    if (this.trainingData.length < 10) return null;
+    const model = calculateRegression(this.trainingData);
+    this.regressionModel = model;
+    this.isCalibrated    = true;
+    this.trainingData    = [];
+    this.continuousData  = [];
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    this.logDebugInfo('GazeTracker: entrenamiento multi-punto finalizado ✓');
+    return {
+      ...model,
+      sensitivityX: +(model.betaX / W).toFixed(4),
+      sensitivityY: +(-model.betaY / H).toFixed(4),
+    };
+  }
+
   addGazeListener(cb: GazeCallback)     { this.gazeListeners.add(cb); }
   removeGazeListener(cb: GazeCallback)  { this.gazeListeners.delete(cb); }
   addBlinkListener(cb: BlinkCallback)   { this.blinkListeners.add(cb); }
