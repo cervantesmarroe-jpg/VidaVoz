@@ -38,13 +38,13 @@ export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
     id: 'mobile',
     label: 'Modo Móvil',
     distanceCm: 25,
-    sensitivityX: -2.40,
-    sensitivityY: 2.00,
+    sensitivityX: -1.80, // Menos nervioso, más control
+    sensitivityY: 1.50,
     model: {
-      alphaX: 363.873,
-      betaX: -864,
-      alphaY: 188.4945,
-      betaY: -1328
+      alphaX: 180.00, // Punto central equilibrado
+      betaX: -750.00, // Recorrido estándar para 360px de ancho
+      alphaY: 150.00, 
+      betaY: -1100.00 // Recorrido estándar para 664px de alto
     }
   },
 };

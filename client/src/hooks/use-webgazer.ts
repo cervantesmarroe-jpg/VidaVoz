@@ -8,9 +8,13 @@ const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
 const DWELL_MS        = 3000;
-const SMOOTH_SAMPLES  = 10;   // media móvil de N muestras
+const SMOOTH_SAMPLES  = 30;    // media móvil pre-filtro: 30 muestras (~1 s a 30 fps)
 const BLINK_THRESHOLD = 0.85;
 const BLINK_COOLDOWN  = 1200;
+
+// ── Suavizado agresivo ────────────────────────────────────────────────────────
+const SNAP_RADIUS_PX  = 50;    // imán: si el cursor está a <50 px de un botón, salta al centro
+const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-temblor)
 
 // Sensibilidad de fábrica (fallback si no se carga perfil)
 const SENSITIVITY_X = GAZE_PROFILES[DEFAULT_PROFILE_ID].sensitivityX;
@@ -101,6 +105,61 @@ function updateGazePoint(
   return estimateGazeNoCalibration(eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL, headRotX, sensX, sensY);
 }
 
+// ─── One-Euro Filter (Casiez et al., 2012) ───────────────────────────────────
+// Filtro adaptativo: suaviza fuerte cuando el movimiento es lento (mirada fija)
+// y deja pasar rápido cuando el movimiento es intencionado (salto de botón).
+// minCutoff bajo → más suavizado en reposo; beta alto → más responsivo al movimiento.
+class OneEuroFilter {
+  private xPrev: number | null = null;
+  private dxPrev = 0;
+  private tPrev:  number | null = null;
+
+  constructor(
+    private readonly minCutoff = 0.35,   // Hz — más bajo = más suave en reposo
+    private readonly beta      = 0.006,  // velocidad de adaptación al movimiento
+    private readonly dCutoff   = 1.0,
+  ) {}
+
+  private alpha(cutoff: number, dt: number) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+
+  filter(x: number, tSec: number): number {
+    if (this.xPrev === null || this.tPrev === null) {
+      this.xPrev = x; this.tPrev = tSec; return x;
+    }
+    const dt    = Math.max(tSec - this.tPrev, 0.001);
+    const dxRaw = (x - this.xPrev) / dt;
+    const aD    = this.alpha(this.dCutoff, dt);
+    const dxHat = aD * dxRaw + (1 - aD) * this.dxPrev;
+    const cut   = this.minCutoff + this.beta * Math.abs(dxHat);
+    const a     = this.alpha(cut, dt);
+    const xHat  = a * x + (1 - a) * this.xPrev;
+    this.xPrev  = xHat; this.dxPrev = dxHat; this.tPrev = tSec;
+    return xHat;
+  }
+
+  reset() { this.xPrev = null; this.dxPrev = 0; this.tPrev = null; }
+}
+
+// ─── Snap-to-button ───────────────────────────────────────────────────────────
+// Si el cursor filtrado está a menos de `radius` px del centro de algún elemento
+// con clase .gaze-target, lo atrae exactamente a ese centro.
+function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y: number } {
+  const targets = document.querySelectorAll<Element>('.gaze-target');
+  let bestDist = radius;
+  let bx = x, by = y;
+  targets.forEach(el => {
+    const r  = el.getBoundingClientRect();
+    const cx = r.left + r.width  / 2;
+    const cy = r.top  + r.height / 2;
+    const d  = Math.hypot(x - cx, y - cy);
+    if (d < bestDist) { bestDist = d; bx = cx; by = cy; }
+  });
+  return { x: bx, y: by };
+}
+
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
 class GazeTracker {
   private landmarker:    FaceLandmarker | null = null;
@@ -115,8 +174,12 @@ class GazeTracker {
   private profileSensY: number = SENSITIVITY_Y;
   private activeProfile: GazeProfile = GAZE_PROFILES[DEFAULT_PROFILE_ID];
 
-  // ── Media móvil de 10 muestras (sin temblor entre dispositivos)
-  private smoothHistory: Array<{ x: number; y: number }> = [];
+  // ── Pipeline de suavizado de 3 etapas ────────────────────────────────────
+  private smoothHistory: Array<{ x: number; y: number }> = [];   // MA(30)
+  private filterX = new OneEuroFilter(0.35, 0.006);               // One-Euro X
+  private filterY = new OneEuroFilter(0.35, 0.006);               // One-Euro Y
+  private lastEmitX = -1;                                         // zona muerta
+  private lastEmitY = -1;
 
   private currentResults: DetectionCache = null;
 
@@ -219,13 +282,38 @@ class GazeTracker {
               this.profileSensX, this.profileSensY,
             );
 
-            // ── Media móvil de SMOOTH_SAMPLES muestras ────────────────────
+            // ── Etapa 1: Media Móvil (30 muestras) — elimina outliers ────────
             this.smoothHistory.push({ x: rawX, y: rawY });
             if (this.smoothHistory.length > SMOOTH_SAMPLES) this.smoothHistory.shift();
-            const n   = this.smoothHistory.length;
-            const sum = this.smoothHistory.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y }), { x: 0, y: 0 });
-            const gx  = Math.max(0, Math.min(window.innerWidth,  sum.x / n));
-            const gy  = Math.max(0, Math.min(window.innerHeight, sum.y / n));
+            const smN = this.smoothHistory.length;
+            const smS = this.smoothHistory.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y }), { x: 0, y: 0 });
+            const maX = smS.x / smN;
+            const maY = smS.y / smN;
+
+            // ── Etapa 2: One-Euro Filter — suaviza, responde al movimiento ────
+            const tSec = performance.now() / 1000;
+            const fX   = this.filterX.filter(maX, tSec);
+            const fY   = this.filterY.filter(maY, tSec);
+
+            // ── Etapa 3: Zona muerta (10 px) — bloquea micro-temblores ───────
+            const dx = fX - this.lastEmitX;
+            const dy = fY - this.lastEmitY;
+            let outX = (this.lastEmitX >= 0 && Math.hypot(dx, dy) < DEAD_ZONE_PX)
+              ? this.lastEmitX : fX;
+            let outY = (this.lastEmitY >= 0 && Math.hypot(dx, dy) < DEAD_ZONE_PX)
+              ? this.lastEmitY : fY;
+
+            // ── Clamp a pantalla ──────────────────────────────────────────────
+            outX = Math.max(0, Math.min(window.innerWidth,  outX));
+            outY = Math.max(0, Math.min(window.innerHeight, outY));
+
+            // ── Snap-to-button (50 px) — imán hacia botones cercanos ─────────
+            const snapped = snapToGazeTarget(outX, outY, SNAP_RADIUS_PX);
+            const gx = snapped.x;
+            const gy = snapped.y;
+
+            this.lastEmitX = gx;
+            this.lastEmitY = gy;
 
             this.gazeListeners.forEach(cb => cb(gx, gy));
 
@@ -263,6 +351,10 @@ class GazeTracker {
     this.lastVideoTime  = -1;
     this.lastMpTs       = 0;
     this.smoothHistory  = [];
+    this.filterX.reset();
+    this.filterY.reset();
+    this.lastEmitX      = -1;
+    this.lastEmitY      = -1;
     this.currentResults = null;
     this.wasBlinking    = false;
     this.blinkOnCooldown = false;
