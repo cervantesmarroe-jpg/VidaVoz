@@ -1,14 +1,27 @@
-import { ReactNode, useRef, useCallback, useEffect, useState } from "react";
+import { ReactNode, useRef, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Eye, EyeOff, ClipboardCopy,
   AlertTriangle, MessageSquareText, ActivitySquare, Keyboard as KeyboardIcon,
 } from "lucide-react";
+
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
+
+// ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
+function useIsPortrait() {
+  const mq = typeof window !== "undefined"
+    ? window.matchMedia("(orientation: portrait)")
+    : null;
+  return useSyncExternalStore(
+    (cb) => { mq?.addEventListener("change", cb); return () => mq?.removeEventListener("change", cb); },
+    () => mq?.matches ?? true,
+    () => true,
+  );
+}
 
 const TAB_DWELL_MS = 1500;
 
@@ -50,16 +63,17 @@ function GazeCursor() {
   );
 }
 
-// ── Pestaña lateral con dwell ────────────────────────────────────────────────
+// ── Pestaña de navegación (sidebar vertical o barra inferior horizontal) ──────
 interface SideTabProps {
   path: string;
   Icon: React.ElementType;
   label: string;
   color: string;
   active: boolean;
+  isPortrait: boolean;
 }
 
-function SideTab({ path, Icon, label, color, active }: SideTabProps) {
+function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps) {
   const [, navigate] = useLocation();
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fillRef   = useRef<HTMLDivElement>(null);
@@ -69,21 +83,32 @@ function SideTab({ path, Icon, label, color, active }: SideTabProps) {
     const fill = fillRef.current;
     if (fill) {
       fill.style.transition = "none";
-      fill.style.height = "0%";
-      void fill.getBoundingClientRect();
-      fill.style.transition = `height ${TAB_DWELL_MS}ms linear`;
-      fill.style.height = "100%";
+      // Portrait: barra crece de izquierda a derecha; Landscape: de abajo a arriba
+      if (isPortrait) {
+        fill.style.width = "0%"; fill.style.height = "100%";
+        void fill.getBoundingClientRect();
+        fill.style.transition = `width ${TAB_DWELL_MS}ms linear`;
+        fill.style.width = "100%";
+      } else {
+        fill.style.height = "0%"; fill.style.width = "100%";
+        void fill.getBoundingClientRect();
+        fill.style.transition = `height ${TAB_DWELL_MS}ms linear`;
+        fill.style.height = "100%";
+      }
     }
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       navigate(path);
     }, TAB_DWELL_MS);
-  }, [active, path, navigate]);
+  }, [active, path, navigate, isPortrait]);
 
   const cancelDwell = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     const fill = fillRef.current;
-    if (fill) { fill.style.transition = "none"; fill.style.height = "0%"; }
+    if (fill) {
+      fill.style.transition = "none";
+      fill.style.height = "0%"; fill.style.width = "0%";
+    }
   }, []);
 
   return (
@@ -95,13 +120,17 @@ function SideTab({ path, Icon, label, color, active }: SideTabProps) {
       style={{
         position: "relative",
         display: "flex",
-        flexDirection: "column",
+        // Portrait (bottom bar): icon + label en fila; Landscape (sidebar): columna
+        flexDirection: isPortrait ? "row" : "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "4px",
-        width: "100%",
-        padding: "10px 4px",
-        borderRadius: "10px",
+        gap: isPortrait ? "6px" : "4px",
+        // Portrait: flex:1 para llenar igualmente los 4 huecos; Landscape: ancho completo del sidebar
+        flex: isPortrait ? 1 : undefined,
+        width: isPortrait ? undefined : "100%",
+        height: isPortrait ? "100%" : undefined,
+        padding: isPortrait ? "8px 4px" : "10px 4px",
+        borderRadius: isPortrait ? "8px" : "10px",
         overflow: "hidden",
         background: active ? `${color}18` : "transparent",
         border: active ? `1px solid ${color}55` : "1px solid transparent",
@@ -111,17 +140,24 @@ function SideTab({ path, Icon, label, color, active }: SideTabProps) {
         flexShrink: 0,
       }}
     >
-      {/* Dwell fill bar */}
+      {/* Dwell fill: en portrait crece →; en landscape crece ↑ */}
       <div
         ref={fillRef}
         style={{
-          position: "absolute", bottom: 0, left: 0, right: 0,
-          height: "0%", background: `${color}33`, pointerEvents: "none",
+          position: "absolute",
+          ...(isPortrait
+            ? { top: 0, bottom: 0, left: 0, width: "0%", height: "100%" }
+            : { bottom: 0, left: 0, right: 0, height: "0%", width: "100%" }),
+          background: `${color}33`, pointerEvents: "none",
         }}
       />
-      <Icon style={{ width: 22, height: 22, color: active ? color : "#AAAAAA", position: "relative", zIndex: 1 }} />
+      <Icon style={{
+        width: isPortrait ? 20 : 22, height: isPortrait ? 20 : 22,
+        color: active ? color : "#AAAAAA", position: "relative", zIndex: 1, flexShrink: 0,
+      }} />
       <span style={{
-        fontSize: "0.5rem", fontWeight: 800, letterSpacing: "0.06em",
+        fontSize: isPortrait ? "0.58rem" : "0.5rem",
+        fontWeight: 800, letterSpacing: "0.06em",
         textTransform: "uppercase", color: active ? color : "#AAAAAA",
         position: "relative", zIndex: 1, lineHeight: 1.2, textAlign: "center",
       }}>
@@ -134,6 +170,7 @@ function SideTab({ path, Icon, label, color, active }: SideTabProps) {
 // ── Layout principal ─────────────────────────────────────────────────────────
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const isPortrait = useIsPortrait();
   const { accepted, accept } = useConsent();
   const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
   const {
@@ -250,12 +287,34 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
         </button>
       </header>
 
-      {/* ── Cuerpo: sidebar + contenido ─────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      {/* ── Cuerpo: nav + contenido (layout adapta a orientación) ──── */}
+      {/*  Portrait  → columna: contenido arriba, barra nav abajo   */}
+      {/*  Landscape → fila:   sidebar izquierda, contenido derecha */}
+      <div style={{
+        display: "flex", flex: 1, minHeight: 0,
+        flexDirection: isPortrait ? "column" : "row",
+      }}>
 
-        {/* Barra lateral de navegación */}
+        {/* Contenido principal — en portrait va ANTES del nav (orden DOM) */}
+        <main
+          id={location === "/" ? "emergencias" : location.slice(1)}
+          style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}
+        >
+          {children}
+        </main>
+
+        {/* Barra de navegación: sidebar lateral (landscape) o barra inferior (portrait) */}
         <nav
-          style={{
+          style={isPortrait ? {
+            // Barra inferior — portrait
+            width: "100%", height: "58px", flexShrink: 0,
+            background: "#FFFFFF",
+            borderTop: "1px solid #E0E0E0",
+            display: "flex", flexDirection: "row",
+            alignItems: "stretch",
+            gap: 4, padding: "4px 6px",
+          } : {
+            // Sidebar izquierdo — landscape
             width: "64px", flexShrink: 0,
             background: "#FFFFFF",
             borderRight: "1px solid #E0E0E0",
@@ -273,14 +332,10 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
               label={tab.label}
               color={tab.color}
               active={location === tab.path}
+              isPortrait={isPortrait}
             />
           ))}
         </nav>
-
-        {/* Contenido */}
-        <main id={location === "/" ? "emergencias" : location.slice(1)} className="flex-1 min-h-0 overflow-hidden">
-          {children}
-        </main>
       </div>
 
       {/* ── Overlay de Entrenamiento Maestro ─────────────────────────── */}

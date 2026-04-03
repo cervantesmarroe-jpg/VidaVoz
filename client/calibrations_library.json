@@ -1,0 +1,22 @@
+[
+  {
+    "id": "captura_01_elena",
+    "profile": "mobile", 
+    "model": {
+      "alphaX": 319.51,
+      "betaX": -1769.63,
+      "alphaY": 124.57,
+      "betaY": -2720.38
+    }
+  },
+  {
+    "id": "captura_02_elena",
+    "profile": "tablet",
+    "model": {
+      "alphaX": 1491.27,
+      "betaX": -4625.57,
+      "alphaY": 749.63,
+      "betaY": -1040.31
+    }
+  }
+]

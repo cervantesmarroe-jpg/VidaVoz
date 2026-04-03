@@ -4,7 +4,7 @@
   "description": "Aplicación de comunicación asistiva para pacientes de UCI",
   "start_url": "/",
   "display": "fullscreen",
-  "orientation": "landscape",
+  "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#000000",
   "lang": "es",
