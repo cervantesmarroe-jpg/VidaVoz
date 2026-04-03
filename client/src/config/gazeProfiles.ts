@@ -25,16 +25,31 @@ export interface GazeProfile {
   sensitivityX: number;
   /** Multiplicador vertical. Positivo = arriba es positivo en blendshapes. */
   sensitivityY: number;
+  /** ADN de fábrica: coeficientes de regresión grabados en fábrica para este dispositivo. */
+  model?: {
+    alphaX: number;
+    betaX:  number;
+    alphaY: number;
+    betaY:  number;
+  };
 }
 
 export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
   tablet: {
-    id:           'tablet',
-    label:        'Modo Tablet',
-    distanceCm:   40,
-    sensitivityX: -1.45,
-    sensitivityY:  1.25,
-  },mobile: {
+    id: 'tablet',
+    label: 'Modo Tablet',
+    distanceCm: 40, // Distancia estándar para tablet en soporte
+    // Sensibilidades calculadas con tus 30 muestras
+    sensitivityX: -2.4092,
+    sensitivityY: 0.9633,
+    model: {
+      alphaX: 1491.2707,
+      betaX: -4625.5720,
+      alphaY: 749.6392,
+      betaY: -1040.3134
+    }
+  },
+  mobile: {
     id: 'mobile',
     label: 'Modo Móvil',
     distanceCm: 25,
