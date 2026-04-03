@@ -412,25 +412,39 @@ export const gazeTracker = new GazeTracker();
 
 // ─── Zustand store ────────────────────────────────────────────────────────────
 interface WebGazerState {
-  isActive:          boolean;
-  isCalibrating:     boolean;
+  isActive:               boolean;
+  isCalibrating:          boolean;
+  /** true una vez que el flujo Splash→Perfil→QuickSync ha completado.
+   *  Bloquea cualquier re-entrada al componente CalibrationScreen. */
+  hasCompletedInitialSync: boolean;
+
   startCalibration:  () => void;
   finishCalibration: () => void;
+  /** Activa la mirada directamente usando el perfil ya calibrado.
+   *  No muestra CalibrationScreen. Usado tras hasCompletedInitialSync=true. */
+  activateFromProfile: () => void;
+  setSyncCompleted:  () => void;
   deactivate:        () => void;
 }
 
 export const useWebGazerStore = create<WebGazerState>((set) => ({
-  isActive:          false,
-  isCalibrating:     false,
-  startCalibration:  () => set({ isCalibrating: true,  isActive: false }),
-  finishCalibration: () => set({ isCalibrating: false, isActive: true }),
-  deactivate:        () => set({ isActive: false, isCalibrating: false }),
+  isActive:               false,
+  isCalibrating:          false,
+  hasCompletedInitialSync: false,
+
+  startCalibration:    () => set({ isCalibrating: true,  isActive: false }),
+  finishCalibration:   () => set({ isCalibrating: false, isActive: true }),
+  activateFromProfile: () => set({ isActive: true, isCalibrating: false }),
+  setSyncCompleted:    () => set({ hasCompletedInitialSync: true }),
+  deactivate:          () => set({ isActive: false, isCalibrating: false }),
 }));
 
 // ─── React hook ───────────────────────────────────────────────────────────────
 export function useWebGazer() {
-  const { isActive, isCalibrating, startCalibration, finishCalibration, deactivate } =
-    useWebGazerStore();
+  const {
+    isActive, isCalibrating, hasCompletedInitialSync,
+    startCalibration, finishCalibration, activateFromProfile, deactivate,
+  } = useWebGazerStore();
 
   useEffect(() => {
     if (!document.getElementById('gaze-cursor')) {
@@ -461,7 +475,14 @@ export function useWebGazer() {
       return;
     }
     if (cursor) cursor.style.display = 'block';
-    gazeTracker.startDetection();
+
+    // Asegurar que la cámara y el modelo están listos (puede haber sido
+    // detenida al volver del flujo de sincronización inicial)
+    (async () => {
+      if (!gazeTracker.hasFaceModel) await gazeTracker.init();
+      if (!gazeTracker.hasCamera)    await gazeTracker.startCamera();
+      gazeTracker.startDetection();
+    })();
 
     let targetEl:     HTMLElement | null = null;
     let enterTime     = 0;
@@ -537,7 +558,10 @@ export function useWebGazer() {
     if (!isCalibrating && !isActive) gazeTracker.stopCamera();
   }, [isCalibrating, isActive]);
 
-  return { isActive, isCalibrating, startCalibration, finishCalibration, deactivate };
+  return {
+    isActive, isCalibrating, hasCompletedInitialSync,
+    startCalibration, finishCalibration, activateFromProfile, deactivate,
+  };
 }
 
 // ─── Dwell helpers ────────────────────────────────────────────────────────────

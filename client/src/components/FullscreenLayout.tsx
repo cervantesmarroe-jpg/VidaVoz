@@ -135,16 +135,30 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { accepted, accept } = useConsent();
   const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
-  const { isActive, isCalibrating, startCalibration, deactivate } = useWebGazer();
+  const {
+    isActive, isCalibrating, hasCompletedInitialSync,
+    startCalibration, activateFromProfile, deactivate,
+  } = useWebGazer();
 
   const handleDecline = () => { accept(); activateScanning(); };
-  const handleGazeToggle = () => { if (isActive || isCalibrating) deactivate(); else startCalibration(); };
+
+  // Si el sync inicial ya está hecho, "Activar mirada" carga el perfil guardado
+  // directamente (sin CalibrationScreen). Solo la primera vez usaría startCalibration.
+  const handleGazeToggle = () => {
+    if (isActive || isCalibrating) {
+      deactivate();
+    } else if (hasCompletedInitialSync) {
+      activateFromProfile();
+    } else {
+      startCalibration();
+    }
+  };
 
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
 
-      {/* Pantalla de calibración (overlay de pantalla completa) */}
-      {isCalibrating && <CalibrationScreen />}
+      {/* Pantalla de calibración — bloqueada permanentemente una vez hecho el sync inicial */}
+      {isCalibrating && !hasCompletedInitialSync && <CalibrationScreen />}
 
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}

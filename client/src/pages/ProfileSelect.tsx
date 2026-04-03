@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { gazeTracker } from "@/hooks/use-webgazer";
+import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { GAZE_PROFILES, type ProfileId, type GazeProfile } from "@/config/gazeProfiles";
 
 // ─── Constantes del QuickSync ─────────────────────────────────────────────────
@@ -142,11 +142,15 @@ export default function ProfileSelect({ onDone }: ProfileSelectProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // ── Fase success → pasar a la app ─────────────────────────────────────────
+  // ── Fase success → marcar sync completo y pasar a la app ─────────────────
   useEffect(() => {
     if (phase !== "success") return;
     const t = setTimeout(() => {
-      gazeTracker.startDetection();
+      // Marcar el flag global: bloquea CalibrationScreen para siempre
+      useWebGazerStore.getState().setSyncCompleted();
+      // Parar cámara/detección — el hook las reiniciará cuando el usuario
+      // pulse "Activar mirada" (activateFromProfile)
+      gazeTracker.stopCamera();
       onDone();
     }, SUCCESS_MS);
     return () => clearTimeout(t);
