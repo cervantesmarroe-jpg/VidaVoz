@@ -1,15 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { GAZE_PROFILES, type ProfileId, type GazeProfile } from "@/config/gazeProfiles";
+import { CalibrationScreen } from "@/components/CalibrationScreen";
 
-// ─── Constantes del QuickSync ─────────────────────────────────────────────────
-const DWELL_MS      = 3000;
-const COLLECT_MS    = 50;
-const WARMUP_MS     = 400;
-const SUCCESS_MS    = 1300;
-
-const R_RING    = 68;
-const CIRCUMF   = 2 * Math.PI * R_RING;
+// ─── Constantes ───────────────────────────────────────────────────────────────
+const SUCCESS_MS = 1300;
 
 // ─── Icono Tablet SVG ─────────────────────────────────────────────────────────
 function TabletIcon({ size = 56, color = "#4B5563" }: { size?: number; color?: string }) {
@@ -34,32 +29,6 @@ function MobileIcon({ size = 48, color = "#4B5563" }: { size?: number; color?: s
   );
 }
 
-// ─── Anillo SVG de progreso (QuickSync) ───────────────────────────────────────
-function SyncRing({ progress }: { progress: number }) {
-  const offset = CIRCUMF * (1 - Math.min(progress, 1));
-  const sz     = (R_RING + 14) * 2;
-  return (
-    <svg
-      width={sz} height={sz}
-      style={{
-        position: "absolute",
-        top: "50%", left: "50%",
-        transform: "translate(-50%,-50%) rotate(-90deg)",
-        pointerEvents: "none",
-      }}
-    >
-      <circle cx={sz / 2} cy={sz / 2} r={R_RING}
-        fill="none" stroke="rgba(125,211,168,0.2)" strokeWidth={8} />
-      <circle cx={sz / 2} cy={sz / 2} r={R_RING}
-        fill="none" stroke="#7DD3A8" strokeWidth={8}
-        strokeLinecap="round"
-        strokeDasharray={CIRCUMF}
-        strokeDashoffset={offset}
-        style={{ transition: "stroke-dashoffset 0.06s linear" }}
-      />
-    </svg>
-  );
-}
 
 // ─── ProfileSelect ────────────────────────────────────────────────────────────
 interface ProfileSelectProps {
@@ -69,20 +38,8 @@ interface ProfileSelectProps {
 type Phase = "pick" | "loading" | "sync" | "success";
 
 export default function ProfileSelect({ onDone }: ProfileSelectProps) {
-  const [phase, setPhase]         = useState<Phase>("pick");
-  const [profile, setProfile]     = useState<GazeProfile | null>(null);
-  const [progress, setProgress]   = useState(0);
-  const [samples, setSamples]     = useState(0);
-
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const ivs    = useRef<ReturnType<typeof setInterval>[]>([]);
-
-  const clearAll = useCallback(() => {
-    timers.current.forEach(clearTimeout);
-    ivs.current.forEach(clearInterval);
-    timers.current = [];
-    ivs.current    = [];
-  }, []);
+  const [phase, setPhase]     = useState<Phase>("pick");
+  const [profile, setProfile] = useState<GazeProfile | null>(null);
 
   // ── Selección de perfil → iniciar cámara ──────────────────────────────────
   const handlePick = useCallback(async (id: ProfileId) => {
@@ -100,48 +57,6 @@ export default function ProfileSelect({ onDone }: ProfileSelectProps) {
     setPhase("sync");
   }, []);
 
-  // ── Fase sync: recoger 3 s de muestras en el centro ──────────────────────
-  useEffect(() => {
-    if (phase !== "sync") return;
-    setProgress(0);
-    setSamples(0);
-
-    const cx = window.innerWidth  / 2;
-    const cy = window.innerHeight / 2;
-    const t0 = Date.now();
-    let collecting = false;
-
-    const warmup = setTimeout(() => { collecting = true; }, WARMUP_MS);
-    timers.current.push(warmup);
-
-    const collector = setInterval(() => {
-      if (!collecting) return;
-      const ok = gazeTracker.recordCalibrationPoint(cx, cy);
-      if (ok) setSamples(s => s + 1);
-    }, COLLECT_MS);
-    ivs.current.push(collector);
-
-    const progressIv = setInterval(() => {
-      setProgress(Math.min((Date.now() - t0) / DWELL_MS, 1));
-    }, 40);
-    ivs.current.push(progressIv);
-
-    const done = setTimeout(() => {
-      clearAll();
-      const ok = gazeTracker.quickCenterCalibrate();
-      if (ok) {
-        setPhase("success");
-      } else {
-        // Sin cara detectada — reintentar sync
-        setPhase("sync");
-      }
-    }, DWELL_MS);
-    timers.current.push(done);
-
-    return clearAll;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
-
   // ── Fase success → marcar sync completo y pasar a la app ─────────────────
   useEffect(() => {
     if (phase !== "success") return;
@@ -155,6 +70,20 @@ export default function ProfileSelect({ onDone }: ProfileSelectProps) {
     }, SUCCESS_MS);
     return () => clearTimeout(t);
   }, [phase, onDone]);
+
+  // ── Fase sync: calibración completa de 9 puntos ──────────────────────────
+  // Render CalibrationScreen directamente (cubre pantalla completa)
+  if (phase === "sync") {
+    return (
+      <CalibrationScreen
+        onSuccess={() => setPhase("success")}
+        onCancel={() => {
+          gazeTracker.stopCamera();
+          setPhase("pick");
+        }}
+      />
+    );
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -325,69 +254,6 @@ export default function ProfileSelect({ onDone }: ProfileSelectProps) {
         </div>
       )}
 
-      {/* ── SYNC: círculo verde en el centro ─────────────────────────────── */}
-      {phase === "sync" && (
-        <>
-          {/* Texto superior */}
-          <p style={{
-            position: "absolute", top: "16%",
-            left: 0, right: 0, textAlign: "center",
-            fontSize: "clamp(1rem,3.5vw,1.3rem)",
-            fontWeight: 600, color: "#555555",
-            animation: "fadeUp .4s ease both",
-          }}>
-            Sincronización Rápida
-          </p>
-          <p style={{
-            position: "absolute", top: "calc(16% + 2.6rem)",
-            left: 0, right: 0, textAlign: "center",
-            fontSize: "clamp(.8rem,2.5vw,.95rem)",
-            color: "#AAAAAA",
-            animation: "fadeUp .5s ease .08s both",
-          }}>
-            Mira el círculo verde sin mover la cabeza
-          </p>
-
-          {/* Perfil elegido */}
-          {profile && (
-            <p style={{
-              position: "absolute", top: "calc(16% + 5rem)",
-              left: 0, right: 0, textAlign: "center",
-              fontSize: ".78rem", color: "#7DD3A8",
-              fontWeight: 600, letterSpacing: ".06em",
-            }}>
-              {profile.label} · {profile.distanceCm} cm
-            </p>
-          )}
-
-          {/* Círculo + anillo */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <SyncRing progress={progress} />
-            <div style={{
-              position: "absolute",
-              width: 120, height: 120, borderRadius: "50%",
-              background: "radial-gradient(circle, rgba(125,211,168,0.12) 0%, transparent 70%)",
-            }} />
-            <div style={{
-              width: 58, height: 58, borderRadius: "50%",
-              background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 55%, #4db88a 100%)",
-              boxShadow: "0 0 36px rgba(125,211,168,0.5), 0 0 8px rgba(125,211,168,0.3)",
-              animation: "heartbeat-ps 1.1s ease-in-out infinite",
-              position: "relative", zIndex: 2,
-            }} />
-          </div>
-
-          {samples > 0 && (
-            <p style={{
-              position: "absolute", bottom: "20%",
-              fontSize: ".68rem", color: "rgba(125,211,168,0.4)",
-              letterSpacing: ".08em",
-            }}>
-              {samples} muestras
-            </p>
-          )}
-        </>
-      )}
 
       {/* ── SUCCESS ───────────────────────────────────────────────────────── */}
       {phase === "success" && (

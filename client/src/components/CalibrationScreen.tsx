@@ -121,7 +121,14 @@ function CheckRow({ ok, label }: { ok: boolean | null; label: string }) {
 // ─── CalibrationScreen ────────────────────────────────────────────────────────
 type Phase = "checking" | "point" | "transition" | "computing" | "success" | "error";
 
-export function CalibrationScreen() {
+interface CalibrationScreenProps {
+  /** Llamado tras éxito (en lugar del flujo por defecto finishCalibration+startDetection) */
+  onSuccess?: () => void;
+  /** Llamado al cancelar (en lugar del flujo por defecto deactivate+stopCamera) */
+  onCancel?: () => void;
+}
+
+export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProps = {}) {
   useDisableBlink();
   const { finishCalibration, deactivate } = useWebGazerStore();
 
@@ -258,18 +265,28 @@ export function CalibrationScreen() {
   useEffect(() => {
     if (phase !== "success") return;
     const h = setTimeout(() => {
-      finishCalibration();
-      gazeTracker.startDetection();
+      if (onSuccess) {
+        // Flujo externo: el componente padre maneja el cierre
+        onSuccess();
+      } else {
+        // Flujo por defecto (desde FullscreenLayout)
+        finishCalibration();
+        gazeTracker.startDetection();
+      }
     }, SUCCESS_MS);
     return () => clearTimeout(h);
-  }, [phase, finishCalibration]);
+  }, [phase, finishCalibration, onSuccess]);
 
   // ── Cancelar ─────────────────────────────────────────────────────────────
   const handleCancel = useCallback(() => {
     clearAll();
-    deactivate();
-    gazeTracker.stopCamera();
-  }, [clearAll, deactivate]);
+    if (onCancel) {
+      onCancel();
+    } else {
+      deactivate();
+      gazeTracker.stopCamera();
+    }
+  }, [clearAll, deactivate, onCancel]);
 
   // ── Comenzar secuencia (desde checking) ──────────────────────────────────
   const handleStart = useCallback(() => {
