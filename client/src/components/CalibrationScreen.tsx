@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { X } from "lucide-react";
 
-// Desactiva el blink-click durante toda la pantalla de calibración
+// ── Desactiva blink durante toda la calibración ───────────────────────────────
 function useDisableBlink() {
   useEffect(() => {
     gazeTracker.setBlinkEnabled(false);
@@ -10,181 +10,325 @@ function useDisableBlink() {
   }, []);
 }
 
-// ── Constantes ───────────────────────────────────────────────────────────────
-const DWELL_TOTAL_MS  = 3000;   // duración del foco central
-const COLLECT_RATE_MS = 50;     // muestreo cada 50 ms → 20 fps
-const WARMUP_MS       = 400;    // retardo antes de capturar (parpadeo de adaptación)
-const SUCCESS_SHOW_MS = 1400;   // tiempo que se ve el estado "listo" antes de cerrar
+// ─── Secuencia de 9 puntos (fracción de pantalla) ────────────────────────────
+// Los márgenes son 40px sobre una pantalla de referencia 360×764.
+// Al multiplicar por innerWidth/Height se escalan a cualquier dispositivo.
+const MH = 40 / 360;   // margen horizontal ~ 11.1 %
+const MV = 40 / 764;   // margen vertical   ~  5.2 %
 
-// Radios del anillo SVG de progreso
-const R_OUTER = 72;             // radio del anillo exterior
-const CIRCUMF  = 2 * Math.PI * R_OUTER;
+const POINTS = [
+  { label: "Centro",           fx: 0.5,    fy: 0.5,    durationMs: 7000 },
+  { label: "Arriba centro",    fx: 0.5,    fy: MV,     durationMs: 5000 },
+  { label: "Abajo centro",     fx: 0.5,    fy: 1 - MV, durationMs: 5000 },
+  { label: "Izquierda centro", fx: MH,     fy: 0.5,    durationMs: 5000 },
+  { label: "Derecha centro",   fx: 1 - MH, fy: 0.5,    durationMs: 5000 },
+  { label: "Esquina sup-izq",  fx: MH,     fy: MV,     durationMs: 6000 },
+  { label: "Esquina sup-der",  fx: 1 - MH, fy: MV,     durationMs: 6000 },
+  { label: "Esquina inf-izq",  fx: MH,     fy: 1 - MV, durationMs: 6000 },
+  { label: "Esquina inf-der",  fx: 1 - MH, fy: 1 - MV, durationMs: 6000 },
+] as const;
 
-type Phase = "syncing" | "success";
+const N_SAMPLES      = 4;     // muestras por punto (distribuidas uniformemente)
+const WARMUP_MS      = 500;   // descarta los primeros 500 ms (ojo en transición)
+const TRANSITION_MS  = 200;   // pausa entre puntos (dot desaparece)
+const SUCCESS_MS     = 1600;  // tiempo de pantalla "¡Listo!" antes de cerrar
 
-// ── Anillo SVG de progreso ────────────────────────────────────────────────────
-function SyncRing({ progress }: { progress: number }) {
-  const offset = CIRCUMF * (1 - Math.min(progress, 1));
-  const size   = (R_OUTER + 12) * 2;
+// Calcula los N_SAMPLES instantes (ms) uniformemente distribuidos en [WARMUP_MS, durationMs]
+function sampleTimes(durationMs: number): number[] {
+  const active = durationMs - WARMUP_MS;
+  return Array.from({ length: N_SAMPLES }, (_, i) =>
+    WARMUP_MS + (active / (N_SAMPLES - 1)) * i
+  );
+}
+
+// ── Anillo SVG de progreso alrededor del punto ────────────────────────────────
+const DOT_R   = 9;    // radio del punto (18 px diámetro)
+const RING_R  = 28;   // radio del anillo exterior
+const RING_C  = 2 * Math.PI * RING_R;
+const SVG_SZ  = (RING_R + 8) * 2;
+
+function PointDot({
+  warmup, progress,
+}: {
+  warmup: boolean;
+  progress: number; // 0–1 durante la fase activa
+}) {
+  const offset = RING_C * (1 - Math.min(progress, 1));
   return (
     <svg
-      width={size} height={size}
-      style={{
-        position: "absolute",
-        top: "50%", left: "50%",
-        transform: "translate(-50%,-50%) rotate(-90deg)",
-        pointerEvents: "none",
-      }}
+      width={SVG_SZ} height={SVG_SZ}
+      style={{ overflow: "visible", pointerEvents: "none" }}
     >
-      {/* Pista de fondo */}
+      {/* Círculo sólido de 18 px */}
       <circle
-        cx={size / 2} cy={size / 2} r={R_OUTER}
-        fill="none"
-        stroke="rgba(125,211,168,0.18)"
-        strokeWidth={7}
+        cx={SVG_SZ / 2} cy={SVG_SZ / 2} r={DOT_R}
+        fill={warmup ? "#888888" : "#FFFFFF"}
+        style={{ transition: "fill 0.12s" }}
       />
-      {/* Arco de progreso */}
-      <circle
-        cx={size / 2} cy={size / 2} r={R_OUTER}
-        fill="none"
-        stroke="#7DD3A8"
-        strokeWidth={7}
-        strokeLinecap="round"
-        strokeDasharray={CIRCUMF}
-        strokeDashoffset={offset}
-        style={{ transition: "stroke-dashoffset 0.06s linear" }}
-      />
+      {/* Anillo de progreso (solo visible en fase activa) */}
+      {!warmup && (
+        <>
+          <circle
+            cx={SVG_SZ / 2} cy={SVG_SZ / 2} r={RING_R}
+            fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={4}
+          />
+          <circle
+            cx={SVG_SZ / 2} cy={SVG_SZ / 2} r={RING_R}
+            fill="none" stroke="#FFFFFF" strokeWidth={4}
+            strokeLinecap="round"
+            strokeDasharray={RING_C}
+            strokeDashoffset={offset}
+            transform={`rotate(-90 ${SVG_SZ / 2} ${SVG_SZ / 2})`}
+            style={{ transition: "stroke-dashoffset 0.04s linear" }}
+          />
+        </>
+      )}
     </svg>
   );
 }
 
-// ── Pantalla de Sincronización Rápida ─────────────────────────────────────────
+// ── Indicador de verificación previa ─────────────────────────────────────────
+function CheckRow({ ok, label }: { ok: boolean | null; label: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{
+        width: 22, height: 22, borderRadius: "50%",
+        background: ok === true ? "rgba(125,211,168,0.2)"
+          : ok === false ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.08)",
+        border: `2px solid ${ok === true ? "#7DD3A8" : ok === false ? "#f87171" : "rgba(255,255,255,0.2)"}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0, transition: "all 0.25s",
+      }}>
+        {ok === true && (
+          <svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+            <polyline points="2,6 5,9 10,3" stroke="#7DD3A8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        {ok === false && (
+          <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+            <line x1="2" y1="2" x2="8" y2="8" stroke="#f87171" strokeWidth={2} strokeLinecap="round" />
+            <line x1="8" y1="2" x2="2" y2="8" stroke="#f87171" strokeWidth={2} strokeLinecap="round" />
+          </svg>
+        )}
+      </div>
+      <span style={{ fontSize: ".82rem", color: ok ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)", transition: "color 0.25s" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─── CalibrationScreen ────────────────────────────────────────────────────────
+type Phase = "checking" | "point" | "transition" | "computing" | "success" | "error";
+
 export function CalibrationScreen() {
   useDisableBlink();
   const { finishCalibration, deactivate } = useWebGazerStore();
 
-  const [phase, setPhase]       = useState<Phase>("syncing");
-  const [progress, setProgress] = useState(0);
-  const [samples, setSamples]   = useState(0);
+  const [phase,           setPhase]           = useState<Phase>("checking");
+  const [pointIdx,        setPointIdx]         = useState(0);
+  const [warmup,          setWarmup]           = useState(true);   // gray dot
+  const [ringProgress,    setRingProgress]     = useState(0);
+  const [showInstruction, setShowInstruction]  = useState(true);
+  const [errorMsg,        setErrorMsg]         = useState("");
+  const [faceStatus, setFaceStatus] = useState<{
+    detected: boolean; bothEyesOpen: boolean; noseX: number;
+  }>({ detected: false, bothEyesOpen: false, noseX: 0.5 });
 
-  // Para cancelar los timers al desmontar
+  // Timers y cleanup
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const ivsRef    = useRef<ReturnType<typeof setInterval>[]>([]);
-
-  const clearAll = useCallback(() => {
+  const clearAll  = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
     ivsRef.current.forEach(clearInterval);
-    timersRef.current = [];
-    ivsRef.current    = [];
+    timersRef.current = []; ivsRef.current = [];
   }, []);
 
-  // ── Fase syncing: recoger muestras del punto central ──────────────────────
+  // ── Fase "checking": poll de estado de rostro cada 200 ms ────────────────
   useEffect(() => {
-    if (phase !== "syncing") return;
-    setProgress(0);
-    setSamples(0);
+    if (phase !== "checking") return;
     gazeTracker.clearCalibration();
-
-    const centerX = window.innerWidth  / 2;
-    const centerY = window.innerHeight / 2;
-
-    const startTime = Date.now();
-
-    // Retardo de calentamiento → ignorar primeras muestras
-    let collecting = false;
-    const warmup = setTimeout(() => { collecting = true; }, WARMUP_MS);
-    timersRef.current.push(warmup);
-
-    // Muestreo
-    const collector = setInterval(() => {
-      if (!collecting) return;
-      const ok = gazeTracker.recordCalibrationPoint(centerX, centerY);
-      if (ok) setSamples(s => s + 1);
-    }, COLLECT_RATE_MS);
-    ivsRef.current.push(collector);
-
-    // Progreso visual
-    const progressIv = setInterval(() => {
-      const p = Math.min((Date.now() - startTime) / DWELL_TOTAL_MS, 1);
-      setProgress(p);
-    }, 40);
-    ivsRef.current.push(progressIv);
-
-    // Fin del dwell
-    const done = setTimeout(() => {
-      clearAll();
-      const ok = gazeTracker.quickCenterCalibrate();
-      if (ok) {
-        setPhase("success");
-      } else {
-        // Sin cara detectada → reintentar
-        setPhase("syncing");
-      }
-    }, DWELL_TOTAL_MS);
-    timersRef.current.push(done);
-
+    const iv = setInterval(() => setFaceStatus(gazeTracker.getFaceStatus()), 200);
+    ivsRef.current.push(iv);
     return clearAll;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // ── Fase success: activar tracking y cerrar ───────────────────────────────
+  // ── Fase "point": ejecuta el punto actual ────────────────────────────────
+  useEffect(() => {
+    if (phase !== "point") return;
+
+    const pt      = POINTS[pointIdx];
+    const screenX = pt.fx * window.innerWidth;
+    const screenY = pt.fy * window.innerHeight;
+
+    setWarmup(true);
+    setRingProgress(0);
+
+    // Programar las N_SAMPLES muestras en sus instantes exactos
+    const times = sampleTimes(pt.durationMs);
+    times.forEach(t => {
+      const h = setTimeout(() => {
+        gazeTracker.recordCalibrationPoint(screenX, screenY);
+      }, t);
+      timersRef.current.push(h);
+    });
+
+    // Tras el warmup: punto blanco + arrancar anillo
+    const whiteH = setTimeout(() => {
+      setWarmup(false);
+      // Ocultar instrucción cuando el primer punto pasa a activo
+      if (pointIdx === 0) setShowInstruction(false);
+    }, WARMUP_MS);
+    timersRef.current.push(whiteH);
+
+    // Anillo de progreso (solo en fase activa)
+    const activeStart    = performance.now() + WARMUP_MS;
+    const activeDuration = pt.durationMs - WARMUP_MS;
+    const progressIv = setInterval(() => {
+      const elapsed = performance.now() - activeStart;
+      setRingProgress(Math.min(elapsed / activeDuration, 1));
+    }, 40);
+    ivsRef.current.push(progressIv);
+
+    // Fin del punto
+    const endH = setTimeout(() => {
+      clearAll();
+      setRingProgress(1);
+      if (pointIdx + 1 >= POINTS.length) {
+        setPhase("computing");
+      } else {
+        setPhase("transition");
+      }
+    }, pt.durationMs);
+    timersRef.current.push(endH);
+
+    return clearAll;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, pointIdx]);
+
+  // ── Fase "transition": 200 ms de pausa → siguiente punto ─────────────────
+  useEffect(() => {
+    if (phase !== "transition") return;
+    const h = setTimeout(() => {
+      setPointIdx(p => p + 1);
+      setPhase("point");
+    }, TRANSITION_MS);
+    return () => clearTimeout(h);
+  }, [phase]);
+
+  // ── Fase "computing": regresión + validación del modelo ──────────────────
+  useEffect(() => {
+    if (phase !== "computing") return;
+
+    const model = gazeTracker.finalizeTraining();
+    if (!model) {
+      setErrorMsg("Calibración inválida — datos insuficientes. Repite el proceso.");
+      setPhase("error");
+      return;
+    }
+
+    const H = window.innerHeight;
+    const W = window.innerWidth;
+    const valid =
+      model.betaX  < 0 &&
+      model.betaY  < 0 &&
+      model.alphaY > 0  &&
+      model.alphaY < H  &&
+      (model.betaX / W) < 0;   // sensitivityX < 0
+
+    if (!valid) {
+      console.warn("[VozUCI] Modelo inválido:", model);
+      gazeTracker.clearCalibration();
+      setErrorMsg("Calibración inválida — repite el proceso manteniendo la mirada fija en cada punto");
+      setPhase("error");
+      return;
+    }
+
+    console.log(
+      "%c[VozUCI] Calibración 9 puntos ✓",
+      "color:#7DD3A8;font-weight:900;font-size:13px",
+      `αX=${model.alphaX.toFixed(1)} βX=${model.betaX.toFixed(1)}`,
+      `αY=${model.alphaY.toFixed(1)} βY=${model.betaY.toFixed(1)}`,
+    );
+    setPhase("success");
+  }, [phase]);
+
+  // ── Fase "success": activar tracking y cerrar ────────────────────────────
   useEffect(() => {
     if (phase !== "success") return;
-    const t = setTimeout(() => {
+    const h = setTimeout(() => {
       finishCalibration();
       gazeTracker.startDetection();
-    }, SUCCESS_SHOW_MS);
-    return () => clearTimeout(t);
+    }, SUCCESS_MS);
+    return () => clearTimeout(h);
   }, [phase, finishCalibration]);
 
+  // ── Cancelar ─────────────────────────────────────────────────────────────
   const handleCancel = useCallback(() => {
     clearAll();
     deactivate();
     gazeTracker.stopCamera();
   }, [clearAll, deactivate]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Comenzar secuencia (desde checking) ──────────────────────────────────
+  const handleStart = useCallback(() => {
+    clearAll();
+    setPointIdx(0);
+    setShowInstruction(true);
+    setPhase("point");
+  }, [clearAll]);
+
+  // ── Reintentar tras error ─────────────────────────────────────────────────
+  const handleRetry = useCallback(() => {
+    clearAll();
+    gazeTracker.clearCalibration();
+    setPointIdx(0);
+    setErrorMsg("");
+    setShowInstruction(true);
+    setPhase("checking");
+  }, [clearAll]);
+
+  // ── Coordenadas del punto actual en pantalla ──────────────────────────────
+  const pt     = POINTS[Math.min(pointIdx, POINTS.length - 1)];
+  const dotX   = pt.fx * window.innerWidth;
+  const dotY   = pt.fy * window.innerHeight;
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const resOk  = Math.abs(W - 360) <= 20 && Math.abs(H - 764) <= 50;
+  const canStart = faceStatus.detected && faceStatus.bothEyesOpen;
+
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         background: "#000000",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
         fontFamily: "'Lexend', sans-serif",
-        userSelect: "none",
-        overflow: "hidden",
+        userSelect: "none", overflow: "hidden",
       }}
     >
       <style>{`
-        @keyframes heartbeat {
-          0%,100% { transform: scale(1);     opacity: 1; }
-          14%      { transform: scale(1.18);  opacity: 0.95; }
-          28%      { transform: scale(1);     opacity: 1; }
-          42%      { transform: scale(1.10);  opacity: 0.95; }
-          70%      { transform: scale(1);     opacity: 1; }
-        }
-        @keyframes popIn {
-          0%   { transform: scale(0.4); opacity: 0; }
+        @keyframes cs-pop {
+          0%   { transform: scale(0.5); opacity: 0; }
           70%  { transform: scale(1.08); opacity: 1; }
           100% { transform: scale(1);   opacity: 1; }
         }
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes cs-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes cs-slide { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:none } }
       `}</style>
 
-      {/* Botón cancelar (esquina superior derecha) */}
+      {/* ── Botón Cancelar ──────────────────────────────────────────────── */}
       <button
         onClick={handleCancel}
         data-testid="button-cancel-calibration"
         style={{
-          position: "absolute", top: 20, right: 20,
+          position: "absolute", top: 18, right: 18, zIndex: 10,
           background: "rgba(255,255,255,0.07)",
           border: "1px solid rgba(255,255,255,0.14)",
           borderRadius: 10, color: "rgba(255,255,255,0.45)",
-          padding: "8px 14px", cursor: "pointer",
+          padding: "7px 14px", cursor: "pointer",
           fontSize: "0.75rem", fontWeight: 700,
           display: "flex", alignItems: "center", gap: 6,
         }}
@@ -192,110 +336,210 @@ export function CalibrationScreen() {
         <X size={13} /> Cancelar
       </button>
 
-      {/* ── Estado: SINCRONIZANDO ─────────────────────────────────────────── */}
-      {phase === "syncing" && (
-        <>
-          {/* Texto superior */}
-          <p style={{
-            position: "absolute", top: "18%", left: 0, right: 0,
-            textAlign: "center",
-            fontSize: "clamp(1rem,3.5vw,1.35rem)",
-            fontWeight: 600,
-            color: "rgba(255,255,255,0.55)",
-            letterSpacing: ".04em",
-            animation: "fadeSlideUp .5s ease both",
-          }}>
-            Sincronización Rápida
-          </p>
-
-          {/* Instrucción */}
-          <p style={{
-            position: "absolute", top: "calc(18% + 3rem)", left: 0, right: 0,
-            textAlign: "center",
-            fontSize: "clamp(.8rem,2.5vw,1rem)",
-            color: "rgba(255,255,255,0.28)",
-            animation: "fadeSlideUp .6s ease .1s both",
-          }}>
-            Mira el círculo verde
-          </p>
-
-          {/* Círculo central con anillo de progreso */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {/* Anillo SVG */}
-            <SyncRing progress={progress} />
-
-            {/* Halo exterior */}
-            <div style={{
-              position: "absolute",
-              width: 110, height: 110,
-              borderRadius: "50%",
-              background: "radial-gradient(circle, rgba(125,211,168,0.15) 0%, transparent 70%)",
-            }} />
-
-            {/* Círculo interior con latido */}
-            <div style={{
-              width:  60, height: 60,
-              borderRadius: "50%",
-              background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 55%, #4db88a 100%)",
-              boxShadow: "0 0 32px rgba(125,211,168,0.55), 0 0 8px rgba(125,211,168,0.3)",
-              animation: "heartbeat 1.1s ease-in-out infinite",
-              position: "relative", zIndex: 2,
-            }} />
+      {/* ══════════════════════════════════════════════════════════════════
+          FASE "checking" — validación previa al inicio
+      ══════════════════════════════════════════════════════════════════ */}
+      {phase === "checking" && (
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 28, padding: "0 32px",
+          animation: "cs-fade .4s ease both",
+        }}>
+          {/* Título */}
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontSize: "clamp(1.1rem,4vw,1.5rem)", fontWeight: 900, color: "#fff", margin: 0 }}>
+              Calibración de mirada
+            </p>
+            <p style={{ fontSize: ".8rem", color: "rgba(255,255,255,0.35)", margin: "6px 0 0" }}>
+              9 puntos · ~63 segundos
+            </p>
           </div>
 
-          {/* Contador de muestras (debug discreto) */}
-          {samples > 0 && (
+          {/* Checks */}
+          <div style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: "20px 24px",
+            display: "flex", flexDirection: "column", gap: 16, width: "100%", maxWidth: 320,
+          }}>
+            <CheckRow ok={faceStatus.detected} label="Rostro detectado" />
+            <CheckRow
+              ok={faceStatus.detected ? faceStatus.bothEyesOpen : null}
+              label="Ambos ojos visibles"
+            />
+            <CheckRow
+              ok={resOk}
+              label={`Pantalla ${W}×${H} px${!resOk ? " (recomendado 360×764)" : ""}`}
+            />
+          </div>
+
+          {/* Instrucción */}
+          <p style={{ fontSize: ".78rem", color: "rgba(255,255,255,0.3)", textAlign: "center", maxWidth: 280, lineHeight: 1.6, margin: 0 }}>
+            Colócate frente a la cámara con el rostro bien iluminado y mira directamente al centro de la pantalla.
+          </p>
+
+          {/* Botón Comenzar */}
+          <button
+            onClick={handleStart}
+            disabled={!canStart}
+            data-testid="button-start-calibration"
+            style={{
+              padding: "13px 36px", borderRadius: 14, border: "none",
+              fontFamily: "'Lexend',sans-serif", fontWeight: 900,
+              fontSize: ".95rem", letterSpacing: ".04em", cursor: canStart ? "pointer" : "not-allowed",
+              background: canStart
+                ? "linear-gradient(135deg, #7DD3A8 0%, #4db88a 100%)"
+                : "rgba(255,255,255,0.08)",
+              color: canStart ? "#0A2018" : "rgba(255,255,255,0.25)",
+              boxShadow: canStart ? "0 0 24px rgba(125,211,168,0.5)" : "none",
+              transition: "all 0.3s",
+            }}
+          >
+            {faceStatus.detected ? "Comenzar calibración" : "Esperando cámara…"}
+          </button>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          FASES "point" / "transition" — secuencia de puntos
+      ══════════════════════════════════════════════════════════════════ */}
+      {(phase === "point" || phase === "transition") && (
+        <>
+          {/* Instrucción superior (desaparece cuando activa el primer punto) */}
+          {showInstruction && (
             <p style={{
-              position: "absolute", bottom: "22%",
-              fontSize: ".68rem", color: "rgba(125,211,168,0.35)",
-              letterSpacing: ".08em",
+              position: "absolute", top: "10%", left: 0, right: 0,
+              textAlign: "center",
+              fontSize: "clamp(.85rem,3vw,1.1rem)",
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.65)",
+              letterSpacing: ".02em",
+              lineHeight: 1.5,
+              padding: "0 24px",
+              animation: "cs-slide .5s ease both",
             }}>
-              {samples} muestras
+              Mira el punto blanco y mantén<br />la mirada fija hasta que desaparezca
             </p>
+          )}
+
+          {/* Contador de puntos (discreto, esquina inferior) */}
+          <p style={{
+            position: "absolute", bottom: "6%", left: 0, right: 0,
+            textAlign: "center",
+            fontSize: ".68rem", color: "rgba(255,255,255,0.2)",
+            letterSpacing: ".1em", fontWeight: 700,
+          }}>
+            {pointIdx + 1} / {POINTS.length}
+          </p>
+
+          {/* Punto posicionado absolutamente en sus coordenadas */}
+          {phase === "point" && (
+            <div style={{
+              position: "absolute",
+              left: dotX, top: dotY,
+              transform: "translate(-50%, -50%)",
+              animation: "cs-pop .22s cubic-bezier(.34,1.56,.64,1) both",
+            }}>
+              <PointDot warmup={warmup} progress={ringProgress} />
+            </div>
           )}
         </>
       )}
 
-      {/* ── Estado: LISTO ────────────────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════
+          FASE "computing" — calculando modelo
+      ══════════════════════════════════════════════════════════════════ */}
+      {phase === "computing" && (
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 16,
+          animation: "cs-fade .3s ease both",
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: "50%",
+            border: "4px solid rgba(125,211,168,0.3)",
+            borderTopColor: "#7DD3A8",
+            animation: "spin 0.8s linear infinite",
+          }} />
+          <p style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)", margin: 0 }}>
+            Calculando modelo…
+          </p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          FASE "success" — calibración exitosa
+      ══════════════════════════════════════════════════════════════════ */}
       {phase === "success" && (
         <div style={{
+          position: "absolute", inset: 0,
           display: "flex", flexDirection: "column",
-          alignItems: "center", gap: 20,
-          animation: "popIn .45s cubic-bezier(.34,1.56,.64,1) both",
+          alignItems: "center", justifyContent: "center", gap: 20,
+          animation: "cs-pop .45s cubic-bezier(.34,1.56,.64,1) both",
         }}>
-          {/* Círculo con check */}
           <div style={{
-            width: 96, height: 96, borderRadius: "50%",
+            width: 88, height: 88, borderRadius: "50%",
             background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 60%, #4db88a 100%)",
             boxShadow: "0 0 48px rgba(125,211,168,0.7)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <svg width={46} height={46} viewBox="0 0 46 46" fill="none">
-              <polyline
-                points="9,24 19,34 37,13"
-                stroke="#fff" strokeWidth={4.5}
-                strokeLinecap="round" strokeLinejoin="round"
-              />
+            <svg width={42} height={42} viewBox="0 0 42 42" fill="none">
+              <polyline points="7,22 17,32 35,11" stroke="#fff" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-
-          <p style={{
-            fontSize: "clamp(1.1rem,3vw,1.5rem)",
-            fontWeight: 800,
-            color: "#7DD3A8",
-            letterSpacing: ".04em",
-            textAlign: "center",
-          }}>
-            ¡Listo!
+          <p style={{ fontSize: "clamp(1.1rem,3vw,1.5rem)", fontWeight: 900, color: "#7DD3A8", letterSpacing: ".04em" }}>
+            ¡Calibración completada!
           </p>
-
-          <p style={{
-            fontSize: ".85rem",
-            color: "rgba(255,255,255,0.4)",
-            textAlign: "center",
-          }}>
+          <p style={{ fontSize: ".82rem", color: "rgba(255,255,255,0.35)" }}>
             Activando seguimiento de mirada…
           </p>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          FASE "error" — modelo inválido
+      ══════════════════════════════════════════════════════════════════ */}
+      {phase === "error" && (
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 24, padding: "0 32px",
+          animation: "cs-fade .3s ease both",
+        }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: "50%",
+            background: "rgba(248,113,113,0.15)",
+            border: "3px solid #f87171",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg width={32} height={32} viewBox="0 0 32 32" fill="none">
+              <line x1="8" y1="8" x2="24" y2="24" stroke="#f87171" strokeWidth={3.5} strokeLinecap="round" />
+              <line x1="24" y1="8" x2="8" y2="24" stroke="#f87171" strokeWidth={3.5} strokeLinecap="round" />
+            </svg>
+          </div>
+          <p style={{
+            fontSize: ".85rem", color: "rgba(255,255,255,0.6)",
+            textAlign: "center", lineHeight: 1.7, margin: 0, maxWidth: 300,
+          }}>
+            {errorMsg}
+          </p>
+          <button
+            onClick={handleRetry}
+            data-testid="button-retry-calibration"
+            style={{
+              padding: "12px 32px", borderRadius: 12, border: "2px solid #f87171",
+              background: "rgba(248,113,113,0.1)", color: "#f87171",
+              fontFamily: "'Lexend',sans-serif", fontWeight: 800, fontSize: ".88rem",
+              cursor: "pointer",
+            }}
+          >
+            Repetir calibración
+          </button>
         </div>
       )}
     </div>

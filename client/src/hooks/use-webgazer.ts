@@ -502,6 +502,19 @@ class GazeTracker {
     };
   }
 
+  // ── Estado en vivo del rostro detectado ──────────────────────────────────
+  // Usado por CalibrationScreen para la validación previa al inicio.
+  getFaceStatus(): { detected: boolean; bothEyesOpen: boolean; noseX: number } {
+    const res = this.currentResults;
+    if (!res) return { detected: false, bothEyesOpen: false, noseX: 0.5 };
+    const find = (n: string) => res.categories.find(s => s.categoryName === n)?.score ?? 0;
+    return {
+      detected:     true,
+      bothEyesOpen: find('eyeBlinkLeft') < 0.3 && find('eyeBlinkRight') < 0.3,
+      noseX:        res.landmarks[1]?.x ?? 0.5,
+    };
+  }
+
   // Imprime el estado actual en consola (útil para calibración maestra)
   logDebugInfo(label = 'GazeTracker debug') {
     const info = this.getDebugInfo();
