@@ -8,24 +8,31 @@ const COLLECT_MS   = 50;
 const WARMUP_MS    = 500;
 const R_RING       = 52;
 const CIRCUMF      = 2 * Math.PI * R_RING;
-const ROUNDS       = 6;  // 5 posiciones × 6 vueltas = 30 muestras totales
+const ROUNDS       = 4;  // 9 posiciones × 4 vueltas = 36 muestras totales
 
-// ── Posiciones (fracción de pantalla) ────────────────────────────────────────
+// Márgenes iguales a los de la CalibrationScreen (40 px sobre 360×764)
+const MH = 40 / 360;
+const MV = 40 / 764;
+
+// ── 9 Posiciones (fracción de pantalla) — mismo orden que CalibrationScreen ──
 const POSITIONS = [
-  { key: "tl", label: "Arriba-Izquierda", fx: 0.12, fy: 0.12 },
-  { key: "tr", label: "Arriba-Derecha",   fx: 0.88, fy: 0.12 },
-  { key: "cx", label: "Centro",           fx: 0.50, fy: 0.50 },
-  { key: "bl", label: "Abajo-Izquierda",  fx: 0.12, fy: 0.88 },
-  { key: "br", label: "Abajo-Derecha",    fx: 0.88, fy: 0.88 },
+  { key: "cx", label: "Centro",            fx: 0.5,    fy: 0.5    },
+  { key: "tc", label: "Arriba-Centro",     fx: 0.5,    fy: MV     },
+  { key: "bc", label: "Abajo-Centro",      fx: 0.5,    fy: 1 - MV },
+  { key: "lc", label: "Izquierda-Centro",  fx: MH,     fy: 0.5    },
+  { key: "rc", label: "Derecha-Centro",    fx: 1 - MH, fy: 0.5    },
+  { key: "tl", label: "Arriba-Izquierda",  fx: MH,     fy: MV     },
+  { key: "tr", label: "Arriba-Derecha",    fx: 1 - MH, fy: MV     },
+  { key: "bl", label: "Abajo-Izquierda",   fx: MH,     fy: 1 - MV },
+  { key: "br", label: "Abajo-Derecha",     fx: 1 - MH, fy: 1 - MV },
 ] as const;
 
-const TOTAL_STEPS = POSITIONS.length * ROUNDS; // 30
+const TOTAL_STEPS = POSITIONS.length * ROUNDS; // 36
 
-// Schedule: Round 1 all positions, then Round 2 all positions
+// Schedule: Round 1 all positions, then Round 2 all positions, etc.
 const SCHEDULE = Array.from({ length: ROUNDS }, (_, r) =>
   POSITIONS.map((_, p) => ({ posIdx: p, round: r }))
 ).flat();
-// = [{posIdx:0,round:0},{posIdx:1,round:0},...,{posIdx:4,round:1}]
 
 type Phase = "idle" | "syncing" | "captured" | "done";
 
@@ -52,36 +59,40 @@ function SyncRing({ progress, r = R_RING }: { progress: number; r?: number }) {
   );
 }
 
-// ── Mini mapa de 5 posiciones ────────────────────────────────────────────────
+// ── Mini mapa de 9 posiciones (cuadrícula 3×3) ───────────────────────────────
+// Índices POSITIONS: 0=C, 1=T, 2=B, 3=L, 4=R, 5=TL, 6=TR, 7=BL, 8=BR
 function PositionMap({ done, current }: { done: number[]; current: number }) {
-  // done = array of posIdx que ya están guardados (en cualquier vuelta completa)
-  const positions = [
-    { posIdx: 0, gridCol: 1, gridRow: 1 },   // TL
-    { posIdx: 1, gridCol: 3, gridRow: 1 },   // TR
-    { posIdx: 2, gridCol: 2, gridRow: 2 },   // C
-    { posIdx: 3, gridCol: 1, gridRow: 3 },   // BL
-    { posIdx: 4, gridCol: 3, gridRow: 3 },   // BR
+  const cells = [
+    { posIdx: 5, gridCol: 1, gridRow: 1 },  // TL
+    { posIdx: 1, gridCol: 2, gridRow: 1 },  // T
+    { posIdx: 6, gridCol: 3, gridRow: 1 },  // TR
+    { posIdx: 3, gridCol: 1, gridRow: 2 },  // L
+    { posIdx: 0, gridCol: 2, gridRow: 2 },  // C
+    { posIdx: 4, gridCol: 3, gridRow: 2 },  // R
+    { posIdx: 7, gridCol: 1, gridRow: 3 },  // BL
+    { posIdx: 2, gridCol: 2, gridRow: 3 },  // B
+    { posIdx: 8, gridCol: 3, gridRow: 3 },  // BR
   ];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,22px)", gridTemplateRows: "repeat(3,22px)", gap: 4 }}>
-      {positions.map(({ posIdx, gridCol, gridRow }) => {
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,16px)", gridTemplateRows: "repeat(3,16px)", gap: 3 }}>
+      {cells.map(({ posIdx, gridCol, gridRow }) => {
         const doneCount = done.filter(d => d === posIdx).length;
         const isCurrent = posIdx === current;
         return (
           <div key={posIdx} style={{
             gridColumn: gridCol, gridRow,
-            width: 22, height: 22, borderRadius: "50%",
+            width: 16, height: 16, borderRadius: "50%",
             background: isCurrent
               ? "#7DD3A8"
-              : doneCount >= ROUNDS ? "rgba(125,211,168,0.55)"
-              : doneCount === 1     ? "rgba(125,211,168,0.25)"
+              : doneCount >= ROUNDS ? "rgba(125,211,168,0.6)"
+              : doneCount > 0       ? `rgba(125,211,168,${0.1 + doneCount * 0.1})`
               : "rgba(255,255,255,0.07)",
-            border: `2px solid ${isCurrent ? "#7DD3A8" : doneCount > 0 ? "rgba(125,211,168,0.5)" : "rgba(255,255,255,0.15)"}`,
-            boxShadow: isCurrent ? "0 0 10px rgba(125,211,168,0.7)" : "none",
+            border: `1.5px solid ${isCurrent ? "#7DD3A8" : doneCount > 0 ? "rgba(125,211,168,0.5)" : "rgba(255,255,255,0.12)"}`,
+            boxShadow: isCurrent ? "0 0 8px rgba(125,211,168,0.7)" : "none",
             transition: "all 0.25s",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "9px", fontWeight: 800,
-            color: isCurrent ? "#0A2018" : doneCount > 0 ? "#7DD3A8" : "rgba(255,255,255,0.2)",
+            fontSize: "7px", fontWeight: 900,
+            color: isCurrent ? "#0A2018" : doneCount > 0 ? "#7DD3A8" : "rgba(255,255,255,0.15)",
           }}>
             {doneCount > 0 && !isCurrent ? doneCount : ""}
           </div>
@@ -217,6 +228,8 @@ export function MasterTrainingOverlay({ onClose }: Props) {
       _instruccion: "Copia este bloque y pégalo en gazeProfiles.ts para grabarlo de fábrica",
       profile:      gazeTracker.currentProfile.id,
       generatedAt:  new Date().toISOString(),
+      positions:    9,
+      rounds:       ROUNDS,
       totalPoints:  TOTAL_STEPS,
       screen:       { widthPx: W, heightPx: H, pixelRatio: window.devicePixelRatio },
       model: {
@@ -338,7 +351,7 @@ export function MasterTrainingOverlay({ onClose }: Props) {
             })}
           </div>
           <p style={{ margin: 0, fontSize: ".72rem", color: "rgba(255,255,255,0.3)", letterSpacing: ".06em" }}>
-            {POSITIONS.length} puntos × {ROUNDS} vueltas = {TOTAL_STEPS} muestras
+            9 puntos × {ROUNDS} vueltas = {TOTAL_STEPS} muestras
           </p>
         </div>
       )}
@@ -357,7 +370,7 @@ export function MasterTrainingOverlay({ onClose }: Props) {
           }}>
             {phase === "idle" && step === 0 && (
               <p style={{ fontSize: ".85rem", color: "rgba(255,255,255,0.4)", textAlign: "center", lineHeight: 1.7, maxWidth: 320, margin: 0 }}>
-                El círculo verde aparecerá en <strong style={{ color: "rgba(255,255,255,0.7)" }}>5 posiciones</strong> distintas, {ROUNDS} veces cada una.<br />
+                El círculo verde aparecerá en <strong style={{ color: "rgba(255,255,255,0.7)" }}>9 posiciones</strong> distintas, {ROUNDS} veces cada una.<br />
                 Mantén la mirada fija en él durante 3 segundos.
               </p>
             )}
@@ -424,7 +437,7 @@ export function MasterTrainingOverlay({ onClose }: Props) {
             animation: "fadeMT .4s ease both",
           }}>
             <p style={{ fontSize: ".9rem", color: "rgba(255,255,255,0.55)", textAlign: "center", lineHeight: 1.7, margin: 0 }}>
-              ¡{TOTAL_STEPS} muestras completadas en {POSITIONS.length} posiciones!<br />
+              ¡{TOTAL_STEPS} muestras completadas en 9 posiciones!<br />
               La regresión usará todos los puntos para calcular el modelo exacto.
             </p>
             <button className="mt-btn" onClick={handleGenerate} style={{
