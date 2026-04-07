@@ -221,7 +221,20 @@ export function MasterTrainingOverlay({ onClose }: Props) {
   // ── Generar ADN Final ─────────────────────────────────────────────────────
   const handleGenerate = useCallback(() => {
     const result = gazeTracker.finalizeTraining();
-    if (!result) return;
+    if (!result) {
+      // Puede ser por < 30 muestras O por datos degenerados (varianza≈0).
+      // En ambos casos mostramos un error accionable en vez de un JSON silenciosamente roto.
+      setFinalJson(JSON.stringify({
+        ERROR: 'No se pudo generar un modelo válido.',
+        CAUSAS_POSIBLES: [
+          'Los blendshapes de MediaPipe no están devolviendo datos de mirada (eyeLookOutLeft, eyeLookInLeft, eyeLookUpLeft, eyeLookDownLeft).',
+          'Los ojos no se movieron lo suficiente entre posiciones — el modelo de regresión necesita varianza en la señal ocular.',
+          'Menos de 30 muestras brutas capturadas.',
+        ],
+        ACCION: 'Abre la consola del navegador y busca [finalizeTraining] para ver las métricas de varianza.',
+      }, null, 2));
+      return;
+    }
     const W = window.innerWidth;
     const H = window.innerHeight;
     const json = JSON.stringify({

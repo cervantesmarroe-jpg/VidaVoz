@@ -675,11 +675,43 @@ class GazeTracker {
   }
 
   // ── Entrenamiento multi-punto: corre regresión sobre todos los puntos ─────
-  // Llamar cuando el usuario ha completado todas las rondas (5 posiciones × 6).
-  // Devuelve el modelo calculado o null si hay < 30 puntos brutos.
+  // Llamar cuando el usuario ha completado todas las rondas (9 posiciones × 4).
+  // Devuelve el modelo calculado o null si hay < 30 puntos brutos o si los
+  // datos son degenerados (varianza de eyeX o eyeY ≈ 0).
   finalizeTraining(): (RegressionModel & { sensitivityX: number; sensitivityY: number }) | null {
-    if (this.trainingData.length < 30) return null;
-    const model = calculateRegression(this.trainingData);
+    const raw = this.trainingData;
+    if (raw.length < 30) {
+      console.warn(`[finalizeTraining] Datos insuficientes: ${raw.length} < 30`);
+      return null;
+    }
+
+    // ── Diagnóstico de varianza ──────────────────────────────────────────────
+    const n        = raw.length;
+    const meanEyeX = raw.reduce((s, d) => s + d.eyeX, 0) / n;
+    const meanEyeY = raw.reduce((s, d) => s + d.eyeY, 0) / n;
+    const varX     = raw.reduce((s, d) => s + (d.eyeX - meanEyeX) ** 2, 0) / n;
+    const varY     = raw.reduce((s, d) => s + (d.eyeY - meanEyeY) ** 2, 0) / n;
+    console.groupCollapsed('%c[finalizeTraining] Diagnóstico de varianza', 'color:#7DD3A8;font-weight:700');
+    console.log(`n=${n}  meanEyeX=${meanEyeX.toFixed(4)}  meanEyeY=${meanEyeY.toFixed(4)}`);
+    console.log(`varEyeX=${varX.toFixed(6)}  varEyeY=${varY.toFixed(6)}`);
+    console.groupEnd();
+
+    // Si la varianza es casi nula el modelo sería betaX≈0, alphaX≈mean(screenX)
+    // — completamente inútil. Devolvemos null para forzar reintento.
+    if (varX < 1e-6 || varY < 1e-6) {
+      console.error(
+        '[finalizeTraining] Datos degenerados: varianza nula en eyeX o eyeY.\n' +
+        '  Causas probables: blendshapes MediaPipe desactivados, cara inmóvil\n' +
+        '  o dispositivo sin cámara frontal operativa.',
+        { varX, varY, n }
+      );
+      this.trainingData   = [];
+      this.continuousData = [];
+      return null;
+    }
+    // ── FIN diagnóstico ──────────────────────────────────────────────────────
+
+    const model = calculateRegression(raw);
     this.regressionModel = model;
     this.isCalibrated    = true;
     this.trainingData    = [];
