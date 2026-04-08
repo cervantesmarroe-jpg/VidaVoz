@@ -1,12 +1,12 @@
 {
-  "name": "VozUCI — Comunicación Asistiva",
-  "short_name": "VozUCI",
-  "description": "Aplicación de comunicación asistiva para pacientes de UCI",
+  "name": "VidaVoz — Comunicación Asistiva UCI",
+  "short_name": "VidaVoz",
+  "description": "Aplicación de comunicación asistiva para pacientes de UCI mediante seguimiento ocular",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "any",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#FFFFFF",
+  "theme_color": "#4ade80",
   "lang": "es",
   "categories": ["health", "medical"],
   "icons": [
@@ -25,7 +25,8 @@
     {
       "src": "/favicon.png",
       "type": "image/png",
-      "sizes": "any"
+      "sizes": "64x64",
+      "purpose": "any"
     }
   ]
 }

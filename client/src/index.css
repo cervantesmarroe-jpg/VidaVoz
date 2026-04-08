@@ -312,3 +312,11 @@ input[type=range].gaze-slider::-moz-range-thumb {
     min-height: 0;
   }
 }
+
+/* ── Splash Screen: barra de progreso ─────────────────────────────────────── */
+@keyframes splash-progress {
+  0%   { width: 0%; }
+  60%  { width: 80%; }
+  85%  { width: 92%; }
+  100% { width: 100%; }
+}

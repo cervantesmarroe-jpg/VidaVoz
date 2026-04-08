@@ -5,11 +5,13 @@ import {
   AlertTriangle, MessageSquareText, ActivitySquare, Keyboard as KeyboardIcon,
 } from "lucide-react";
 
+import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
+import { SplashScreen } from "@/components/SplashScreen";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -147,6 +149,13 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     startCalibration, activateFromProfile, deactivate,
   } = useWebGazer();
 
+  // ── Splash Screen: visible 2,5 s al arrancar mientras los modelos cargan ─
+  const [showSplash, setShowSplash] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 2500);
+    return () => clearTimeout(t);
+  }, []);
+
   // ── Entrenamiento Maestro (10 muestras) ──────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
@@ -177,6 +186,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
 
+      {/* Splash Screen — se muestra 2,5 s al iniciar la app */}
+      <SplashScreen visible={showSplash} />
+
       {/* Pantalla de calibración — bloqueada permanentemente una vez hecho el sync inicial */}
       {isCalibrating && !hasCompletedInitialSync && <CalibrationScreen />}
 
@@ -204,53 +216,72 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingLeft: "16px",
-          paddingRight: "16px",
+          paddingLeft: "12px",
+          paddingRight: "12px",
           flexShrink: 0,
           zIndex: 50,
+          gap: 8,
         }}
       >
-        {/* Activar/desactivar mirada */}
-        <button
-          data-testid="button-toggle-eyetracking"
-          onClick={handleGazeToggle}
+        {/* ── Logo VidaVoz — izquierda ──────────────────────────────── */}
+        <img
+          src={logoPath}
+          alt="VidaVoz"
+          draggable={false}
           style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "6px 16px", borderRadius: 12,
-            fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.82rem",
-            cursor: "pointer", border: "1.5px solid",
-            transition: "all 0.2s",
-            ...(isActive
-              ? { background: "#D5F5E3", color: "#145A30", borderColor: "#A8E6C8", boxShadow: "0 0 10px rgba(20,150,70,0.15)" }
-              : isCalibrating
-              ? { background: "#FCF3CF", color: "#6B4C00", borderColor: "#F0DC80" }
-              : { background: "#F5F5F5", color: "#555555", borderColor: "#E0E0E0" }
-            ),
+            height: "36px",
+            width: "auto",
+            objectFit: "contain",
+            flexShrink: 0,
+            userSelect: "none",
+            WebkitUserSelect: "none" as const,
           }}
-        >
-          {isActive || isCalibrating
-            ? <Eye style={{ width: 15, height: 15, flexShrink: 0 }} />
-            : <EyeOff style={{ width: 15, height: 15, flexShrink: 0 }} />}
-          <span>{isActive ? "Mirada activa" : isCalibrating ? "Calibrando…" : "Activar mirada"}</span>
-        </button>
+        />
 
-        {/* Entrenamiento Maestro — botón temporal (calibración de fábrica) */}
-        <button
-          data-testid="button-master-training"
-          onClick={() => setShowTraining(true)}
-          title="Abrir sistema de entrenamiento maestro (10 muestras)"
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "5px 12px", borderRadius: 10,
-            fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.72rem",
-            cursor: "pointer", border: "1.5px solid",
-            transition: "all 0.2s",
-            background: "#F0F4FF", color: "#4455AA", borderColor: "#C8D4F8",
-          }}
-        >
-          <ClipboardCopy style={{ width: 13, height: 13 }} />
-          <span>Calibrar ADN</span>
-        </button>
+        {/* ── Botones de control — derecha ─────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+          {/* Activar/desactivar mirada */}
+          <button
+            data-testid="button-toggle-eyetracking"
+            onClick={handleGazeToggle}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "5px 12px", borderRadius: 12,
+              fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.78rem",
+              cursor: "pointer", border: "1.5px solid",
+              transition: "all 0.2s",
+              ...(isActive
+                ? { background: "#D5F5E3", color: "#145A30", borderColor: "#A8E6C8", boxShadow: "0 0 10px rgba(20,150,70,0.15)" }
+                : isCalibrating
+                ? { background: "#FCF3CF", color: "#6B4C00", borderColor: "#F0DC80" }
+                : { background: "#F5F5F5", color: "#555555", borderColor: "#E0E0E0" }
+              ),
+            }}
+          >
+            {isActive || isCalibrating
+              ? <Eye style={{ width: 14, height: 14, flexShrink: 0 }} />
+              : <EyeOff style={{ width: 14, height: 14, flexShrink: 0 }} />}
+            <span>{isActive ? "Mirada activa" : isCalibrating ? "Calibrando…" : "Activar mirada"}</span>
+          </button>
+
+          {/* Entrenamiento Maestro */}
+          <button
+            data-testid="button-master-training"
+            onClick={() => setShowTraining(true)}
+            title="Abrir sistema de entrenamiento maestro (10 muestras)"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "5px 10px", borderRadius: 10,
+              fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.7rem",
+              cursor: "pointer", border: "1.5px solid",
+              transition: "all 0.2s",
+              background: "#F0F4FF", color: "#4455AA", borderColor: "#C8D4F8",
+            }}
+          >
+            <ClipboardCopy style={{ width: 12, height: 12 }} />
+            <span>Calibrar ADN</span>
+          </button>
+        </div>
       </header>
 
       {/* ── Cuerpo: nav + contenido (layout adapta a orientación) ──── */}
