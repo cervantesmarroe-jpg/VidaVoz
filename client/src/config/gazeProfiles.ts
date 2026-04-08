@@ -11,8 +11,10 @@
 //   Tablet   40 cm — pantalla grande, necesita menos amplificación angular
 //   Móvil    25 cm — pantalla pequeña, el ojo cubre menos píxeles por grado
 //
-// Estos valores son la "fábrica" del dispositivo. El QuickSync de 3 s ajusta
-// el offset individual (alpha) sin tocar la pendiente (beta) del perfil.
+// Estos valores son el "ADN de fábrica" del dispositivo. Al pulsar "Activar Mirada"
+// la cámara arranca directamente con estos coeficientes, sin ninguna calibración visual.
+// El auto-ajuste continuo (nudge 8% por toque/blink) corrige el offset individual
+// del paciente en segundo plano mientras usa la app.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ProfileId = 'tablet' | 'mobile';

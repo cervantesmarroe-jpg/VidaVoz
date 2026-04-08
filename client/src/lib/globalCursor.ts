@@ -120,6 +120,22 @@ export function isTouchLocked(): boolean {
   return performance.now() < _touchLockUntil;
 }
 
+// ── Callback de auto-ajuste por toque ────────────────────────────────────────
+// Cuando el paciente toca un botón de mirada, se notifica al tracker para que
+// pueda reajustar suavemente el modelo en segundo plano (ver nudgeAlphaFromTouch).
+let _onGazeTargetTouch: ((cx: number, cy: number) => void) | null = null;
+
+/**
+ * Registra una función que se llama cuando el dedo toca un elemento
+ * con atributo [data-gaze-target="true"] o clase .gaze-target.
+ * Pasar null para desregistrar.
+ */
+export function setGazeTargetTouchCallback(
+  fn: ((cx: number, cy: number) => void) | null,
+) {
+  _onGazeTargetTouch = fn;
+}
+
 // ── Listeners permanentes (nunca se eliminan) ─────────────────────────────────
 
 // RATÓN: solo cuando el gaze NO tiene prioridad
@@ -132,12 +148,24 @@ window.addEventListener('mousemove', (e: MouseEvent) => {
 // 1. Mueve el cursor al dedo.
 // 2. Congela el gaze 500 ms para que el cursor no salte.
 // 3. Pulsa visual del cursor para feedback inmediato.
+// 4. Notifica al tracker si el toque cae sobre un botón de mirada (auto-ajuste).
 window.addEventListener('touchstart', (e: TouchEvent) => {
   const t = e.touches[0];
   if (!t) return;
   moveGlobalCursor(t.clientX, t.clientY);
   _touchLockUntil = performance.now() + TOUCH_LOCK_MS;
   flashGlobalCursor();
+
+  // Auto-ajuste: si hay un botón de mirada bajo el dedo, notificar al tracker
+  if (_onGazeTargetTouch) {
+    const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
+    const gazeEl = el?.closest<HTMLElement>('[data-gaze-target="true"]')
+                ?? el?.closest<HTMLElement>('.gaze-target');
+    if (gazeEl) {
+      const r = gazeEl.getBoundingClientRect();
+      _onGazeTargetTouch(r.left + r.width / 2, r.top + r.height / 2);
+    }
+  }
 }, { passive: true });
 
 // TOUCHMOVE: actualiza posición durante arrastre

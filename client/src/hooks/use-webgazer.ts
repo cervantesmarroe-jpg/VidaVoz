@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess, isTouchLocked } from '@/lib/globalCursor';
+import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess, isTouchLocked, setGazeTargetTouchCallback } from '@/lib/globalCursor';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
@@ -17,7 +17,7 @@ const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora invol
 const BLINK_MAX_MS    = 500;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
-const SNAP_RADIUS_PX  = 50;    // imán: si el cursor está a <50 px de un botón, salta al centro
+const SNAP_RADIUS_PX  = 58;    // imán: si el cursor está a <58 px de un botón, salta al centro (+15% área)
 const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-temblor)
 
 // ── One-Euro: parámetros clínicos (máximo suavizado en reposo) ────────────────
@@ -642,6 +642,30 @@ class GazeTracker {
     }
   }
 
+  // ── Auto-ajuste por toque: nudge suave del offset alfa ───────────────────
+  // Cuando el paciente toca un botón con el dedo, esa posición es la que quería
+  // seleccionar. Si el modelo maestro tiene un offset (alpha) ligeramente errado
+  // para este paciente/posición, cada toque lo corrige un 8% hacia el valor real.
+  // Los beta (pendientes) no se tocan — vienen del ADN de fábrica y son precisos.
+  nudgeAlphaFromTouch(screenX: number, screenY: number) {
+    if (!this.regressionModel || !this.currentResults) return;
+
+    const shapes    = this.currentResults.categories;
+    const landmarks = this.currentResults.landmarks;
+    const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+
+    const headRotX = landmarks[1].x - landmarks[4].x;
+    const eyeX = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
+    const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
+
+    const predictedX = this.regressionModel.alphaX + this.regressionModel.betaX * eyeX;
+    const predictedY = this.regressionModel.alphaY + this.regressionModel.betaY * eyeY;
+
+    const NUDGE = 0.08; // 8% del error por toque — acumulativo y suave
+    this.regressionModel.alphaX += NUDGE * (screenX - predictedX);
+    this.regressionModel.alphaY += NUDGE * (screenY - predictedY);
+  }
+
   // Métodos legacy (UsaCalibrationOverlay los llama)
   computeCalibration() {
     if (this.trainingData.length >= 4) {
@@ -935,12 +959,19 @@ export function useWebGazer() {
     gazeTracker.addGazeListener(onGaze);
     gazeTracker.addBlinkListener(onBlink);
 
+    // ── Auto-ajuste por toque: mientras la mirada está activa, cada vez que
+    // el paciente toca un botón de mirada, aplicamos un nudge alpha suave. ──
+    setGazeTargetTouchCallback((cx, cy) => {
+      gazeTracker.nudgeAlphaFromTouch(cx, cy);
+    });
+
     return () => {
       setGazePriority(false);
       // Limpiar glow pendiente al desmontar
       setAimGlow(targetEl, false);
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);
+      setGazeTargetTouchCallback(null);
     };
   }, [isActive]);
 

@@ -8,18 +8,9 @@ import {
 import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useScanning } from "@/context/ScanningContext";
-import { useWebGazer, useWebGazerStore, gazeTracker } from "@/hooks/use-webgazer";
+import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
-
-// ── Parámetros QuickSync (mismo que el antiguo ProfileSelect) ─────────────────
-const QS_DWELL_MS   = 3000;
-const QS_WARMUP_MS  = 400;
-const QS_COLLECT_MS = 50;
-const QS_SUCCESS_MS = 1200;
-
-const QS_R_RING = 52;
-const QS_CIRCUMF = 2 * Math.PI * QS_R_RING;
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -30,33 +21,6 @@ function useIsPortrait() {
     (cb) => { mq?.addEventListener("change", cb); return () => mq?.removeEventListener("change", cb); },
     () => mq?.matches ?? true,
     () => true,
-  );
-}
-
-// ── Anillo SVG de progreso (QuickSync) ────────────────────────────────────────
-function QSSyncRing({ progress }: { progress: number }) {
-  const offset = QS_CIRCUMF * (1 - Math.min(progress, 1));
-  const sz     = (QS_R_RING + 14) * 2;
-  return (
-    <svg
-      width={sz} height={sz}
-      style={{
-        position: "absolute",
-        top: "50%", left: "50%",
-        transform: "translate(-50%,-50%) rotate(-90deg)",
-        pointerEvents: "none",
-      }}
-    >
-      <circle cx={sz / 2} cy={sz / 2} r={QS_R_RING}
-        fill="none" stroke="rgba(125,211,168,0.2)" strokeWidth={8} />
-      <circle cx={sz / 2} cy={sz / 2} r={QS_R_RING}
-        fill="none" stroke="#7DD3A8" strokeWidth={8}
-        strokeLinecap="round"
-        strokeDasharray={QS_CIRCUMF}
-        strokeDashoffset={offset}
-        style={{ transition: "stroke-dashoffset 0.06s linear" }}
-      />
-    </svg>
   );
 }
 
@@ -163,9 +127,6 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
   );
 }
 
-// ── Overlay QuickSync inline (se muestra al pulsar "Activar Mirada") ───────────
-type QSSyncPhase = null | "loading" | "sync" | "success" | "error";
-
 // ── Layout principal ──────────────────────────────────────────────────────────
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -173,23 +134,13 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const { accepted, accept } = useConsent();
   const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
   const {
-    isActive, isCalibrating, hasCompletedInitialSync,
+    isActive, isCalibrating,
     activateFromProfile, deactivate,
   } = useWebGazer();
 
-  // ── Estado del QuickSync inline ───────────────────────────────────────────
-  const [syncPhase,    setSyncPhase]    = useState<QSSyncPhase>(null);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [syncError,    setSyncError]    = useState("");
-  const syncTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const syncIvsRef    = useRef<ReturnType<typeof setInterval>[]>([]);
-
-  const clearSyncTimers = useCallback(() => {
-    syncTimersRef.current.forEach(clearTimeout);
-    syncIvsRef.current.forEach(clearInterval);
-    syncTimersRef.current = [];
-    syncIvsRef.current    = [];
-  }, []);
+  // ── Estado de activación ──────────────────────────────────────────────────
+  // "loading" = cargando modelo ML y/o cámara por primera vez / tras parar
+  const [loading, setLoading] = useState(false);
 
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
@@ -204,92 +155,63 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
   const handleDecline = () => { accept(); activateScanning(); };
 
-  // ── "Activar Mirada" ──────────────────────────────────────────────────────
-  //  • Si ya está activo/calibrando → desactivar
-  //  • Si ya completó el QuickSync   → reactivar directamente (cámara arranca sola en Efecto D)
-  //  • Primera vez               → mostrar overlay QuickSync de 3 s
+  // ── "Activar / Desactivar Mirada" ─────────────────────────────────────────
+  //
+  //  • Perfil Maestro: loadProfile() ya cargó alpha/beta de fábrica al elegir
+  //    dispositivo → no hay QuickSync ni calibración visual.
+  //  • Primera activación (o tras parar cámara): init modelo + startCamera → active.
+  //    El modelo MediaPipe se descarga una sola vez y persiste en memoria.
+  //  • Segunda activación (modelo+cámara ya listos): solo startCamera si hace
+  //    falta → Efecto D arranca detección de inmediato.
+  //
   const handleGazeToggle = useCallback(async () => {
+    // Desactivar si ya está activa / calibrando
     if (isActive || isCalibrating) {
       deactivate();
       return;
     }
-    if (hasCompletedInitialSync) {
-      // Segunda activación: Efecto D reinicia cámara y detección automáticamente
+
+    // Si modelo Y cámara ya están listos, activar sin espera
+    if (gazeTracker.hasFaceModel && gazeTracker.hasCamera) {
       activateFromProfile();
       return;
     }
-    // Primera vez: QuickSync
-    setSyncError("");
-    setSyncPhase("loading");
+
+    // Necesitamos inicializar (primera vez o tras parar cámara)
+    setLoading(true);
     try {
       if (!gazeTracker.hasFaceModel) await gazeTracker.init();
-      await gazeTracker.startCamera();
-      gazeTracker.startDetection();
-      gazeTracker.clearCalibration();
-      setSyncPhase("sync");
-    } catch (err) {
-      console.error("[VidaVoz] Error iniciando cámara:", err);
-      setSyncError("No se pudo acceder a la cámara. Comprueba los permisos.");
-      setSyncPhase("error");
-    }
-  }, [isActive, isCalibrating, hasCompletedInitialSync, activateFromProfile, deactivate]);
-
-  // ── Fase "sync": recoge 3 s de muestras en el centro ─────────────────────
-  useEffect(() => {
-    if (syncPhase !== "sync") return;
-    setSyncProgress(0);
-    const cx = window.innerWidth  / 2;
-    const cy = window.innerHeight / 2;
-    const t0 = Date.now();
-    let collecting = false;
-
-    const warmupT = setTimeout(() => { collecting = true; }, QS_WARMUP_MS);
-    syncTimersRef.current.push(warmupT);
-
-    const collectorIv = setInterval(() => {
-      if (!collecting) return;
-      gazeTracker.recordCalibrationPoint(cx, cy);
-    }, QS_COLLECT_MS);
-    syncIvsRef.current.push(collectorIv);
-
-    const progressIv = setInterval(() => {
-      setSyncProgress(Math.min((Date.now() - t0) / QS_DWELL_MS, 1));
-    }, 40);
-    syncIvsRef.current.push(progressIv);
-
-    const doneT = setTimeout(() => {
-      clearSyncTimers();
-      gazeTracker.quickCenterCalibrate();
-      setSyncPhase("success");
-    }, QS_DWELL_MS);
-    syncTimersRef.current.push(doneT);
-
-    return clearSyncTimers;
-  }, [syncPhase, clearSyncTimers]);
-
-  // ── Fase "success": confirmar sync y activar gaze ─────────────────────────
-  useEffect(() => {
-    if (syncPhase !== "success") return;
-    const t = setTimeout(() => {
-      setSyncPhase(null);
-      useWebGazerStore.getState().setSyncCompleted();
+      if (!gazeTracker.hasCamera)    await gazeTracker.startCamera();
       activateFromProfile();
-    }, QS_SUCCESS_MS);
-    return () => clearTimeout(t);
-  }, [syncPhase, activateFromProfile]);
+    } catch (err) {
+      console.error('[VidaVoz] Error iniciando cámara/modelo:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [isActive, isCalibrating, deactivate, activateFromProfile]);
 
-  // ── Cancelar QuickSync ────────────────────────────────────────────────────
-  const handleCancelSync = useCallback(() => {
-    clearSyncTimers();
-    setSyncPhase(null);
-    deactivate();
-    gazeTracker.stopCamera();
-  }, [clearSyncTimers, deactivate]);
+  // ── Estilo del botón según estado ─────────────────────────────────────────
+  const btnStyle: React.CSSProperties = (() => {
+    if (isActive)
+      return { background: "#D5F5E3", color: "#145A30", borderColor: "#A8E6C8",
+               boxShadow: "0 0 10px rgba(20,150,70,0.15)" };
+    if (isCalibrating || loading)
+      return { background: "#FCF3CF", color: "#6B4C00", borderColor: "#F0DC80" };
+    return { background: "#F5F5F5", color: "#555555", borderColor: "#E0E0E0" };
+  })();
+
+  const btnLabel = isActive
+    ? "Mirada activa"
+    : isCalibrating
+    ? "Calibrando…"
+    : loading
+    ? "Iniciando…"
+    : "Activar mirada";
 
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
 
-      {/* Calibración 9 puntos (solo si se invoca startCalibration desde otro lugar) */}
+      {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
       {isCalibrating && <CalibrationScreen />}
 
       {/* Consent modal */}
@@ -328,42 +250,39 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           <button
             data-testid="button-toggle-eyetracking"
             onClick={handleGazeToggle}
+            disabled={loading}
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "5px 12px", borderRadius: 12,
               fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.78rem",
-              cursor: "pointer", border: "1.5px solid", transition: "all 0.2s",
-              ...(isActive
-                ? { background: "#D5F5E3", color: "#145A30", borderColor: "#A8E6C8", boxShadow: "0 0 10px rgba(20,150,70,0.15)" }
-                : isCalibrating || syncPhase !== null
-                ? { background: "#FCF3CF", color: "#6B4C00", borderColor: "#F0DC80" }
-                : { background: "#F5F5F5", color: "#555555", borderColor: "#E0E0E0" }
-              ),
+              cursor: loading ? "wait" : "pointer",
+              border: "1.5px solid", transition: "all 0.2s",
+              ...btnStyle,
             }}
           >
-            {isActive || isCalibrating || syncPhase !== null
-              ? <Eye style={{ width: 14, height: 14, flexShrink: 0 }} />
-              : <EyeOff style={{ width: 14, height: 14, flexShrink: 0 }} />}
-            <span>
-              {isActive
-                ? "Mirada activa"
-                : isCalibrating
-                ? "Calibrando…"
-                : syncPhase === "loading"
-                ? "Iniciando…"
-                : syncPhase === "sync"
-                ? "Sincronizando…"
-                : syncPhase === "success"
-                ? "¡Listo!"
-                : "Activar mirada"}
-            </span>
+            {/* Spinner cuando carga, icono de ojo en otro caso */}
+            {loading ? (
+              <span style={{
+                display: "inline-block", width: 12, height: 12,
+                border: "2px solid rgba(107,76,0,0.3)",
+                borderTop: "2px solid #6B4C00",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+                flexShrink: 0,
+              }} />
+            ) : isActive || isCalibrating ? (
+              <Eye style={{ width: 14, height: 14, flexShrink: 0 }} />
+            ) : (
+              <EyeOff style={{ width: 14, height: 14, flexShrink: 0 }} />
+            )}
+            <span>{btnLabel}</span>
           </button>
 
           {/* Calibrar ADN */}
           <button
             data-testid="button-master-training"
             onClick={() => setShowTraining(true)}
-            title="Abrir sistema de entrenamiento maestro (10 muestras)"
+            title="Abrir sistema de entrenamiento maestro"
             style={{
               display: "flex", alignItems: "center", gap: 5,
               padding: "5px 10px", borderRadius: 10,
@@ -419,174 +338,8 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {/* ── Overlay Entrenamiento Maestro ─────────────────────────────── */}
       {showTraining && <MasterTrainingOverlay onClose={() => setShowTraining(false)} />}
 
-      {/* ── Overlay QuickSync (Just-in-Time, al pulsar "Activar Mirada") ─ */}
-      {syncPhase !== null && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 9998,
-          background: "#000000",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          fontFamily: "'Lexend', sans-serif",
-          userSelect: "none",
-        }}>
-          <style>{`
-            @keyframes qs-heartbeat {
-              0%,100% { transform: scale(1); }
-              14%      { transform: scale(1.22); }
-              28%      { transform: scale(1); }
-              42%      { transform: scale(1.12); }
-              70%      { transform: scale(1); }
-            }
-            @keyframes qs-pop {
-              0%   { transform: scale(0.4); opacity: 0; }
-              70%  { transform: scale(1.08); opacity: 1; }
-              100% { transform: scale(1); opacity: 1; }
-            }
-            @keyframes qs-fade { from { opacity: 0 } to { opacity: 1 } }
-          `}</style>
-
-          {/* Botón Cancelar */}
-          {syncPhase !== "success" && (
-            <button
-              onClick={handleCancelSync}
-              style={{
-                position: "absolute", top: 18, right: 18,
-                background: "rgba(255,255,255,0.07)",
-                border: "1px solid rgba(255,255,255,0.14)",
-                borderRadius: 10, color: "rgba(255,255,255,0.45)",
-                padding: "7px 14px", cursor: "pointer",
-                fontSize: "0.75rem", fontWeight: 700,
-              }}
-            >
-              Cancelar
-            </button>
-          )}
-
-          {/* ── Loading: iniciando cámara ────────────────────────────── */}
-          {syncPhase === "loading" && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, animation: "qs-fade .3s ease both" }}>
-              <div style={{
-                width: 52, height: 52, borderRadius: "50%",
-                border: "4px solid rgba(125,211,168,0.2)",
-                borderTop: "4px solid #7DD3A8",
-                animation: "spin 0.9s linear infinite",
-              }} />
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-              <p style={{ fontSize: ".95rem", color: "rgba(255,255,255,0.5)", margin: 0, fontWeight: 600 }}>
-                Iniciando cámara…
-              </p>
-              <p style={{ fontSize: ".75rem", color: "rgba(255,255,255,0.25)", margin: 0 }}>
-                Acepta los permisos si el sistema lo solicita
-              </p>
-            </div>
-          )}
-
-          {/* ── Sync: punto verde pulsátil 3 s ──────────────────────── */}
-          {syncPhase === "sync" && (
-            <>
-              <p style={{
-                position: "absolute", top: "15%",
-                left: 0, right: 0, textAlign: "center",
-                fontSize: "clamp(1rem,3.5vw,1.3rem)",
-                fontWeight: 700, color: "rgba(255,255,255,0.75)",
-                animation: "qs-fade .4s ease both",
-              }}>
-                Sincronización Rápida
-              </p>
-              <p style={{
-                position: "absolute", top: "calc(15% + 2.4rem)",
-                left: 0, right: 0, textAlign: "center",
-                fontSize: "clamp(.78rem,2.4vw,.95rem)",
-                color: "rgba(255,255,255,0.35)",
-                animation: "qs-fade .5s ease .08s both",
-              }}>
-                Mira el círculo verde sin mover la cabeza
-              </p>
-
-              {/* Punto + anillo */}
-              <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <QSSyncRing progress={syncProgress} />
-                <div style={{
-                  position: "absolute",
-                  width: 120, height: 120, borderRadius: "50%",
-                  background: "radial-gradient(circle, rgba(125,211,168,0.1) 0%, transparent 70%)",
-                }} />
-                <div style={{
-                  width: 56, height: 56, borderRadius: "50%",
-                  background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 55%, #4db88a 100%)",
-                  boxShadow: "0 0 36px rgba(125,211,168,0.55), 0 0 8px rgba(125,211,168,0.3)",
-                  animation: "qs-heartbeat 1.1s ease-in-out infinite",
-                  position: "relative", zIndex: 2,
-                }} />
-              </div>
-            </>
-          )}
-
-          {/* ── Error: no se pudo acceder a la cámara ───────────────── */}
-          {syncPhase === "error" && (
-            <div style={{
-              display: "flex", flexDirection: "column",
-              alignItems: "center", gap: 20, padding: "0 32px",
-              animation: "qs-fade .3s ease both",
-            }}>
-              <div style={{
-                width: 72, height: 72, borderRadius: "50%",
-                background: "rgba(248,113,113,0.15)",
-                border: "3px solid #f87171",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <svg width={32} height={32} viewBox="0 0 32 32" fill="none">
-                  <line x1="8" y1="8" x2="24" y2="24" stroke="#f87171" strokeWidth={3} strokeLinecap="round" />
-                  <line x1="24" y1="8" x2="8" y2="24" stroke="#f87171" strokeWidth={3} strokeLinecap="round" />
-                </svg>
-              </div>
-              <p style={{ fontSize: "clamp(.9rem,3vw,1.1rem)", fontWeight: 800, color: "#f87171", margin: 0, textAlign: "center" }}>
-                Error de cámara
-              </p>
-              <p style={{ fontSize: ".78rem", color: "rgba(255,255,255,0.35)", margin: 0, textAlign: "center", maxWidth: 280, lineHeight: 1.6 }}>
-                {syncError}
-              </p>
-              <button
-                onClick={handleCancelSync}
-                style={{
-                  padding: "10px 28px", borderRadius: 12, border: "none",
-                  background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)",
-                  fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: ".88rem",
-                  cursor: "pointer",
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
-          )}
-
-          {/* ── Success: ¡Listo! ─────────────────────────────────────── */}
-          {syncPhase === "success" && (
-            <div style={{
-              display: "flex", flexDirection: "column",
-              alignItems: "center", gap: 20,
-              animation: "qs-pop .45s cubic-bezier(.34,1.56,.64,1) both",
-            }}>
-              <div style={{
-                width: 88, height: 88, borderRadius: "50%",
-                background: "radial-gradient(circle at 38% 38%, #a8e8c8 0%, #7DD3A8 60%, #4db88a 100%)",
-                boxShadow: "0 0 40px rgba(125,211,168,0.6)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <svg width={42} height={42} viewBox="0 0 42 42" fill="none">
-                  <polyline points="7,22 17,32 35,11" stroke="#fff" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p style={{ fontSize: "clamp(1.1rem,3vw,1.45rem)", fontWeight: 900, color: "#7DD3A8", margin: 0 }}>
-                ¡Mirada activada!
-              </p>
-              <p style={{ fontSize: ".82rem", color: "rgba(255,255,255,0.35)", margin: 0 }}>
-                El cursor de mirada ya está activo
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Keyframes para el spinner del botón */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
