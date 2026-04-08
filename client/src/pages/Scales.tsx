@@ -1,16 +1,16 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, ReactNode } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
 import { RotateCcw } from "lucide-react";
 
-const DWELL_MS = 2500;
+const DWELL_MS        = 2500;
+const ACCORDION_DWELL = 1400; // ms para abrir/cerrar un panel del acordeón
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATOS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Gradiente fisionómico pastel: #DDF5E0 (mint) → #F2D7D5 (coral)
 const BORG_BLOCKS = [
   { value: 0,  label: "Nada",      face: "😌", bg: "#DDF5E0" },
   { value: 1,  label: "Muy leve",  face: "😊", bg: "#DFF2DF" },
@@ -25,7 +25,6 @@ const BORG_BLOCKS = [
   { value: 10, label: "Máximo",    face: "😱", bg: "#F2D7D5" },
 ] as const;
 
-// Gradiente fisionómico pastel: #DDF5E0 (mint) → #F2D7D5 (coral)
 const ANXIETY_LEVELS = [
   { label: "Tranquilo",   face: "😌", bg: "#DDF5E0", tts: "Estoy tranquilo." },
   { label: "Inquieto",    face: "🙂", bg: "#E2EEDD", tts: "Me siento inquieto." },
@@ -35,7 +34,7 @@ const ANXIETY_LEVELS = [
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOOK: dwell con progreso RAF (0→1, llama onLock al completar)
+// HOOK: dwell con progreso RAF
 // ─────────────────────────────────────────────────────────────────────────────
 function useDwellWithProgress<T>(
   activeValue: T | null,
@@ -80,12 +79,160 @@ function useDwellWithProgress<T>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ACORDEÓN: header dwell target + contenido colapsable
+// Contenido siempre montado (display:none cuando cerrado) para preservar estado.
+// ─────────────────────────────────────────────────────────────────────────────
+function AccordionPanel({
+  title, isOpen, lockedBadge, onToggle, children,
+}: {
+  title: string;
+  isOpen: boolean;
+  lockedBadge?: string | null;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const rafRef      = useRef<number | null>(null);
+  const startRef    = useRef(0);
+  const [dwellPct, setDwellPct] = useState(0);
+  const onToggleRef = useRef(onToggle);
+  onToggleRef.current = onToggle;
+
+  const cancelDwell = useCallback(() => {
+    if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    setDwellPct(0);
+  }, []);
+
+  const startDwell = useCallback(() => {
+    if (rafRef.current !== null) return;
+    startRef.current = Date.now();
+    const tick = () => {
+      const pct = Math.min(1, (Date.now() - startRef.current) / ACCORDION_DWELL);
+      setDwellPct(pct);
+      if (pct < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+        setDwellPct(0);
+        onToggleRef.current();
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  useEffect(() => () => cancelDwell(), [cancelDwell]);
+
+  return (
+    <div style={{
+      flex: isOpen ? "5 1 0" : "0 0 58px",
+      display: "flex",
+      flexDirection: "column",
+      borderRadius: 14,
+      overflow: "hidden",
+      border: isOpen ? "2px solid #D4CAB8" : "1.5px solid #E0D8CB",
+      background: "#FFFFFF",
+      minHeight: 58,
+      boxShadow: isOpen
+        ? "0 2px 12px rgba(0,0,0,0.09)"
+        : "0 1px 4px rgba(0,0,0,0.05)",
+      transition: "border-color .2s, box-shadow .2s",
+    }}>
+
+      {/* ── Header: siempre visible, es el dwell target ─────────────────── */}
+      <div
+        className="gaze-target"
+        data-gaze-target="true"
+        onPointerEnter={startDwell}
+        onPointerLeave={cancelDwell}
+        onClick={() => onToggleRef.current()}
+        style={{
+          height: 58,
+          flexShrink: 0,
+          padding: "0 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          background: isOpen ? "#FDF2E2" : "#FFFFFF",
+          cursor: "pointer",
+          position: "relative",
+          overflow: "hidden",
+          userSelect: "none",
+          touchAction: "none",
+          transition: "background .2s",
+        }}
+      >
+        {/* Título */}
+        <span style={{
+          fontFamily: "'Lexend',sans-serif",
+          fontWeight: 900,
+          fontSize: "clamp(.78rem,2vw,1rem)",
+          color: "#333333",
+          letterSpacing: ".14em",
+          textTransform: "uppercase",
+          flexShrink: 0,
+        }}>
+          {title}
+        </span>
+
+        {/* Valor bloqueado (badge dorado) */}
+        {lockedBadge && (
+          <span style={{
+            background: "rgba(251,191,36,.25)",
+            color: "#6B4500",
+            fontSize: ".72rem",
+            fontWeight: 800,
+            padding: "2px 10px",
+            borderRadius: 20,
+            fontFamily: "'Lexend',sans-serif",
+            whiteSpace: "nowrap",
+          }}>
+            ✓ {lockedBadge}
+          </span>
+        )}
+
+        {/* Indicador abierto/cerrado */}
+        <span style={{
+          fontSize: "1.1rem",
+          color: "#AAAAAA",
+          marginLeft: "auto",
+          flexShrink: 0,
+          lineHeight: 1,
+          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+          transition: "transform .22s",
+        }}>▾</span>
+
+        {/* Barra de progreso dwell */}
+        {dwellPct > 0 && (
+          <div style={{
+            position: "absolute", bottom: 0, left: 0,
+            height: 3,
+            width: `${dwellPct * 100}%`,
+            background: "#fbbf24",
+            borderRadius: "0 2px 0 0",
+          }} />
+        )}
+      </div>
+
+      {/* ── Contenido: siempre montado, oculto con display:none cuando cerrado */}
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        padding: "8px",
+        display: isOpen ? "flex" : "none",
+        flexDirection: "column",
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ESCALA 1 — EVA (Dolor): gradiente continuo 0-10
 // ─────────────────────────────────────────────────────────────────────────────
 function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
   const { speak }   = useTTS();
   const stripRef    = useRef<HTMLDivElement>(null);
-  // innerRef tracks only the numbers row, excluding padding and emojis
   const innerRef    = useRef<HTMLDivElement>(null);
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
@@ -98,17 +245,13 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
   const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
 
-  // Track pointer over the INNER numbers container so the hit-zones
-  // align exactly with the circles regardless of padding or emoji width.
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const rect = innerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const x   = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    // 11 values (0-10): divide width into 11 equal buckets
     const val = Math.min(10, Math.floor(x / rect.width * 11));
     setHover(val);
   }, []);
-  // Cancel on pointer leave of the OUTER strip
   const onPointerLeave = useCallback(() => setHover(null), []);
 
   const active   = hover ?? locked;
@@ -130,7 +273,6 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         boxSizing: "border-box", transition: "border-color .2s, box-shadow .2s",
       }}
     >
-      {/* Etiqueta + emojis extremos */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexShrink: 0,
@@ -152,7 +294,6 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         <span style={{ fontSize: "clamp(1rem,3vw,1.5rem)", lineHeight: 1 }}>😭</span>
       </div>
 
-      {/* Números 0-10: ref propio para tracking correcto */}
       <div
         ref={innerRef}
         onPointerMove={onPointerMove}
@@ -168,7 +309,6 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
           const isSel    = hover === n;
           const isThisLk = isLocked && locked === n;
           const dimmed   = isLocked && locked !== n;
-          // Responsive sizes: clamp(min, vw-relative, max)
           const szStr    = isThisLk
             ? "clamp(22px, 6.5vw, 42px)"
             : isSel
@@ -217,7 +357,7 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ESCALA 2 — BORG (Respiración): 11 bloques discretos coloreados
+// ESCALA 2 — BORG (Respiración)
 // ─────────────────────────────────────────────────────────────────────────────
 function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
   const { speak }  = useTTS();
@@ -260,7 +400,6 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         transition: "border-color .2s, box-shadow .2s",
       }}
     >
-      {/* Etiqueta */}
       <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
         RESPIRACIÓN (BORG)
         {isLocked && (
@@ -270,13 +409,11 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         )}
       </div>
 
-      {/* Bloques — sin gap, hitbox completo */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 2, borderRadius: 10, overflow: "hidden" }}>
         {BORG_BLOCKS.map((block, i) => {
           const isHov    = hover === i;
           const isThisLk = isLocked && locked === i;
           const dimmed   = isLocked && locked !== i;
-          // Conic-gradient fill overlay driven by progress
           const fillDeg  = isHov && !isThisLk ? progress * 360 : 0;
 
           return (
@@ -295,7 +432,6 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
               boxSizing: "border-box",
               overflow: "hidden",
             }}>
-              {/* Conic fill overlay (dwell progress) */}
               {isHov && !isThisLk && fillDeg > 0 && (
                 <div style={{
                   position: "absolute", inset: 0,
@@ -304,8 +440,6 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                   borderRadius: "inherit",
                 }} />
               )}
-
-              {/* Número */}
               <span style={{
                 fontFamily: "'Lexend',sans-serif", fontWeight: 900,
                 fontSize: isHov || isThisLk ? "clamp(1rem,3vw,1.4rem)" : "clamp(.85rem,2.4vw,1.1rem)",
@@ -314,15 +448,11 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 textShadow: "0 1px 3px rgba(255,255,255,.5)",
                 position: "relative", zIndex: 3,
               }}>{block.value}</span>
-
-              {/* Cara */}
               <span style={{
                 fontSize: isHov || isThisLk ? "clamp(1.1rem,3.2vw,1.5rem)" : "clamp(.9rem,2.5vw,1.2rem)",
                 lineHeight: 1, transition: "font-size .18s",
                 position: "relative", zIndex: 3,
               }}>{block.face}</span>
-
-              {/* Etiqueta semántica — siempre legible */}
               <span style={{
                 fontFamily: "'Lexend',sans-serif", fontWeight: 700,
                 fontSize: "clamp(.44rem,1.1vw,.62rem)",
@@ -346,7 +476,7 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ESCALA 3 — ANSIEDAD: 5 niveles con nombre
+// ESCALA 3 — ANSIEDAD
 // ─────────────────────────────────────────────────────────────────────────────
 function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
   const { speak }  = useTTS();
@@ -389,7 +519,6 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         transition: "border-color .2s, box-shadow .2s",
       }}
     >
-      {/* Etiqueta */}
       <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
         ANSIEDAD
         {isLocked && (
@@ -399,7 +528,6 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         )}
       </div>
 
-      {/* 5 bloques */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 2, borderRadius: 10, overflow: "hidden" }}>
         {ANXIETY_LEVELS.map((level, i) => {
           const isHov    = hover === i;
@@ -423,7 +551,6 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
               boxSizing: "border-box",
               overflow: "hidden",
             }}>
-              {/* Conic fill overlay */}
               {isHov && !isThisLk && fillDeg > 0 && (
                 <div style={{
                   position: "absolute", inset: 0,
@@ -432,15 +559,11 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                   borderRadius: "inherit",
                 }} />
               )}
-
-              {/* Cara */}
               <span style={{
                 fontSize: isHov || isThisLk ? "clamp(1.4rem,4.5vw,2rem)" : "clamp(1.1rem,3.5vw,1.6rem)",
                 lineHeight: 1, transition: "font-size .18s",
                 position: "relative", zIndex: 3,
               }}>{level.face}</span>
-
-              {/* Nombre */}
               <span style={{
                 fontFamily: "'Lexend',sans-serif", fontWeight: 900,
                 fontSize: isHov || isThisLk ? "clamp(.72rem,2vw,.98rem)" : "clamp(.62rem,1.7vw,.84rem)",
@@ -543,8 +666,11 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
 // ─────────────────────────────────────────────────────────────────────────────
 // PÁGINA
 // ─────────────────────────────────────────────────────────────────────────────
+type ScaleKey = "eva" | "borg" | "anxiety";
+
 export default function Scales() {
   const [resetKey,      setResetKey]      = useState(0);
+  const [openScale,     setOpenScale]     = useState<ScaleKey | null>(null);
   const [evaLocked,     setEvaLocked]     = useState<number | null>(null);
   const [borgLocked,    setBorgLocked]    = useState<number | null>(null);
   const [anxietyLocked, setAnxietyLocked] = useState<number | null>(null);
@@ -554,17 +680,31 @@ export default function Scales() {
     setEvaLocked(null);
     setBorgLocked(null);
     setAnxietyLocked(null);
+    setOpenScale(null);
   }, []);
+
+  const toggle = useCallback((key: ScaleKey) =>
+    setOpenScale((prev) => (prev === key ? null : key)), []);
+
+  const toggleEva     = useCallback(() => toggle("eva"),     [toggle]);
+  const toggleBorg    = useCallback(() => toggle("borg"),    [toggle]);
+  const toggleAnxiety = useCallback(() => toggle("anxiety"), [toggle]);
+
+  const evaBadge     = evaLocked     !== null ? `${evaLocked}/10`                          : null;
+  const borgBadge    = borgLocked    !== null ? `${borgLocked} ${BORG_BLOCKS[borgLocked].label}` : null;
+  const anxietyBadge = anxietyLocked !== null ? ANXIETY_LEVELS[anxietyLocked].label          : null;
 
   return (
     <FullscreenLayout>
       <div style={{
         display: "flex", flexDirection: "column", height: "100%",
-        padding: "10px", gap: "10px", boxSizing: "border-box", background: "#FDF2E2",
+        padding: "10px", gap: "8px", boxSizing: "border-box", background: "#FDF2E2",
       }}>
+
         {/* Barra superior: reiniciar */}
         <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
           <button
+            className="gaze-target"
             data-gaze-target="true"
             data-testid="button-scale-reset"
             onClick={handleReset}
@@ -575,6 +715,7 @@ export default function Scales() {
               fontSize: ".7rem", letterSpacing: ".08em", textTransform: "uppercase",
               display: "flex", alignItems: "center", gap: 6,
               boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+              position: "relative", overflow: "hidden",
             }}
           >
             <RotateCcw style={{ width: 12, height: 12 }} />
@@ -582,11 +723,37 @@ export default function Scales() {
           </button>
         </div>
 
-        <EvaStrip     key={`eva-${resetKey}`}     onLocked={setEvaLocked}     />
-        <BorgStrip    key={`borg-${resetKey}`}     onLocked={setBorgLocked}    />
-        <AnxietyStrip key={`ansiedad-${resetKey}`} onLocked={setAnxietyLocked} />
+        {/* Acordeón — EVA */}
+        <AccordionPanel
+          title="Dolor (EVA)"
+          isOpen={openScale === "eva"}
+          lockedBadge={evaBadge}
+          onToggle={toggleEva}
+        >
+          <EvaStrip key={`eva-${resetKey}`} onLocked={setEvaLocked} />
+        </AccordionPanel>
 
-        {/* Recuento de puntuaciones — siempre visible */}
+        {/* Acordeón — BORG */}
+        <AccordionPanel
+          title="Respiración (BORG)"
+          isOpen={openScale === "borg"}
+          lockedBadge={borgBadge}
+          onToggle={toggleBorg}
+        >
+          <BorgStrip key={`borg-${resetKey}`} onLocked={setBorgLocked} />
+        </AccordionPanel>
+
+        {/* Acordeón — ANSIEDAD */}
+        <AccordionPanel
+          title="Ansiedad"
+          isOpen={openScale === "anxiety"}
+          lockedBadge={anxietyBadge}
+          onToggle={toggleAnxiety}
+        >
+          <AnxietyStrip key={`ansiedad-${resetKey}`} onLocked={setAnxietyLocked} />
+        </AccordionPanel>
+
+        {/* Recuento de puntuaciones — siempre visible al fondo */}
         <ScoreSummary
           evaLocked={evaLocked}
           borgLocked={borgLocked}

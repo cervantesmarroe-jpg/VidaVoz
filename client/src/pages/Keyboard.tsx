@@ -2,17 +2,41 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { Volume2, Trash2, Delete, Space } from "lucide-react";
 
-const KEY_DWELL_MS    = 2000; // ms para fijar una letra
-const ACTION_DWELL_MS = 2000; // ms para HABLAR / BORRAR TODO
+const KEY_DWELL_MS    = 2000;
+const ACTION_DWELL_MS = 2000;
 
-const ROWS = [
+// Filas en landscape (3×9 — diseño original)
+const ROWS_LANDSCAPE = [
   ["A","B","C","D","E","F","G","H","I"],
   ["J","K","L","M","N","O","P","Q","R"],
   ["S","T","U","V","W","X","Y","Z","Ñ"],
 ];
 
+// Filas en portrait (4×7 — tipo teclado móvil)
+const ROWS_PORTRAIT = [
+  ["A","B","C","D","E","F","G"],
+  ["H","I","J","K","L","M","N"],
+  ["O","P","Q","R","S","T","U"],
+  ["V","W","X","Y","Z","Ñ"],
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Hook de dwell con RAF — emite un valor al completar
+// Hook: detecta orientación landscape
+// ─────────────────────────────────────────────────────────────────────────────
+function useIsLandscape() {
+  const [landscape, setLandscape] = useState(
+    () => typeof window !== "undefined" && window.innerWidth > window.innerHeight,
+  );
+  useEffect(() => {
+    const update = () => setLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return landscape;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook de dwell con RAF
 // ─────────────────────────────────────────────────────────────────────────────
 function useDwellProgress(
   activeKey: string | null,
@@ -49,11 +73,12 @@ interface KeyBtnProps {
   progress: number;
   wide?: boolean;
   icon?: React.ReactNode;
+  fontSize?: string;
   onEnter: () => void;
   onLeave: () => void;
 }
 
-function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLeave }: KeyBtnProps) {
+function KeyBtn({ label, isFocused, progress, wide = false, icon, fontSize = "clamp(.9rem,2.2vw,1.4rem)", onEnter, onLeave }: KeyBtnProps) {
   return (
     <div
       data-gaze-target="true"
@@ -79,7 +104,6 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
         boxShadow: isFocused ? "0 0 10px rgba(245,158,11,0.25)" : "0 1px 3px rgba(0,0,0,0.06)",
       }}
     >
-      {/* Letra / icono */}
       {icon ? (
         <span style={{ color: isFocused ? "#92400E" : "#555555", display: "flex" }}>
           {icon}
@@ -88,7 +112,7 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
         <span style={{
           fontFamily: "'Lexend',sans-serif",
           fontWeight: 800,
-          fontSize: "clamp(.9rem,2.2vw,1.4rem)",
+          fontSize,
           color: isFocused ? "#92400E" : "#333333",
           lineHeight: 1,
           transition: "color .12s",
@@ -97,7 +121,6 @@ function KeyBtn({ label, isFocused, progress, wide = false, icon, onEnter, onLea
         </span>
       )}
 
-      {/* Barra de progreso amarilla en la base */}
       {isFocused && progress > 0 && (
         <div style={{
           position: "absolute",
@@ -165,7 +188,6 @@ function ActionBtn({ label, icon, bg, textColor, isFocused, progress, onEnter, o
         {label}
       </span>
 
-      {/* Progreso dorado en la base */}
       {isFocused && progress > 0 && (
         <div style={{
           position: "absolute",
@@ -185,25 +207,29 @@ function ActionBtn({ label, icon, bg, textColor, isFocused, progress, onEnter, o
 // PÁGINA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Keyboard() {
+  const isLandscape = useIsLandscape();
+
+  const rows         = isLandscape ? ROWS_LANDSCAPE : ROWS_PORTRAIT;
+  const keyFontSize  = isLandscape
+    ? "clamp(.9rem,2.2vw,1.4rem)"   // 9 cols — teclas más estrechas
+    : "clamp(1.1rem,3.8vw,1.7rem)"; // 7 cols — teclas más anchas
+
   const [message, setMessage]       = useState("");
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | null>(null);
   const justActivatedRef = useRef<string | null>(null);
 
-  // ── Dwell teclas de letra ──────────────────────────────────────────────────
   const onKeyComplete = useCallback((key: string) => {
     justActivatedRef.current = key;
     setFocusedKey(null);
     if (key === "ESP") setMessage((m) => m + " ");
     else if (key === "⌫")  setMessage((m) => m.slice(0, -1));
     else                   setMessage((m) => m + key);
-    // Cooldown: tras 600ms permite re-dwell sobre la misma tecla
     setTimeout(() => { justActivatedRef.current = null; }, 600);
   }, []);
 
   const keyProgress = useDwellProgress(focusedKey, KEY_DWELL_MS, onKeyComplete);
 
-  // ── Dwell botones de acción ────────────────────────────────────────────────
   const onActionComplete = useCallback((act: string) => {
     setFocusedAct(null);
     if (act === "speak") {
@@ -220,7 +246,6 @@ export default function Keyboard() {
 
   const actionProgress = useDwellProgress(focusedAct, ACTION_DWELL_MS, onActionComplete);
 
-  // ── Handlers teclas ────────────────────────────────────────────────────────
   const handleKeyEnter = useCallback((key: string) => {
     if (justActivatedRef.current === key) return;
     setFocusedKey(key);
@@ -242,11 +267,11 @@ export default function Keyboard() {
         background: "#FAFAFA",
       }}>
 
-        {/* ── Visor de mensaje ──────────────────────────────────────────────── */}
+        {/* ── Visor de mensaje ────────────────────────────────────────────── */}
         <div style={{
           flexShrink: 0,
-          minHeight: 72,
-          maxHeight: 100,
+          minHeight: isLandscape ? 64 : 88,
+          maxHeight: isLandscape ? 88 : 120,
           background: "#FFFFFF",
           borderRadius: 14,
           border: "1.5px solid #E0E0E0",
@@ -260,7 +285,9 @@ export default function Keyboard() {
           <span style={{
             fontFamily: "'Lexend',sans-serif",
             fontWeight: 700,
-            fontSize: "clamp(1rem,3vw,1.8rem)",
+            fontSize: isLandscape
+              ? "clamp(1rem,3vw,1.8rem)"
+              : "clamp(1.15rem,4.5vw,2rem)",
             color: message ? "#333333" : "#BBBBBB",
             letterSpacing: ".02em",
             wordBreak: "break-all",
@@ -268,7 +295,6 @@ export default function Keyboard() {
           }}>
             {message || "El mensaje aparecerá aquí…"}
           </span>
-          {/* Cursor parpadeante */}
           {message && (
             <span style={{
               display: "inline-block",
@@ -282,20 +308,21 @@ export default function Keyboard() {
           )}
         </div>
 
-        {/* ── Teclado A-Z ──────────────────────────────────────────────────── */}
+        {/* ── Teclado ─────────────────────────────────────────────────────── */}
         <div style={{
           flex: 1,
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: isLandscape ? 5 : 7,
         }}>
-          {ROWS.map((row, ri) => (
-            <div key={ri} style={{ flex: 1, display: "flex", gap: 6, minHeight: 0 }}>
+          {rows.map((row, ri) => (
+            <div key={ri} style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
               {row.map((letter) => (
                 <KeyBtn
                   key={letter}
                   label={letter}
+                  fontSize={keyFontSize}
                   isFocused={focusedKey === letter}
                   progress={focusedKey === letter ? keyProgress : 0}
                   onEnter={() => handleKeyEnter(letter)}
@@ -305,12 +332,13 @@ export default function Keyboard() {
             </div>
           ))}
 
-          {/* Fila: Espacio + Borrar (carácter) */}
-          <div style={{ flex: 1, display: "flex", gap: 6, minHeight: 0 }}>
+          {/* Fila: Espacio + Borrar */}
+          <div style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
             <KeyBtn
               label="ESP"
               wide
-              icon={<Space size={20} />}
+              fontSize={keyFontSize}
+              icon={<Space size={isLandscape ? 20 : 24} />}
               isFocused={focusedKey === "ESP"}
               progress={focusedKey === "ESP" ? keyProgress : 0}
               onEnter={() => handleKeyEnter("ESP")}
@@ -318,7 +346,8 @@ export default function Keyboard() {
             />
             <KeyBtn
               label="⌫"
-              icon={<Delete size={20} />}
+              fontSize={keyFontSize}
+              icon={<Delete size={isLandscape ? 20 : 24} />}
               isFocused={focusedKey === "⌫"}
               progress={focusedKey === "⌫" ? keyProgress : 0}
               onEnter={() => handleKeyEnter("⌫")}
@@ -327,11 +356,16 @@ export default function Keyboard() {
           </div>
         </div>
 
-        {/* ── Botones de acción ─────────────────────────────────────────────── */}
-        <div style={{ flexShrink: 0, height: 72, display: "flex", gap: 8 }}>
+        {/* ── Botones de acción ──────────────────────────────────────────── */}
+        <div style={{
+          flexShrink: 0,
+          height: isLandscape ? 60 : 72,
+          display: "flex",
+          gap: 8,
+        }}>
           <ActionBtn
             label="Reproducir mensaje"
-            icon={<Volume2 size={24} />}
+            icon={<Volume2 size={isLandscape ? 20 : 24} />}
             bg="#DDF5E0"
             textColor="#1A5C2A"
             isFocused={focusedAct === "speak"}
@@ -342,7 +376,7 @@ export default function Keyboard() {
           />
           <ActionBtn
             label="Borrar todo"
-            icon={<Trash2 size={22} />}
+            icon={<Trash2 size={isLandscape ? 20 : 22} />}
             bg="#FEE2E2"
             textColor="#991B1B"
             isFocused={focusedAct === "clear"}
@@ -354,7 +388,6 @@ export default function Keyboard() {
         </div>
       </div>
 
-      {/* Animación del cursor */}
       <style>{`@keyframes blink { 50% { opacity: 0; } }`}</style>
     </FullscreenLayout>
   );
