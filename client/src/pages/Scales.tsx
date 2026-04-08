@@ -8,7 +8,7 @@ const DWELL_MS        = 2500;
 const ACCORDION_DWELL = 1400;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TIPOS Y DATOS
+// DATOS
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ScaleItem = {
@@ -73,15 +73,11 @@ function useDwellProgress(
 
   useEffect(() => {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-
-    if (activeIdx === null) {
-      setProgress(0); prevRef.current = null; firedRef.current = false; return;
-    }
+    if (activeIdx === null) { setProgress(0); prevRef.current = null; firedRef.current = false; return; }
     if (activeIdx !== prevRef.current) {
       prevRef.current = activeIdx; startRef.current = Date.now();
       firedRef.current = false; setProgress(0);
     }
-
     const captured = activeIdx;
     const tick = () => {
       const pct = Math.min(1, (Date.now() - startRef.current) / dwell);
@@ -101,22 +97,20 @@ function useDwellProgress(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTÓN INDIVIDUAL de escala
+// BOTÓN INDIVIDUAL — sin altura mínima fija, se adapta a la fila del grid
 // ─────────────────────────────────────────────────────────────────────────────
 interface ScaleBtnProps {
-  item:       ScaleItem;
-  testId:     string;
-  isHovered:  boolean;
-  isLocked:   boolean;
-  isDimmed:   boolean;
-  progress:   number;
-  onEnter:    () => void;
-  onSelect:   () => void;
+  item:      ScaleItem;
+  testId:    string;
+  isHovered: boolean;
+  isLocked:  boolean;
+  isDimmed:  boolean;
+  progress:  number;
+  onEnter:   () => void;
+  onSelect:  () => void;
 }
 
 function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnter, onSelect }: ScaleBtnProps) {
-  const fillW = isHovered && !isLocked ? `${progress * 100}%` : "0%";
-
   return (
     <div
       data-gaze-target="true"
@@ -124,69 +118,72 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
       onPointerEnter={onEnter}
       onClick={onSelect}
       style={{
-        width: "100%",
-        flexShrink: 0,
-        minHeight: 62,
+        /* el grid le asigna la altura exacta — nunca desborda */
+        minHeight: 0,
+        minWidth: 0,
         display: "flex",
         alignItems: "center",
-        padding: "10px 16px",
-        gap: 14,
+        padding: "0 10px",
+        gap: 8,
         boxSizing: "border-box",
         background: isLocked ? "#F0FDF4" : item.bg,
         border: isLocked
-          ? "2.5px solid #22C55E"
+          ? "2px solid #22C55E"
           : isHovered
           ? "2px solid #F59E0B"
-          : "1.5px solid rgba(0,0,0,0.08)",
-        borderRadius: 12,
-        opacity: isDimmed ? 0.35 : 1,
+          : "1px solid rgba(0,0,0,0.07)",
+        borderRadius: 10,
+        opacity: isDimmed ? 0.32 : 1,
         position: "relative",
         overflow: "hidden",
         cursor: "pointer",
         userSelect: "none",
         touchAction: "manipulation",
-        boxShadow: isLocked
-          ? "0 0 16px rgba(34,197,94,0.35)"
-          : isHovered
-          ? "0 2px 10px rgba(245,158,11,0.25)"
-          : "0 1px 3px rgba(0,0,0,0.06)",
-        transition: "border-color .12s, box-shadow .15s, opacity .2s, background .15s",
         WebkitTapHighlightColor: "transparent",
+        boxShadow: isLocked
+          ? "0 0 12px rgba(34,197,94,0.3)"
+          : isHovered
+          ? "0 1px 8px rgba(245,158,11,0.2)"
+          : "0 1px 2px rgba(0,0,0,0.05)",
+        transition: "border-color .12s, box-shadow .14s, opacity .18s, background .14s",
       }}
     >
-      {/* Barra de progreso dwell — se llena de izquierda a derecha */}
-      <div style={{
-        position: "absolute",
-        bottom: 0, left: 0,
-        height: 4,
-        width: fillW,
-        background: "#F59E0B",
-        borderRadius: "0 3px 0 0",
-        transition: "none",
-        pointerEvents: "none",
-      }} />
+      {/* Barra de progreso dwell — llena el borde inferior */}
+      {isHovered && !isLocked && (
+        <div style={{
+          position: "absolute",
+          bottom: 0, left: 0,
+          height: 3,
+          width: `${progress * 100}%`,
+          background: "#F59E0B",
+          borderRadius: "0 2px 0 0",
+          pointerEvents: "none",
+        }} />
+      )}
 
-      {/* Checkmark cuando está bloqueado */}
+      {/* Checkmark cuando bloqueado */}
       {isLocked && (
         <div style={{
           position: "absolute",
-          top: 6, right: 8,
-          fontSize: ".65rem",
+          top: 4, right: 6,
+          fontSize: ".58rem",
           fontWeight: 900,
           color: "#16A34A",
           fontFamily: "'Lexend',sans-serif",
+          lineHeight: 1,
           pointerEvents: "none",
         }}>✓</div>
       )}
 
-      {/* Número */}
+      {/* Número — grande y en negrita a la izquierda */}
       <span style={{
         fontFamily: "'Lexend',sans-serif",
         fontWeight: 900,
-        fontSize: "clamp(1.5rem,4.5vw,2rem)",
+        /* fuente adaptativa: si el botón es bajo, el número se achica */
+        fontSize: "clamp(.85rem,3.5cqh,1.5rem)",
         color: isLocked ? "#16A34A" : "#1A1A1A",
         lineHeight: 1,
-        minWidth: 36,
+        minWidth: "1.8ch",
         textAlign: "center",
         flexShrink: 0,
         pointerEvents: "none",
@@ -194,27 +191,31 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
         {item.num}
       </span>
 
-      {/* Emoji */}
+      {/* Emoji — al centro */}
       <span style={{
-        fontSize: "clamp(1.6rem,5vw,2.2rem)",
+        fontSize: "clamp(.9rem,3.8cqh,1.6rem)",
         lineHeight: 1,
         flexShrink: 0,
         pointerEvents: "none",
-        filter: isHovered ? "drop-shadow(0 0 4px rgba(245,158,11,0.5))" : "none",
-        transition: "filter .15s",
+        filter: isHovered && !isLocked ? "drop-shadow(0 0 3px rgba(245,158,11,.5))" : "none",
+        transition: "filter .14s",
       }}>
         {item.face}
       </span>
 
-      {/* Etiqueta */}
+      {/* Etiqueta — alineada a la derecha */}
       <span style={{
         fontFamily: "'Lexend',sans-serif",
         fontWeight: 700,
-        fontSize: "clamp(.82rem,2.4vw,1.05rem)",
+        fontSize: "clamp(.55rem,2.5cqh,.88rem)",
         color: isLocked ? "#14532D" : "#2A2A2A",
         flex: 1,
         textAlign: "right",
-        lineHeight: 1.2,
+        lineHeight: 1.15,
+        overflow: "hidden",
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
         pointerEvents: "none",
       }}>
         {item.label}
@@ -224,15 +225,17 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LISTA DE BOTONES con dwell + click directo
+// GRID DE ESCALA — sin scroll, altura 100 %, distribución exacta
+// • 11 ítems → 2 columnas × 6 filas  (la última celda queda vacía)
+// •  5 ítems → 1 columna  × 5 filas
 // ─────────────────────────────────────────────────────────────────────────────
-interface ScaleListProps {
+interface ScaleGridProps {
   items:    ScaleItem[];
   prefix:   string;
   onLocked: (val: number | null) => void;
 }
 
-function ScaleList({ items, prefix, onLocked }: ScaleListProps) {
+function ScaleGrid({ items, prefix, onLocked }: ScaleGridProps) {
   const { speak }  = useTTS();
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
@@ -244,27 +247,35 @@ function ScaleList({ items, prefix, onLocked }: ScaleListProps) {
     speak(items[idx].tts);
   }, [items, onLocked, speak]);
 
-  const progress = useDwellProgress(hover, DWELL_MS, fire);
-  const isLocked = locked !== null && hover === null;
+  const progress  = useDwellProgress(hover, DWELL_MS, fire);
+  const isLocked  = locked !== null && hover === null;
 
   const handleSelect = useCallback((idx: number) => {
-    if (locked === idx) return;
+    if (isLocked && locked === idx) return;
     fire(idx);
-  }, [locked, fire]);
+  }, [isLocked, locked, fire]);
+
+  /* Distribución en rejilla: >6 ítems → 2 columnas */
+  const cols = items.length > 6 ? 2 : 1;
+  const rows = Math.ceil(items.length / cols);
 
   return (
     <div
+      /* contenedor sin contenido gaze-target propio */
       onPointerLeave={() => setHover(null)}
       style={{
+        /* ocupa todo el espacio que el acordeón le deja */
         flex: 1,
         minHeight: 0,
-        overflowY: "auto",
-        WebkitOverflowScrolling: "touch" as never,
-        overscrollBehavior: "contain",
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        paddingRight: 2,
+        /* contenedor de consulta para clamp(…cqh…) */
+        containerType: "size",
+        display: "grid",
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        gridTemplateRows: `repeat(${rows}, 1fr)`,
+        /* flow en fila: 0,1 | 2,3 | 4,5 … legible de izq a der */
+        gridAutoFlow: "row",
+        gap: 4,
+        overflow: "hidden",
       }}
     >
       {items.map((item, idx) => (
@@ -276,7 +287,7 @@ function ScaleList({ items, prefix, onLocked }: ScaleListProps) {
           isLocked={isLocked && locked === idx}
           isDimmed={isLocked && locked !== idx}
           progress={progress}
-          onEnter={() => { if (!isLocked || locked !== idx) setHover(idx); }}
+          onEnter={() => setHover(idx)}
           onSelect={() => handleSelect(idx)}
         />
       ))}
@@ -285,8 +296,10 @@ function ScaleList({ items, prefix, onLocked }: ScaleListProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PANEL ACORDEÓN
+// ACORDEÓN — transición suave, overflow oculto para no generar scroll
 // ─────────────────────────────────────────────────────────────────────────────
+const HEADER_H = 50; // px — cabecera reducida
+
 function AccordionPanel({
   title, isOpen, lockedBadge, onToggle, children,
 }: {
@@ -328,21 +341,22 @@ function AccordionPanel({
 
   return (
     <div style={{
-      flex: isOpen ? "1 1 0" : "0 0 62px",
-      minHeight: 62,
+      flex: isOpen ? "1 1 0" : `0 0 ${HEADER_H}px`,
+      minHeight: HEADER_H,
       display: "flex",
       flexDirection: "column",
-      borderRadius: 14,
+      borderRadius: 12,
+      /* overflow hidden es clave: impide que el contenido genere scroll */
       overflow: "hidden",
       border: isOpen ? "2px solid #D4CAB8" : "1.5px solid #E0D8CB",
       background: "#FFFFFF",
       boxShadow: isOpen
-        ? "0 2px 12px rgba(0,0,0,0.09)"
-        : "0 1px 4px rgba(0,0,0,0.05)",
-      transition: "flex .22s ease, border-color .2s, box-shadow .2s",
+        ? "0 2px 10px rgba(0,0,0,0.08)"
+        : "0 1px 3px rgba(0,0,0,0.05)",
+      transition: "flex .22s ease, border-color .18s, box-shadow .18s",
     }}>
 
-      {/* Header */}
+      {/* ── Cabecera (siempre visible, es el dwell target) ────────────────── */}
       <div
         className="gaze-target"
         data-gaze-target="true"
@@ -350,12 +364,12 @@ function AccordionPanel({
         onPointerLeave={cancelDwell}
         onClick={() => onToggleRef.current()}
         style={{
-          height: 62,
+          height: HEADER_H,
           flexShrink: 0,
-          padding: "0 16px",
+          padding: "0 14px",
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: 8,
           background: isOpen ? "#FDF2E2" : "#FFFFFF",
           cursor: "pointer",
           position: "relative",
@@ -363,15 +377,15 @@ function AccordionPanel({
           userSelect: "none",
           touchAction: "manipulation",
           WebkitTapHighlightColor: "transparent",
-          transition: "background .2s",
+          transition: "background .18s",
         }}
       >
         <span style={{
           fontFamily: "'Lexend',sans-serif",
           fontWeight: 900,
-          fontSize: "clamp(.8rem,2.2vw,1.05rem)",
+          fontSize: "clamp(.76rem,2vw,.98rem)",
           color: "#333333",
-          letterSpacing: ".12em",
+          letterSpacing: ".11em",
           textTransform: "uppercase",
           flexShrink: 0,
         }}>
@@ -382,9 +396,9 @@ function AccordionPanel({
           <span style={{
             background: "rgba(34,197,94,.18)",
             color: "#14532D",
-            fontSize: ".72rem",
+            fontSize: ".65rem",
             fontWeight: 800,
-            padding: "2px 10px",
+            padding: "2px 8px",
             borderRadius: 20,
             fontFamily: "'Lexend',sans-serif",
             whiteSpace: "nowrap",
@@ -394,7 +408,7 @@ function AccordionPanel({
         )}
 
         <span style={{
-          fontSize: "1.1rem",
+          fontSize: "1rem",
           color: "#AAAAAA",
           marginLeft: "auto",
           flexShrink: 0,
@@ -415,11 +429,11 @@ function AccordionPanel({
         )}
       </div>
 
-      {/* Contenido */}
+      {/* ── Contenido: ocupa el resto del panel, overflow hidden ──────────── */}
       <div style={{
         flex: 1,
         minHeight: 0,
-        padding: isOpen ? "8px 10px 10px" : 0,
+        padding: isOpen ? "5px 6px 6px" : 0,
         display: isOpen ? "flex" : "none",
         flexDirection: "column",
         overflow: "hidden",
@@ -433,21 +447,21 @@ function AccordionPanel({
 // ─────────────────────────────────────────────────────────────────────────────
 // RESUMEN DE PUNTUACIONES
 // ─────────────────────────────────────────────────────────────────────────────
-interface ScoreSummaryProps {
-  evaLocked:     number | null;
-  borgLocked:    number | null;
+function ScoreSummary({
+  evaLocked, borgLocked, anxietyLocked,
+}: {
+  evaLocked: number | null;
+  borgLocked: number | null;
   anxietyLocked: number | null;
-}
-
-function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProps) {
+}) {
   const anxietyLabel = anxietyLocked !== null
     ? ANXIETY_ITEMS[anxietyLocked - 1]?.label ?? null
     : null;
 
   const items = [
-    { key: "eva",     label: "Dolor",     value: evaLocked     !== null ? `${evaLocked}/10` : null },
-    { key: "borg",    label: "Esfuerzo",  value: borgLocked    !== null ? `${borgLocked}/10` : null },
-    { key: "ansiedad",label: "Ansiedad",  value: anxietyLabel },
+    { key: "eva",      label: "Dolor",    value: evaLocked  !== null ? `${evaLocked}/10`  : null },
+    { key: "borg",     label: "Esfuerzo", value: borgLocked !== null ? `${borgLocked}/10` : null },
+    { key: "ansiedad", label: "Ansiedad", value: anxietyLabel },
   ];
 
   return (
@@ -455,10 +469,10 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
       data-testid="score-summary"
       style={{
         flexShrink: 0,
-        borderRadius: 14,
+        borderRadius: 12,
         background: "#FFFFFF",
         border: "1.5px solid #E0D8CB",
-        boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
         display: "flex",
         alignItems: "stretch",
         overflow: "hidden",
@@ -474,30 +488,26 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            padding: "8px 6px",
+            padding: "6px 4px",
             borderRight: idx < items.length - 1 ? "1px solid #E8E0D4" : "none",
-            gap: 3,
+            gap: 2,
           }}
         >
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.45rem,1.2vw,.6rem)",
+            fontSize: "clamp(.42rem,1.1vw,.58rem)",
             fontWeight: 700,
             letterSpacing: ".1em",
             textTransform: "uppercase",
             color: "#AAAAAA",
-          }}>
-            {item.label}
-          </span>
+          }}>{item.label}</span>
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.7rem,1.9vw,.95rem)",
+            fontSize: "clamp(.66rem,1.7vw,.88rem)",
             fontWeight: 900,
             color: item.value !== null ? "#16A34A" : "#CCCCCC",
             textAlign: "center",
-          }}>
-            {item.value ?? "—"}
-          </span>
+          }}>{item.value ?? "—"}</span>
         </div>
       ))}
     </div>
@@ -505,7 +515,7 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PÁGINA PRINCIPAL
+// PÁGINA
 // ─────────────────────────────────────────────────────────────────────────────
 type ScaleKey = "eva" | "borg" | "anxiety";
 
@@ -536,14 +546,16 @@ export default function Scales() {
       <div style={{
         display: "flex",
         flexDirection: "column",
+        /* altura total sin scroll: el acordeón absorbe el espacio disponible */
         height: "100%",
-        padding: "8px 10px 10px",
-        gap: 8,
+        overflow: "hidden",
+        padding: "6px 8px 8px",
+        gap: 6,
         boxSizing: "border-box",
         background: "#FDF2E2",
       }}>
 
-        {/* ── Botón reiniciar ────────────────────────────────────────────── */}
+        {/* ── Botón reiniciar ─────────────────────────────────────────────── */}
         <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
           <button
             className="gaze-target"
@@ -553,36 +565,36 @@ export default function Scales() {
             style={{
               background: "#FFF",
               border: "1.5px solid #E0D8CB",
-              borderRadius: 10,
+              borderRadius: 9,
               color: "#555555",
-              padding: "6px 14px",
+              padding: "5px 12px",
               cursor: "pointer",
               fontFamily: "'Lexend',sans-serif",
               fontWeight: 700,
-              fontSize: ".72rem",
-              letterSpacing: ".08em",
+              fontSize: ".68rem",
+              letterSpacing: ".07em",
               textTransform: "uppercase",
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-              WebkitTapHighlightColor: "transparent",
+              gap: 5,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
-            <RotateCcw style={{ width: 12, height: 12 }} />
+            <RotateCcw style={{ width: 11, height: 11 }} />
             Reiniciar
           </button>
         </div>
 
-        {/* ── Acordeón DOLOR (EVA) ───────────────────────────────────────── */}
+        {/* ── Acordeón DOLOR (EVA) ──────────────────────────────────────── */}
         <AccordionPanel
           title="Dolor (EVA)"
           isOpen={openScale === "eva"}
           lockedBadge={evaBadge}
           onToggle={() => toggle("eva")}
         >
-          <ScaleList
+          <ScaleGrid
             key={`eva-${resetKey}`}
             items={EVA_ITEMS}
             prefix="eva"
@@ -590,14 +602,14 @@ export default function Scales() {
           />
         </AccordionPanel>
 
-        {/* ── Acordeón RESPIRACIÓN (BORG) ───────────────────────────────── */}
+        {/* ── Acordeón RESPIRACIÓN (BORG) ──────────────────────────────── */}
         <AccordionPanel
           title="Respiración (BORG)"
           isOpen={openScale === "borg"}
           lockedBadge={borgBadge}
           onToggle={() => toggle("borg")}
         >
-          <ScaleList
+          <ScaleGrid
             key={`borg-${resetKey}`}
             items={BORG_ITEMS}
             prefix="borg"
@@ -605,14 +617,14 @@ export default function Scales() {
           />
         </AccordionPanel>
 
-        {/* ── Acordeón ANSIEDAD ─────────────────────────────────────────── */}
+        {/* ── Acordeón ANSIEDAD ────────────────────────────────────────── */}
         <AccordionPanel
           title="Ansiedad"
           isOpen={openScale === "anxiety"}
           lockedBadge={anxietyBadge}
           onToggle={() => toggle("anxiety")}
         >
-          <ScaleList
+          <ScaleGrid
             key={`ansiedad-${resetKey}`}
             items={ANXIETY_ITEMS}
             prefix="anxiety"
@@ -620,7 +632,7 @@ export default function Scales() {
           />
         </AccordionPanel>
 
-        {/* ── Resumen siempre visible ────────────────────────────────────── */}
+        {/* ── Resumen de puntuaciones ───────────────────────────────────── */}
         <ScoreSummary
           evaLocked={evaLocked}
           borgLocked={borgLocked}
