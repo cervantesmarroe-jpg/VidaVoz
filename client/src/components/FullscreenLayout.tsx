@@ -11,7 +11,6 @@ import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
-import { SplashScreen } from "@/components/SplashScreen";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -149,13 +148,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     startCalibration, activateFromProfile, deactivate,
   } = useWebGazer();
 
-  // ── Splash Screen: visible 2,5 s al arrancar mientras los modelos cargan ─
-  const [showSplash, setShowSplash] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setShowSplash(false), 2500);
-    return () => clearTimeout(t);
-  }, []);
-
   // ── Entrenamiento Maestro (10 muestras) ──────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
@@ -185,9 +177,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
-
-      {/* Splash Screen — se muestra 2,5 s al iniciar la app */}
-      <SplashScreen visible={showSplash} />
 
       {/* Pantalla de calibración — bloqueada permanentemente una vez hecho el sync inicial */}
       {isCalibrating && !hasCompletedInitialSync && <CalibrationScreen />}
