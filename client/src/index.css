@@ -241,3 +241,45 @@ input[type=range].gaze-slider::-moz-range-thumb {
   opacity: 0.25;
   animation: wavePulse 0.78s ease-in-out 3 both;
 }
+
+/* ── Grids responsivos: orientación portrait / landscape ─────────────────── */
+/*
+ * Solo se modifican grid-template-columns y min-height/padding de los hijos.
+ * Colores, fuentes y lógica de selección (dwell/blink) permanecen intactos.
+ */
+
+.quad-grid-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.msg-grid-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(5, 1fr);
+}
+
+/* Portrait — botones altos: blancos fáciles para eye-tracking */
+@media (orientation: portrait) {
+  .quad-grid-container > *,
+  .msg-grid-container  > * {
+    min-height: 150px;
+  }
+}
+
+/* Landscape — más columnas: todo cabe sin scroll */
+@media (orientation: landscape) {
+  .quad-grid-container {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: 1fr;
+  }
+  .msg-grid-container {
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: 1fr 1fr;
+  }
+  .quad-grid-container > *,
+  .msg-grid-container  > * {
+    min-height: 0;
+  }
+}

@@ -198,10 +198,7 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
 export default function Messages() {
   return (
     <FullscreenLayout>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gridTemplateRows: "repeat(5, 1fr)",
+      <div className="msg-grid-container" style={{
         gap: "8px",
         padding: "10px",
         height: "100%",

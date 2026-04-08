@@ -130,13 +130,10 @@ export function QuadButton({
   );
 }
 
-// ── Grid 2×2 reutilizable ────────────────────────────────────────────────────
+// ── Grid 2×2 reutilizable (responsivo vía CSS) ───────────────────────────────
 export function QuadGrid({ children }: { children: ReactNode }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gridTemplateRows: "1fr 1fr",
+    <div className="quad-grid-container" style={{
       gap: "10px",
       padding: "10px",
       height: "100%",

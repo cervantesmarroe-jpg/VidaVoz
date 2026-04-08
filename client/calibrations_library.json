@@ -3,10 +3,12 @@
     "id": "captura_01_elena",
     "profile": "mobile", 
     "model": {
-      "alphaX": 319.51,
-      "betaX": -1769.63,
-      "alphaY": 124.57,
-      "betaY": -2720.38
+      "alphaX": 369.1374,
+      "betaX": -1197.6939,
+      "alphaY": 369.3608, 
+      "betaY": -1865.4609,
+      "sensitivityX": -3.3269,
+      "sensitivityY": 2.4417
     }
   },
   {
