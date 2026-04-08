@@ -80,6 +80,24 @@ export function flashGlobalCursor() {
   setTimeout(() => globalCursor.classList.remove('gaze-blink-flash'), 350);
 }
 
+/** Feedback verde inmediato: el cursor se vuelve verde brillante 600ms para
+ *  confirmar al paciente que el parpadeo fue registrado como clic válido.
+ *  Usa setProperty('…', '…', 'important') para sobreescribir el !important
+ *  establecido en applyBaseStyles vía cssText. */
+export function setCursorBlinkSuccess() {
+  const el = globalCursor;
+  el.style.setProperty('background',  'rgba(34, 197, 94, 0.95)',  'important');
+  el.style.setProperty('border-color','#15803d',                   'important');
+  el.style.setProperty('box-shadow',
+    '0 0 0 3px rgba(255,255,255,0.85), 0 0 28px rgba(34,197,94,0.9)', 'important');
+  setTimeout(() => {
+    el.style.setProperty('background',  'rgba(255, 255, 255, 0.95)', 'important');
+    el.style.setProperty('border-color','rgba(15, 118, 110, 1)',      'important');
+    el.style.setProperty('box-shadow',
+      '0 0 0 2px rgba(255,255,255,0.6), 0 0 18px rgba(20,184,166,0.7)', 'important');
+  }, 600);
+}
+
 // ── Listeners siempre activos (ratón + touch) ─────────────────────────────────
 // Cuando el eye-tracking está activo, llamará a moveGlobalCursor con mayor
 // frecuencia, sobreescribiendo de forma natural la posición del ratón.

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { moveGlobalCursor, flashGlobalCursor, setGazePriority } from '@/lib/globalCursor';
+import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess } from '@/lib/globalCursor';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
@@ -14,7 +14,7 @@ const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (
 const BLINK_THRESHOLD = 0.85;
 const BLINK_COOLDOWN  = 1200;  // periodo refractario entre blink-clicks (ms)
 const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora involuntarios
-const BLINK_MAX_MS    = 600;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
+const BLINK_MAX_MS    = 500;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
 const SNAP_RADIUS_PX  = 50;    // imán: si el cursor está a <50 px de un botón, salta al centro
@@ -169,6 +169,18 @@ function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y:
   return { x: bx, y: by };
 }
 
+// ─── hasGazeTarget ────────────────────────────────────────────────────────────
+// Devuelve true si hay algún elemento .gaze-target dentro de `radius` px del punto.
+// Usado para validar si un parpadeo apunta a un botón real (Confianza).
+function hasGazeTarget(x: number, y: number, radius: number): boolean {
+  return Array.from(document.querySelectorAll<Element>('.gaze-target')).some(el => {
+    const r  = el.getBoundingClientRect();
+    const cx = r.left + r.width  / 2;
+    const cy = r.top  + r.height / 2;
+    return Math.hypot(x - cx, y - cy) <= radius;
+  });
+}
+
 // ─── Pop sound (Web Audio API — sin ficheros externos) ───────────────────────
 function playPopSound() {
   try {
@@ -229,6 +241,13 @@ class GazeTracker {
   private blinkStartTime: number | null = null;   // cuándo empezó el cierre
   private lastBlinkEnd    = 0;                    // cuándo acabó el último blink-click
   private blinkEnabled    = true;                 // false durante calibración
+  // ── Congelación de cursor durante el parpadeo ─────────────────────────────
+  // Al detectar el inicio de un parpadeo, se guardan las coordenadas del cursor.
+  // El cursor permanece congelado hasta 100 ms después de que el ojo se reabre,
+  // evitando que el ruido visual de los párpados desplace el punto de mira.
+  private blinkFrozenX    = -1;
+  private blinkFrozenY    = -1;
+  private blinkUnfreezeAt = 0;
 
   private gazeListeners:  Set<GazeCallback>  = new Set();
   private blinkListeners: Set<BlinkCallback> = new Set();
@@ -372,23 +391,26 @@ class GazeTracker {
             this.lastEmitX = gx;
             this.lastEmitY = gy;
 
-            this.gazeListeners.forEach(cb => cb(gx, gy));
-
-            // ── Detección de parpadeo deliberado (ventana de duración) ───────
-            // Solo activa si el cierre de ojos dura entre BLINK_MIN_MS y BLINK_MAX_MS.
-            // Parpadeos involuntarios (<200 ms) e ignorados; sueño/mirada perdida (>600 ms) ignorado.
+            // ── Detección de parpadeo deliberado ─────────────────────────────
+            // Se ejecuta ANTES de emitir coords para que la congelación del cursor
+            // ya esté activa en el mismo frame en que el parpadeo comienza.
             const blinkL  = find('eyeBlinkLeft');
             const blinkR  = find('eyeBlinkRight');
             const isBlink = blinkL > BLINK_THRESHOLD && blinkR > BLINK_THRESHOLD;
             const nowMs   = performance.now();
 
             if (isBlink && !this.wasBlinking) {
-              // ── Inicio del cierre de ojos ────────────────────────────────
+              // ── INICIO del cierre: CONGELAR coordenadas del cursor ────────
+              // Las coords se guardan en este frame; el cursor NO se moverá
+              // mientras los párpados estén cerrados ni 100 ms después de abrirse.
               this.blinkStartTime = nowMs;
+              this.blinkFrozenX   = gx;
+              this.blinkFrozenY   = gy;
             } else if (!isBlink && this.wasBlinking && this.blinkStartTime !== null) {
-              // ── Fin del cierre: medir duración ───────────────────────────
+              // ── FIN del cierre: medir duración y programar descongelación ─
               const dur = nowMs - this.blinkStartTime;
-              this.blinkStartTime = null;
+              this.blinkStartTime  = null;
+              this.blinkUnfreezeAt = nowMs + 100; // descongelar 100 ms tras abrir el ojo
               if (
                 dur >= BLINK_MIN_MS &&
                 dur <= BLINK_MAX_MS &&
@@ -396,10 +418,19 @@ class GazeTracker {
                 this.blinkEnabled
               ) {
                 this.lastBlinkEnd = nowMs;
-                this.fireBlinkClick(gx, gy);
+                // Disparar con coords CONGELADAS (antes del ruido de párpado)
+                this.fireBlinkClick(this.blinkFrozenX, this.blinkFrozenY);
               }
             }
             this.wasBlinking = isBlink;
+
+            // ── Emitir coordenadas de gaze (congeladas durante/tras parpadeo) ─
+            // Durante el parpadeo (isBlink) y los 100 ms de "rebote" post-blink,
+            // se emiten las coords congeladas para que el cursor no salte.
+            const freezeActive = isBlink || nowMs < this.blinkUnfreezeAt;
+            const emitX = (freezeActive && this.blinkFrozenX >= 0) ? this.blinkFrozenX : gx;
+            const emitY = (freezeActive && this.blinkFrozenY >= 0) ? this.blinkFrozenY : gy;
+            this.gazeListeners.forEach(cb => cb(emitX, emitY));
           }
         } catch (_) {}
       }
@@ -640,22 +671,38 @@ class GazeTracker {
   setBlinkEnabled(v: boolean) { this.blinkEnabled = v; }
 
   // ── Dispara la acción de blink-click verificado ───────────────────────────
-  // 1. Sonido "pop"  2. Flash del botón  3. Notifica blinkListeners
+  // Mejoras de precisión:
+  //   1. Validación de confianza: solo dispara si hay un botón en radio snap.
+  //   2. Feedback verde inmediato en el cursor (setCursorBlinkSuccess).
+  //   3. Sonido "pop".
+  //   4. Flash del botón activado.
+  //   5. Notifica blinkListeners.
   private fireBlinkClick(x: number, y: number) {
-    // Sonido
+    // ── VALIDACIÓN DE CONFIANZA ───────────────────────────────────────────────
+    // Si el cursor está en el vacío (sin ningún .gaze-target en el radio de
+    // atracción), el parpadeo se ignora: el paciente no estaba mirando un botón.
+    if (!hasGazeTarget(x, y, SNAP_RADIUS_PX + 20)) return;
+
+    // Snap al centro exacto del botón más cercano
+    const snapped = snapToGazeTarget(x, y, SNAP_RADIUS_PX + 20);
+
+    // ── FEEDBACK VERDE INMEDIATO ──────────────────────────────────────────────
+    // El cursor cambia a verde brillante para confirmar al paciente que su
+    // parpadeo fue reconocido como un clic válido.
+    setCursorBlinkSuccess();
+
+    // Sonido de confirmación
     playPopSound();
 
-    // Encontrar el elemento .gaze-target más cercano al punto imantado
-    const snapped = snapToGazeTarget(x, y, SNAP_RADIUS_PX + 20);
-    const topEl   = document.elementFromPoint(snapped.x, snapped.y);
-    const gazeEl  = topEl?.closest<HTMLElement>('.gaze-target') ?? null;
+    // Flash del botón activado
+    const topEl  = document.elementFromPoint(snapped.x, snapped.y);
+    const gazeEl = topEl?.closest<HTMLElement>('.gaze-target') ?? null;
     if (gazeEl) {
       gazeEl.classList.add('blink-activated');
       setTimeout(() => gazeEl.classList.remove('blink-activated'), 500);
     }
 
-    // Notificar listeners (el callback onBlink en useWebGazer flashea el cursor
-    // y llama a activateTarget, que ejecuta el onClick del botón)
+    // Notificar listeners (triggerClick en el hook ejecuta el onClick del botón)
     this.blinkListeners.forEach(cb => cb(snapped.x, snapped.y));
   }
 
