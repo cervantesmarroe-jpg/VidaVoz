@@ -32,37 +32,6 @@ const TABS = [
   { path: "/teclado",  Icon: KeyboardIcon,     label: "TECLADO",  color: "#a78bfa" },
 ];
 
-// ── Cursor de mirada ─────────────────────────────────────────────────────────
-function GazeCursor() {
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const onMove = (e: PointerEvent) => {
-      wrap.style.transform = `translate(${e.clientX - 22}px, ${e.clientY - 22}px)`;
-      wrap.style.opacity = "1";
-    };
-    window.addEventListener("pointermove", onMove, { passive: true });
-    return () => window.removeEventListener("pointermove", onMove);
-  }, []);
-
-  return (
-    <div
-      ref={wrapRef}
-      className="fixed top-0 left-0 pointer-events-none z-[9997]"
-      style={{ opacity: 0, transition: "transform 0.09s linear, opacity 0.4s", willChange: "transform" }}
-    >
-      <div style={{
-        width: 44, height: 44, borderRadius: "50%",
-        background: "rgba(255,255,255,0.22)",
-        border: "3px solid #fbbf24",
-        boxShadow: "0 0 16px rgba(251,191,36,0.6), inset 0 0 8px rgba(255,255,255,0.1)",
-      }} />
-    </div>
-  );
-}
-
 // ── Pestaña de navegación (sidebar vertical o barra inferior horizontal) ──────
 interface SideTabProps {
   path: string;
@@ -224,9 +193,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
       )}
-
-      {/* Cursor de mirada */}
-      <GazeCursor />
 
       {/* ── Header ─────────────────────────────────────────────────── */}
       <header

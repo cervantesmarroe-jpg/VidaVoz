@@ -773,16 +773,36 @@ export function useWebGazer() {
     startCalibration, finishCalibration, activateFromProfile, deactivate,
   } = useWebGazerStore();
 
+  // ── Efecto A: Crear/destruir el elemento #gaze-cursor (Cursor Maestro Único) ─
   useEffect(() => {
-    if (!document.getElementById('gaze-cursor')) {
-      const el = document.createElement('div');
+    let el = document.getElementById('gaze-cursor');
+    if (!el) {
+      el = document.createElement('div');
       el.id = 'gaze-cursor';
       document.body.appendChild(el);
     }
+    el.style.display = 'block';
+    el.style.opacity = '0'; // sin posición inicial: oculto hasta primer movimiento
     return () => { document.getElementById('gaze-cursor')?.remove(); };
   }, []);
 
-  // Calibrando → cámara + detección
+  // ── Efecto B: Cuando la mirada está OFF → cursor sigue el puntero del sistema ─
+  // (mouse o toque físico sin gaze activo)
+  useEffect(() => {
+    if (isActive) return; // la mirada activa gestiona la posición en Efecto C
+    const cursor = document.getElementById('gaze-cursor');
+    if (!cursor) return;
+
+    const onPointerMove = (e: PointerEvent) => {
+      cursor.style.transform = `translate(calc(${e.clientX}px - 50%), calc(${e.clientY}px - 50%))`;
+      cursor.style.opacity   = '1';
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onPointerMove);
+  }, [isActive]);
+
+  // ── Efecto C: Calibrando → cámara + detección ────────────────────────────────
   useEffect(() => {
     if (!isCalibrating) return;
     gazeTracker.clearCalibration();
@@ -793,35 +813,31 @@ export function useWebGazer() {
     })();
   }, [isCalibrating]);
 
-  // Activo → dwell + parpadeo + aprendizaje continuo
+  // ── Efecto D: Activo → cursor unificado con prioridad touch > mirada ──────────
   useEffect(() => {
     const cursor = document.getElementById('gaze-cursor');
     if (!isActive) {
-      if (cursor) cursor.style.display = 'none';
       gazeTracker.stopDetection();
       return;
     }
-    if (cursor) cursor.style.display = 'block';
+    if (cursor) { cursor.style.display = 'block'; cursor.style.opacity = '1'; }
 
-    // Asegurar que la cámara y el modelo están listos (puede haber sido
-    // detenida al volver del flujo de sincronización inicial)
+    // Asegurar cámara y modelo listos
     (async () => {
       if (!gazeTracker.hasFaceModel) await gazeTracker.init();
       if (!gazeTracker.hasCamera)    await gazeTracker.startCamera();
       gazeTracker.startDetection();
     })();
 
-    let targetEl:     HTMLElement | null = null;
-    let enterTime     = 0;
-    let dwellCooldown = false;
+    let targetEl:      HTMLElement | null = null;
+    let enterTime      = 0;
+    let dwellCooldown  = false;
+    let touchLockUntil = 0; // performance.now() hasta el que el toque tiene prioridad
 
+    // ── Helpers compartidos ──────────────────────────────────────────────────
     function activateTarget(el: HTMLElement) {
-      // Aprendizaje continuo: registra la posición del botón
       const rect = el.getBoundingClientRect();
-      const cx   = rect.left + rect.width  / 2;
-      const cy   = rect.top  + rect.height / 2;
-      gazeTracker.recordClickCalibration(cx, cy);
-
+      gazeTracker.recordClickCalibration(rect.left + rect.width / 2, rect.top + rect.height / 2);
       el.click();
       resetProgress(el);
       el.style.transform = 'scale(0.95)';
@@ -835,9 +851,56 @@ export function useWebGazer() {
       return hit?.closest('[data-gaze-target="true"]') as HTMLElement | null;
     }
 
+    // ── triggerClick: función unificada para blink Y toque físico ────────────
+    // Reproduce sonido visual y activa el elemento bajo el cursor.
+    function triggerClick(x: number, y: number) {
+      if (cursor) {
+        cursor.classList.add('gaze-blink-flash');
+        setTimeout(() => cursor!.classList.remove('gaze-blink-flash'), 350);
+      }
+      const target = hitTest(x, y);
+      if (target) {
+        target.classList.add('blink-activated');
+        setTimeout(() => target.classList.remove('blink-activated'), 500);
+        activateTarget(target);
+      }
+    }
+
+    // ── Handler de TOQUE FÍSICO ──────────────────────────────────────────────
+    // • Salta el cursor al dedo instantáneamente
+    // • Bloquea el seguimiento de mirada durante 1 s (evita "lucha" con el dedo)
+    // • Llama a triggerClick (misma función que el blink)
+    // • preventDefault evita el clic sintético del navegador (evita doble activación)
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      e.preventDefault(); // evitar doble clic sintético
+      const x = t.clientX;
+      const y = t.clientY;
+
+      // Salto instantáneo al dedo
+      if (cursor) {
+        cursor.style.transform = `translate(calc(${x}px - 50%), calc(${y}px - 50%))`;
+        cursor.style.opacity   = '1';
+      }
+
+      // Bloqueo de mirada durante 1 s
+      touchLockUntil = performance.now() + 1000;
+
+      // Misma activación que el blink
+      triggerClick(x, y);
+    };
+
+    // ── Handler de MIRADA ────────────────────────────────────────────────────
     const onGaze = (x: number, y: number) => {
-      if (cursor) cursor.style.transform =
-        `translate(calc(${x}px - 50%), calc(${y}px - 50%)) rotate(45deg)`;
+      // Si un toque físico ocurrió hace menos de 1 s, no mover el cursor ni
+      // procesar dwell (el dedo tiene prioridad sobre la mirada).
+      if (performance.now() < touchLockUntil) return;
+
+      if (cursor) {
+        cursor.style.transform = `translate(calc(${x}px - 50%), calc(${y}px - 50%)) rotate(45deg)`;
+        cursor.style.opacity   = '1';
+      }
 
       const target = hitTest(x, y);
       const now    = performance.now();
@@ -862,22 +925,18 @@ export function useWebGazer() {
       }
     };
 
-    const onBlink = (x: number, y: number) => {
-      if (cursor) {
-        cursor.classList.add('gaze-blink-flash');
-        setTimeout(() => cursor.classList.remove('gaze-blink-flash'), 350);
-      }
-      const target = hitTest(x, y);
-      if (target) activateTarget(target);
-    };
+    // ── Handler de PARPADEO deliberado ───────────────────────────────────────
+    const onBlink = (x: number, y: number) => triggerClick(x, y);
 
+    window.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
     gazeTracker.addGazeListener(onGaze);
     gazeTracker.addBlinkListener(onBlink);
 
     return () => {
+      window.removeEventListener('touchstart', onTouchStart, { capture: true });
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);
-      if (cursor) cursor.style.display = 'none';
+      if (cursor) cursor.style.opacity = '0';
     };
   }, [isActive]);
 

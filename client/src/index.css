@@ -41,6 +41,13 @@
     background: #FAFAFA;
     @apply text-stone-800 antialiased overflow-hidden selection:bg-teal-200;
     font-family: 'Lexend', sans-serif;
+    cursor: none !important;
+  }
+
+  /* ── Cursor maestro único: ocultar cursor nativo en todos los elementos ── */
+  /* El cursor visual lo gestiona exclusivamente #gaze-cursor (DOM puro). */
+  html, html * {
+    cursor: none !important;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -59,7 +66,7 @@
   }
 }
 
-/* Custom WebGazer Cursor */
+/* Cursor Maestro Único — gestiona mirada, toque físico y ratón en un solo elemento */
 #gaze-cursor {
   position: fixed;
   top: 0;
@@ -73,9 +80,9 @@
   transform: translate(-50%, -50%) rotate(45deg);
   pointer-events: none;
   z-index: 999999;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s;
   box-shadow: 0 0 20px rgba(20, 184, 166, 0.6);
-  display: none;
+  /* display y opacity se controlan desde JS; no usar display:none aquí */
 }
 
 /* Flash de parpadeo — se añade/retira por JS en cada blink detectado.
