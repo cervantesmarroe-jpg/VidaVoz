@@ -897,6 +897,15 @@ export function useWebGazer() {
       triggerClick(x, y);
     };
 
+    // ── Helpers de hover-aim ──────────────────────────────────────────────────
+    // Añade/quita la clase CSS .gaze-hover que ilumina el borde del botón
+    // mientras el cursor de mirada está encima, ayudando al paciente a apuntar.
+    function setAimGlow(el: HTMLElement | null, on: boolean) {
+      if (!el) return;
+      if (on) el.classList.add('gaze-hover');
+      else    el.classList.remove('gaze-hover');
+    }
+
     // ── MIRADA: gaze tiene prioridad salvo durante 1 s tras un toque ─────────
     const onGaze = (x: number, y: number) => {
       if (performance.now() < touchLockUntil) return;
@@ -907,15 +916,24 @@ export function useWebGazer() {
 
       if (target) {
         if (target !== targetEl) {
-          if (targetEl) resetProgress(targetEl);
+          // ── Cambio de botón: apagar glow del anterior, encender el nuevo ───
+          if (targetEl) { resetProgress(targetEl); setAimGlow(targetEl, false); }
           targetEl = target; enterTime = now; dwellCooldown = false;
+          setAimGlow(target, true);
         } else if (!dwellCooldown) {
           const progress = Math.min((now - enterTime) / DWELL_MS, 1);
           updateProgress(target, progress);
-          if (progress >= 1) { activateTarget(target); dwellCooldown = true; }
+          if (progress >= 1) {
+            // ── Activación por dwell: apagar glow antes de activar ───────────
+            setAimGlow(target, false);
+            activateTarget(target);
+            dwellCooldown = true;
+          }
         }
       } else if (targetEl) {
+        // ── El cursor salió al vacío ──────────────────────────────────────────
         resetProgress(targetEl);
+        setAimGlow(targetEl, false);
         targetEl = null;
       }
     };
@@ -929,6 +947,8 @@ export function useWebGazer() {
 
     return () => {
       setGazePriority(false);
+      // Limpiar glow pendiente al desmontar
+      setAimGlow(targetEl, false);
       window.removeEventListener('touchstart', onTouchStart, { capture: true });
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);

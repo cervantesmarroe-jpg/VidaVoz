@@ -124,6 +124,28 @@
   transform: scale(0.98);
 }
 
+/* ── Indicador de apuntado (Gaze Aim) ─────────────────────────────────────
+ * Se añade la clase .gaze-hover cuando el cursor de mirada entra en un botón.
+ * El borde ámbar pulsa suavemente para indicar al paciente que "está apuntando"
+ * y que un parpadeo en ese momento activará el botón.                          */
+@keyframes gaze-aim-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.55),
+                0 0 14px rgba(251, 191, 36, 0.25);
+    filter: brightness(1.05);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(251, 191, 36, 0.80),
+                0 0 28px rgba(251, 191, 36, 0.50);
+    filter: brightness(1.12);
+  }
+}
+
+.gaze-target.gaze-hover {
+  animation: gaze-aim-pulse 1.4s ease-in-out infinite !important;
+  transition: box-shadow 0.15s, filter 0.15s !important;
+}
+
 /* ── Blink-click: flash del botón activado por parpadeo deliberado ──────── */
 @keyframes blink-activate {
   0%   { filter: brightness(1);    box-shadow: inherit; outline: none; }
