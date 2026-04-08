@@ -229,11 +229,11 @@ function AccordionPanel({
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ESCALA 1 — EVA (Dolor): gradiente continuo 0-10
+// Cada número es su propio gaze-target con hit-zone de flex:1 (sin zonas muertas).
+// El contenedor raíz NO tiene data-gaze-target para que el magnetismo no lo capture.
 // ─────────────────────────────────────────────────────────────────────────────
 function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
   const { speak }   = useTTS();
-  const stripRef    = useRef<HTMLDivElement>(null);
-  const innerRef    = useRef<HTMLDivElement>(null);
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
 
@@ -245,23 +245,16 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
   const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    const rect = innerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x   = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    const val = Math.min(10, Math.floor(x / rect.width * 11));
-    setHover(val);
-  }, []);
-  const onPointerLeave = useCallback(() => setHover(null), []);
+  // Limpia hover cuando el puntero/mirada sale del strip completo
+  const onStripLeave = useCallback(() => setHover(null), []);
 
   const active   = hover ?? locked;
   const isLocked = locked !== null && hover === null;
 
   return (
+    // Sin data-gaze-target: el magnetismo no debe capturar el fondo de la escala
     <div
-      ref={stripRef}
-      data-gaze-target="true"
-      onPointerLeave={onPointerLeave}
+      onPointerLeave={onStripLeave}
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
@@ -273,6 +266,7 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         boxSizing: "border-box", transition: "border-color .2s, box-shadow .2s",
       }}
     >
+      {/* Emojis extremos + etiqueta */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexShrink: 0,
@@ -294,17 +288,13 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         <span style={{ fontSize: "clamp(1rem,3vw,1.5rem)", lineHeight: 1 }}>😭</span>
       </div>
 
-      <div
-        ref={innerRef}
-        onPointerMove={onPointerMove}
-        style={{
-          flex: 1, minHeight: 0,
-          display: "flex", alignItems: "center",
-          justifyContent: "space-between",
-          padding: "3px 0",
-          gap: 2,
-        }}
-      >
+      {/* Números 0-10: cada uno ocupa flex:1 → sin zonas muertas entre ellos */}
+      <div style={{
+        flex: 1, minHeight: 0,
+        display: "flex", alignItems: "stretch",
+        padding: "3px 0",
+        gap: 2,
+      }}>
         {Array.from({ length: 11 }, (_, i) => i).map((n) => {
           const isSel    = hover === n;
           const isThisLk = isLocked && locked === n;
@@ -317,31 +307,45 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
           const ringPx    = isSel && !isThisLk ? 2 + progress * 4 : 0;
           const ringAlpha = isSel && !isThisLk ? 0.35 + progress * 0.45 : 0;
           return (
-            <div key={n} style={{
-              width: szStr, height: szStr,
-              minWidth: 0, flexShrink: 1,
-              borderRadius: "50%",
-              position: "relative",
-              background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.30)" : "rgba(0,0,0,.18)",
-              opacity: dimmed ? 0.35 : 1,
-              color: "#333", display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'Lexend',sans-serif",
-              fontWeight: isSel || isThisLk ? 900 : 700,
-              fontSize: isThisLk
-                ? "clamp(.65rem,2.2vw,1.1rem)"
-                : isSel
-                ? "clamp(.6rem,1.9vw,1rem)"
-                : "clamp(.5rem,1.5vw,.8rem)",
-              border: isThisLk ? "2.5px solid #7A4500" : "none",
-              boxShadow: isThisLk
-                ? "0 0 12px rgba(251,191,36,.7)"
-                : isSel && ringPx > 0
-                ? `0 0 0 ${ringPx}px rgba(251,191,36,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(251,191,36,${ringAlpha * 0.6})`
-                : "none",
-              textShadow: "0 1px 2px rgba(255,255,255,.6)",
-              transition: "opacity .2s, background .14s",
-            }}>
-              {n}
+            // Hit-zone: ocupa 1/11 del ancho, altura completa de la fila
+            <div
+              key={n}
+              data-gaze-target="true"
+              data-testid={`eva-num-${n}`}
+              onPointerEnter={() => setHover(n)}
+              style={{
+                flex: 1, minWidth: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "crosshair",
+              }}
+            >
+              {/* Círculo visual */}
+              <div style={{
+                width: szStr, height: szStr,
+                borderRadius: "50%",
+                position: "relative",
+                background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.30)" : "rgba(0,0,0,.18)",
+                opacity: dimmed ? 0.35 : 1,
+                color: "#333", display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "'Lexend',sans-serif",
+                fontWeight: isSel || isThisLk ? 900 : 700,
+                fontSize: isThisLk
+                  ? "clamp(.65rem,2.2vw,1.1rem)"
+                  : isSel
+                  ? "clamp(.6rem,1.9vw,1rem)"
+                  : "clamp(.5rem,1.5vw,.8rem)",
+                border: isThisLk ? "2.5px solid #7A4500" : "none",
+                boxShadow: isThisLk
+                  ? "0 0 12px rgba(251,191,36,.7)"
+                  : isSel && ringPx > 0
+                  ? `0 0 0 ${ringPx}px rgba(251,191,36,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(251,191,36,${ringAlpha * 0.6})`
+                  : "none",
+                textShadow: "0 1px 2px rgba(255,255,255,.6)",
+                transition: "opacity .2s, background .14s",
+                pointerEvents: "none", // el hit-zone padre gestiona los eventos
+              }}>
+                {n}
+              </div>
             </div>
           );
         })}
@@ -358,10 +362,10 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ESCALA 2 — BORG (Respiración)
+// Cada bloque es su propio gaze-target. El contenedor raíz NO tiene gaze-target.
 // ─────────────────────────────────────────────────────────────────────────────
 function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
   const { speak }  = useTTS();
-  const stripRef   = useRef<HTMLDivElement>(null);
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
 
@@ -373,22 +377,12 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
   const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
 
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = stripRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const idx = Math.max(0, Math.min(10, Math.floor((e.clientX - rect.left) / rect.width * 11)));
-    setHover(idx);
-  }, []);
-  const onPointerLeave = useCallback(() => setHover(null), []);
-
   const isLocked = locked !== null && hover === null;
 
   return (
+    // Sin data-gaze-target en el contenedor raíz
     <div
-      ref={stripRef}
-      data-gaze-target="true"
-      onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
+      onPointerLeave={() => setHover(null)}
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
@@ -409,6 +403,7 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         )}
       </div>
 
+      {/* Bloques: cada uno es un gaze-target individual */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 2, borderRadius: 10, overflow: "hidden" }}>
         {BORG_BLOCKS.map((block, i) => {
           const isHov    = hover === i;
@@ -417,21 +412,27 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
           const fillDeg  = isHov && !isThisLk ? progress * 360 : 0;
 
           return (
-            <div key={i} style={{
-              flex: 1, minWidth: 0,
-              position: "relative",
-              background: block.bg,
-              opacity: dimmed ? 0.38 : 1,
-              border: isThisLk ? "3px solid #fbbf24" : isHov ? "2px solid rgba(0,0,0,.25)" : "1px solid transparent",
-              borderRadius: 8,
-              boxShadow: isThisLk ? "0 0 14px rgba(251,191,36,.7), inset 0 0 6px rgba(251,191,36,.3)" : "none",
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "space-evenly",
-              padding: "4px 1px",
-              transition: "opacity .2s, border .12s, box-shadow .2s",
-              boxSizing: "border-box",
-              overflow: "hidden",
-            }}>
+            <div
+              key={i}
+              data-gaze-target="true"
+              data-testid={`borg-block-${i}`}
+              onPointerEnter={() => setHover(i)}
+              style={{
+                flex: 1, minWidth: 0,
+                position: "relative",
+                background: block.bg,
+                opacity: dimmed ? 0.38 : 1,
+                border: isThisLk ? "3px solid #fbbf24" : isHov ? "2px solid rgba(0,0,0,.25)" : "1px solid transparent",
+                borderRadius: 8,
+                boxShadow: isThisLk ? "0 0 14px rgba(251,191,36,.7), inset 0 0 6px rgba(251,191,36,.3)" : "none",
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "space-evenly",
+                padding: "4px 1px",
+                transition: "opacity .2s, border .12s, box-shadow .2s",
+                boxSizing: "border-box",
+                overflow: "hidden",
+              }}
+            >
               {isHov && !isThisLk && fillDeg > 0 && (
                 <div style={{
                   position: "absolute", inset: 0,
@@ -447,11 +448,13 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 transition: "font-size .18s",
                 textShadow: "0 1px 3px rgba(255,255,255,.5)",
                 position: "relative", zIndex: 3,
+                pointerEvents: "none",
               }}>{block.value}</span>
               <span style={{
                 fontSize: isHov || isThisLk ? "clamp(1.1rem,3.2vw,1.5rem)" : "clamp(.9rem,2.5vw,1.2rem)",
                 lineHeight: 1, transition: "font-size .18s",
                 position: "relative", zIndex: 3,
+                pointerEvents: "none",
               }}>{block.face}</span>
               <span style={{
                 fontFamily: "'Lexend',sans-serif", fontWeight: 700,
@@ -466,6 +469,7 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 textShadow: "0 1px 2px rgba(255,255,255,.6)",
                 position: "relative", zIndex: 3,
                 padding: "0 1px",
+                pointerEvents: "none",
               }}>{block.label}</span>
             </div>
           );
@@ -477,10 +481,10 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ESCALA 3 — ANSIEDAD
+// Cada bloque es su propio gaze-target. El contenedor raíz NO tiene gaze-target.
 // ─────────────────────────────────────────────────────────────────────────────
 function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
   const { speak }  = useTTS();
-  const stripRef   = useRef<HTMLDivElement>(null);
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
 
@@ -492,22 +496,12 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
 
   const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
 
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = stripRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const idx = Math.max(0, Math.min(4, Math.floor((e.clientX - rect.left) / rect.width * 5)));
-    setHover(idx);
-  }, []);
-  const onPointerLeave = useCallback(() => setHover(null), []);
-
   const isLocked = locked !== null && hover === null;
 
   return (
+    // Sin data-gaze-target en el contenedor raíz
     <div
-      ref={stripRef}
-      data-gaze-target="true"
-      onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
+      onPointerLeave={() => setHover(null)}
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
@@ -528,6 +522,7 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         )}
       </div>
 
+      {/* Niveles: cada uno es un gaze-target individual */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 2, borderRadius: 10, overflow: "hidden" }}>
         {ANXIETY_LEVELS.map((level, i) => {
           const isHov    = hover === i;
@@ -536,21 +531,27 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
           const fillDeg  = isHov && !isThisLk ? progress * 360 : 0;
 
           return (
-            <div key={i} style={{
-              flex: 1, minWidth: 0,
-              position: "relative",
-              background: level.bg,
-              opacity: dimmed ? 0.38 : 1,
-              border: isThisLk ? "3px solid #fbbf24" : isHov ? "2px solid rgba(0,0,0,.22)" : "1px solid transparent",
-              borderRadius: 8,
-              boxShadow: isThisLk ? "0 0 14px rgba(251,191,36,.7), inset 0 0 6px rgba(251,191,36,.3)" : "none",
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "space-evenly",
-              padding: "4px 6px",
-              transition: "opacity .2s, border .12s, box-shadow .2s",
-              boxSizing: "border-box",
-              overflow: "hidden",
-            }}>
+            <div
+              key={i}
+              data-gaze-target="true"
+              data-testid={`anxiety-level-${i}`}
+              onPointerEnter={() => setHover(i)}
+              style={{
+                flex: 1, minWidth: 0,
+                position: "relative",
+                background: level.bg,
+                opacity: dimmed ? 0.38 : 1,
+                border: isThisLk ? "3px solid #fbbf24" : isHov ? "2px solid rgba(0,0,0,.22)" : "1px solid transparent",
+                borderRadius: 8,
+                boxShadow: isThisLk ? "0 0 14px rgba(251,191,36,.7), inset 0 0 6px rgba(251,191,36,.3)" : "none",
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "space-evenly",
+                padding: "4px 6px",
+                transition: "opacity .2s, border .12s, box-shadow .2s",
+                boxSizing: "border-box",
+                overflow: "hidden",
+              }}
+            >
               {isHov && !isThisLk && fillDeg > 0 && (
                 <div style={{
                   position: "absolute", inset: 0,
@@ -563,6 +564,7 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 fontSize: isHov || isThisLk ? "clamp(1.4rem,4.5vw,2rem)" : "clamp(1.1rem,3.5vw,1.6rem)",
                 lineHeight: 1, transition: "font-size .18s",
                 position: "relative", zIndex: 3,
+                pointerEvents: "none",
               }}>{level.face}</span>
               <span style={{
                 fontFamily: "'Lexend',sans-serif", fontWeight: 900,
@@ -572,6 +574,7 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 textShadow: "0 1px 3px rgba(255,255,255,.5)",
                 transition: "font-size .18s",
                 position: "relative", zIndex: 3,
+                pointerEvents: "none",
               }}>{level.label}</span>
             </div>
           );
