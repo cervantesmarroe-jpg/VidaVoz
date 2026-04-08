@@ -6,7 +6,7 @@
   "display": "fullscreen",
   "orientation": "any",
   "background_color": "#FFFFFF",
-  "theme_color": "#4ade80",
+  "theme_color": "#FFFFFF",
   "lang": "es",
   "categories": ["health", "medical"],
   "icons": [

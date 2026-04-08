@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess } from '@/lib/globalCursor';
+import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess, isTouchLocked } from '@/lib/globalCursor';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
@@ -851,10 +851,10 @@ export function useWebGazer() {
       gazeTracker.startDetection();
     })();
 
-    let targetEl:      HTMLElement | null = null;
-    let enterTime      = 0;
-    let dwellCooldown  = false;
-    let touchLockUntil = 0;
+    let targetEl:     HTMLElement | null = null;
+    let enterTime     = 0;
+    let dwellCooldown = false;
+    // touchLockUntil eliminado — ahora lo gestiona globalCursor.ts (isTouchLocked())
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     function activateTarget(el: HTMLElement) {
@@ -886,17 +886,6 @@ export function useWebGazer() {
       }
     }
 
-    // ── TOQUE FÍSICO: salta cursor al dedo + bloquea gaze 1 s ───────────────
-    const onTouchStart = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (!t) return;
-      e.preventDefault();
-      const { clientX: x, clientY: y } = t;
-      moveGlobalCursor(x, y);
-      touchLockUntil = performance.now() + 1000;
-      triggerClick(x, y);
-    };
-
     // ── Helpers de hover-aim ──────────────────────────────────────────────────
     // Añade/quita la clase CSS .gaze-hover que ilumina el borde del botón
     // mientras el cursor de mirada está encima, ayudando al paciente a apuntar.
@@ -906,9 +895,9 @@ export function useWebGazer() {
       else    el.classList.remove('gaze-hover');
     }
 
-    // ── MIRADA: gaze tiene prioridad salvo durante 1 s tras un toque ─────────
+    // ── MIRADA: gaze cede al toque durante 500 ms (isTouchLocked de globalCursor) ─
     const onGaze = (x: number, y: number) => {
-      if (performance.now() < touchLockUntil) return;
+      if (isTouchLocked()) return;
       moveGlobalCursor(x, y);
 
       const target = hitTest(x, y);
@@ -941,7 +930,8 @@ export function useWebGazer() {
     // ── PARPADEO ─────────────────────────────────────────────────────────────
     const onBlink = (x: number, y: number) => triggerClick(x, y);
 
-    window.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
+    // Touch lo maneja globalCursor.ts (siempre activo, passive, sin preventDefault).
+    // Aquí solo registramos gaze y blink.
     gazeTracker.addGazeListener(onGaze);
     gazeTracker.addBlinkListener(onBlink);
 
@@ -949,7 +939,6 @@ export function useWebGazer() {
       setGazePriority(false);
       // Limpiar glow pendiente al desmontar
       setAimGlow(targetEl, false);
-      window.removeEventListener('touchstart', onTouchStart, { capture: true });
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);
     };

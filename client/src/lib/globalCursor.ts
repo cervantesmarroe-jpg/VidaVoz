@@ -1,34 +1,28 @@
 // ──────────────────────────────────────────────────────────────────────────────
-// Global Cursor Maestro
-// Este módulo se ejecuta SINCRÓNICAMENTE al importarse, antes de cualquier
-// render de React. Crea #gaze-cursor en el DOM de inmediato y lo mantiene
-// visible con z-index 99999. Exporta moveGlobalCursor(x, y) como API única.
+// Global Cursor Maestro — única fuente de verdad del cursor en pantalla
+//
+// ARQUITECTURA:
+//   • Se importa sincrónicamente antes de React (ver main.tsx).
+//   • Crea #gaze-cursor una sola vez y lo gestiona para siempre.
+//   • Responde a TRES fuentes: ratón, toque y mirada (eye-tracking).
+//   • Touch y gaze COEXISTEN: touch bloquea gaze 500 ms, luego el ojo retoma.
+//   • El cursor arranca OCULTO (opacity:0) → setCursorVisible(true) en App.tsx.
+//
+// API EXPORTADA:
+//   moveGlobalCursor(x,y)     – mueve el cursor (gaze + mouse; touch lo llama internamente)
+//   flashGlobalCursor()       – flash de activación (blink / touch)
+//   setCursorBlinkSuccess()   – feedback verde 600 ms para blink válido
+//   setGazePriority(bool)     – mouse cede a gaze cuando true
+//   setCursorVisible(bool)    – muestra/oculta el cursor
+//   isTouchLocked()           – true durante los 500 ms post-toque (para que gaze ceda)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const CURSOR_SIZE = 32; // px — diámetro del círculo
-const HALF        = CURSOR_SIZE / 2;
+const CURSOR_SIZE    = 32;   // px — diámetro del círculo
+const HALF           = CURSOR_SIZE / 2;
+const TOUCH_LOCK_MS  = 500;  // ms — cuánto tiempo el gaze cede al toque
 
-// ── Crear (o reutilizar) el elemento en el DOM ────────────────────────────────
-// Se hace fuera de cualquier función para garantizar ejecución síncrona en el
-// momento del import, independientemente del ciclo de vida de React.
-function createCursorElement(): HTMLDivElement {
-  const existing = document.getElementById('gaze-cursor') as HTMLDivElement | null;
-  if (existing) {
-    applyBaseStyles(existing);
-    return existing;
-  }
-  const el = document.createElement('div');
-  el.id = 'gaze-cursor';
-  applyBaseStyles(el);
-  // Añadir al body si ya existe; si no (muy improbable), al documentElement
-  (document.body ?? document.documentElement).appendChild(el);
-  return el;
-}
-
+// ── Crear (o reutilizar) el elemento ──────────────────────────────────────────
 function applyBaseStyles(el: HTMLDivElement) {
-  // Estilos inline completos — no dependen del CSS externo para máxima robustez.
-  // El cursor arranca OCULTO (opacity:0) y solo se muestra tras la Splash Screen
-  // mediante setCursorVisible(true) llamado desde App.tsx al salir de la fase splash.
   el.style.cssText = `
     position: fixed !important;
     top: 0 !important;
@@ -46,18 +40,25 @@ function applyBaseStyles(el: HTMLDivElement) {
     will-change: transform !important;
     transition: box-shadow 0.18s, background 0.12s, opacity 0.3s !important;
   `;
-  // Posición inicial: centro exacto de la pantalla
   const cx = typeof window !== 'undefined' ? window.innerWidth  / 2 : 0;
   const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
   el.style.transform = `translate(${cx - HALF}px, ${cy - HALF}px)`;
 }
 
-// Inicialización síncrona — si el body aún no está (SSR-edge), esperar DOMContentLoaded
+function createCursorElement(): HTMLDivElement {
+  const existing = document.getElementById('gaze-cursor') as HTMLDivElement | null;
+  if (existing) { applyBaseStyles(existing); return existing; }
+  const el = document.createElement('div');
+  el.id = 'gaze-cursor';
+  applyBaseStyles(el);
+  (document.body ?? document.documentElement).appendChild(el);
+  return el;
+}
+
 let _cursor: HTMLDivElement;
 if (document.body) {
   _cursor = createCursorElement();
 } else {
-  // Fallback por si el módulo se importa antes de que el DOM esté listo
   _cursor = document.createElement('div');
   _cursor.id = 'gaze-cursor';
   document.addEventListener('DOMContentLoaded', () => {
@@ -68,67 +69,79 @@ if (document.body) {
 
 export const globalCursor = _cursor;
 
+// ── Estado interno ─────────────────────────────────────────────────────────────
+let _gazePriority    = false;   // true cuando el eye-tracking está activo
+let _touchLockUntil  = 0;       // timestamp hasta el que el gaze debe ceder al toque
+
 // ── API pública ───────────────────────────────────────────────────────────────
 
-/** Mueve el cursor al punto (x, y) en coordenadas de viewport.
- *  Llamar desde eventos mousemove, touchmove y desde el pipeline de eye-tracking. */
+/** Mueve el cursor a (x, y). Llamada desde gaze, mouse y touch. */
 export function moveGlobalCursor(x: number, y: number) {
   globalCursor.style.transform = `translate(${x - HALF}px, ${y - HALF}px)`;
 }
 
-/** Flash visual (blink o touch) — efecto visual de activación */
+/** Flash de activación visual (blink o toque). */
 export function flashGlobalCursor() {
   globalCursor.classList.add('gaze-blink-flash');
   setTimeout(() => globalCursor.classList.remove('gaze-blink-flash'), 350);
 }
 
-/** Feedback verde inmediato: el cursor se vuelve verde brillante 600ms para
- *  confirmar al paciente que el parpadeo fue registrado como clic válido.
- *  Usa setProperty('…', '…', 'important') para sobreescribir el !important
- *  establecido en applyBaseStyles vía cssText. */
+/** Feedback verde 600 ms — confirma al paciente que su parpadeo fue un clic válido. */
 export function setCursorBlinkSuccess() {
   const el = globalCursor;
-  el.style.setProperty('background',  'rgba(34, 197, 94, 0.95)',  'important');
-  el.style.setProperty('border-color','#15803d',                   'important');
+  el.style.setProperty('background',   'rgba(34, 197, 94, 0.95)',  'important');
+  el.style.setProperty('border-color', '#15803d',                   'important');
   el.style.setProperty('box-shadow',
     '0 0 0 3px rgba(255,255,255,0.85), 0 0 28px rgba(34,197,94,0.9)', 'important');
   setTimeout(() => {
-    el.style.setProperty('background',  'rgba(255, 255, 255, 0.95)', 'important');
-    el.style.setProperty('border-color','rgba(15, 118, 110, 1)',      'important');
+    el.style.setProperty('background',   'rgba(255, 255, 255, 0.95)', 'important');
+    el.style.setProperty('border-color', 'rgba(15, 118, 110, 1)',      'important');
     el.style.setProperty('box-shadow',
       '0 0 0 2px rgba(255,255,255,0.6), 0 0 18px rgba(20,184,166,0.7)', 'important');
   }, 600);
 }
 
-// ── Listeners siempre activos (ratón + touch) ─────────────────────────────────
-// Cuando el eye-tracking está activo, llamará a moveGlobalCursor con mayor
-// frecuencia, sobreescribiendo de forma natural la posición del ratón.
-// No hay conflicto: la última llamada a moveGlobalCursor siempre gana.
-let _gazePriority = false; // true cuando el eye-tracking está activo
-
-window.addEventListener('mousemove', (e: MouseEvent) => {
-  if (_gazePriority) return; // el gaze tiene prioridad: ignoramos el ratón
-  moveGlobalCursor(e.clientX, e.clientY);
-}, { passive: true });
-
-window.addEventListener('touchmove', (e: TouchEvent) => {
-  const t = e.touches[0];
-  if (t) moveGlobalCursor(t.clientX, t.clientY);
-}, { passive: true });
-
-window.addEventListener('touchstart', (e: TouchEvent) => {
-  const t = e.touches[0];
-  if (t) moveGlobalCursor(t.clientX, t.clientY);
-}, { passive: true });
-
-/** Activa/desactiva la prioridad del eye-tracking sobre el ratón */
+/** Activa/desactiva la prioridad del eye-tracking sobre el ratón. */
 export function setGazePriority(active: boolean) {
   _gazePriority = active;
 }
 
-/** Muestra u oculta el cursor.
- *  Se llama desde App.tsx: false durante la Splash Screen, true al terminarla.
- *  El cursor arranca con opacity:0 por defecto. */
+/** Muestra u oculta el cursor (opacity). Oculto durante la Splash Screen. */
 export function setCursorVisible(visible: boolean) {
   globalCursor.style.setProperty('opacity', visible ? '1' : '0', 'important');
 }
+
+/**
+ * Devuelve true si un toque reciente está bloqueando el gaze.
+ * El gaze debe ceder (no mover el cursor ni acumular dwell) mientras sea true.
+ * Se activa 500 ms con cada touchstart.
+ */
+export function isTouchLocked(): boolean {
+  return performance.now() < _touchLockUntil;
+}
+
+// ── Listeners permanentes (nunca se eliminan) ─────────────────────────────────
+
+// RATÓN: solo cuando el gaze NO tiene prioridad
+window.addEventListener('mousemove', (e: MouseEvent) => {
+  if (_gazePriority) return;
+  moveGlobalCursor(e.clientX, e.clientY);
+}, { passive: true });
+
+// TOQUE: siempre activo, PASSIVE (no bloquea eventos nativos de click en botones).
+// 1. Mueve el cursor al dedo.
+// 2. Congela el gaze 500 ms para que el cursor no salte.
+// 3. Pulsa visual del cursor para feedback inmediato.
+window.addEventListener('touchstart', (e: TouchEvent) => {
+  const t = e.touches[0];
+  if (!t) return;
+  moveGlobalCursor(t.clientX, t.clientY);
+  _touchLockUntil = performance.now() + TOUCH_LOCK_MS;
+  flashGlobalCursor();
+}, { passive: true });
+
+// TOUCHMOVE: actualiza posición durante arrastre
+window.addEventListener('touchmove', (e: TouchEvent) => {
+  const t = e.touches[0];
+  if (t) moveGlobalCursor(t.clientX, t.clientY);
+}, { passive: true });
