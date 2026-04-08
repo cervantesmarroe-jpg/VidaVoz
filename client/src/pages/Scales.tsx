@@ -5,62 +5,84 @@ import { useTTS } from "@/hooks/use-tts";
 import { RotateCcw } from "lucide-react";
 
 const DWELL_MS        = 2500;
-const ACCORDION_DWELL = 1400; // ms para abrir/cerrar un panel del acordeón
+const ACCORDION_DWELL = 1400;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATOS
+// TIPOS Y DATOS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BORG_BLOCKS = [
-  { value: 0,  label: "Nada",      face: "😌", bg: "#DDF5E0" },
-  { value: 1,  label: "Muy leve",  face: "😊", bg: "#DFF2DF" },
-  { value: 2,  label: "Leve",      face: "🙂", bg: "#E1EFDE" },
-  { value: 3,  label: "Moderado",  face: "😐", bg: "#E3ECDD" },
-  { value: 4,  label: "Algo duro", face: "😐", bg: "#E5E9DC" },
-  { value: 5,  label: "Duro",      face: "😟", bg: "#E8E6DB" },
-  { value: 6,  label: "Duro",      face: "😟", bg: "#EAE3D9" },
-  { value: 7,  label: "Muy duro",  face: "😰", bg: "#ECE0D8" },
-  { value: 8,  label: "Muy duro",  face: "😰", bg: "#EEDDD7" },
-  { value: 9,  label: "Extremo",   face: "😱", bg: "#F0DAD6" },
-  { value: 10, label: "Máximo",    face: "😱", bg: "#F2D7D5" },
-] as const;
+type ScaleItem = {
+  num:   number;
+  face:  string;
+  label: string;
+  bg:    string;
+  tts:   string;
+};
 
-const ANXIETY_LEVELS = [
-  { label: "Tranquilo",   face: "😌", bg: "#DDF5E0", tts: "Estoy tranquilo." },
-  { label: "Inquieto",    face: "🙂", bg: "#E2EEDD", tts: "Me siento inquieto." },
-  { label: "Ansioso",     face: "😟", bg: "#E8E6DB", tts: "Estoy ansioso." },
-  { label: "Muy ansioso", face: "😰", bg: "#EDDFD8", tts: "Estoy muy ansioso." },
-  { label: "Pánico",      face: "😱", bg: "#F2D7D5", tts: "Siento pánico." },
-] as const;
+const EVA_ITEMS: ScaleItem[] = [
+  { num: 0,  face: "😊", label: "Sin dolor",       bg: "#DDF5E0", tts: "Mi dolor es 0 sobre 10. Sin dolor." },
+  { num: 1,  face: "🙂", label: "Muy leve",         bg: "#E0F1DF", tts: "Mi dolor es 1 sobre 10. Muy leve." },
+  { num: 2,  face: "😌", label: "Leve",             bg: "#E3EEDE", tts: "Mi dolor es 2 sobre 10. Leve." },
+  { num: 3,  face: "😐", label: "Leve-moderado",    bg: "#E6EADC", tts: "Mi dolor es 3 sobre 10. Leve-moderado." },
+  { num: 4,  face: "😕", label: "Moderado",         bg: "#E9E7DB", tts: "Mi dolor es 4 sobre 10. Moderado." },
+  { num: 5,  face: "😟", label: "Moderado-intenso", bg: "#ECE3D9", tts: "Mi dolor es 5 sobre 10. Moderado-intenso." },
+  { num: 6,  face: "😮", label: "Intenso",          bg: "#EFDFD8", tts: "Mi dolor es 6 sobre 10. Intenso." },
+  { num: 7,  face: "😣", label: "Muy intenso",      bg: "#F2DCD7", tts: "Mi dolor es 7 sobre 10. Muy intenso." },
+  { num: 8,  face: "😢", label: "Muy intenso",      bg: "#F4D8D5", tts: "Mi dolor es 8 sobre 10. Muy intenso." },
+  { num: 9,  face: "😭", label: "Severo",           bg: "#F5D4D2", tts: "Mi dolor es 9 sobre 10. Severo." },
+  { num: 10, face: "😱", label: "Insoportable",     bg: "#F7D0CF", tts: "Mi dolor es 10 sobre 10. Insoportable." },
+];
+
+const BORG_ITEMS: ScaleItem[] = [
+  { num: 0,  face: "😌", label: "Nada",           bg: "#DDF5E0", tts: "Mi esfuerzo respiratorio es 0. Nada." },
+  { num: 1,  face: "😊", label: "Muy leve",        bg: "#E0F1DF", tts: "Mi esfuerzo respiratorio es 1. Muy leve." },
+  { num: 2,  face: "🙂", label: "Leve",            bg: "#E3EEDE", tts: "Mi esfuerzo respiratorio es 2. Leve." },
+  { num: 3,  face: "😐", label: "Moderado",        bg: "#E6EADC", tts: "Mi esfuerzo respiratorio es 3. Moderado." },
+  { num: 4,  face: "😕", label: "Algo duro",       bg: "#E9E7DB", tts: "Mi esfuerzo respiratorio es 4. Algo duro." },
+  { num: 5,  face: "😟", label: "Duro",            bg: "#ECE3D9", tts: "Mi esfuerzo respiratorio es 5. Duro." },
+  { num: 6,  face: "😟", label: "Duro",            bg: "#EFDFD8", tts: "Mi esfuerzo respiratorio es 6. Duro." },
+  { num: 7,  face: "😰", label: "Muy duro",        bg: "#F2DCD7", tts: "Mi esfuerzo respiratorio es 7. Muy duro." },
+  { num: 8,  face: "😰", label: "Muy duro",        bg: "#F4D8D5", tts: "Mi esfuerzo respiratorio es 8. Muy duro." },
+  { num: 9,  face: "😱", label: "Extremo",         bg: "#F5D4D2", tts: "Mi esfuerzo respiratorio es 9. Extremo." },
+  { num: 10, face: "😱", label: "Máximo absoluto", bg: "#F7D0CF", tts: "Mi esfuerzo respiratorio es 10. Máximo absoluto." },
+];
+
+const ANXIETY_ITEMS: ScaleItem[] = [
+  { num: 1, face: "😌", label: "Tranquilo",   bg: "#DDF5E0", tts: "Estoy tranquilo." },
+  { num: 2, face: "🙂", label: "Inquieto",    bg: "#E4EBDC", tts: "Me siento inquieto." },
+  { num: 3, face: "😟", label: "Ansioso",     bg: "#ECE3D9", tts: "Estoy ansioso." },
+  { num: 4, face: "😰", label: "Muy ansioso", bg: "#F2DCD7", tts: "Estoy muy ansioso." },
+  { num: 5, face: "😱", label: "Pánico",      bg: "#F7D0CF", tts: "Siento pánico." },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOOK: dwell con progreso RAF
+// HOOK: progreso de dwell con RAF
 // ─────────────────────────────────────────────────────────────────────────────
-function useDwellWithProgress<T>(
-  activeValue: T | null,
+function useDwellProgress(
+  activeIdx: number | null,
   dwell: number,
-  onLock: (v: T) => void,
+  onFire: (idx: number) => void,
 ): number {
   const [progress, setProgress] = useState(0);
   const rafRef    = useRef<number | null>(null);
   const startRef  = useRef(0);
-  const prevRef   = useRef<T | null>(null);
+  const prevRef   = useRef<number | null>(null);
   const firedRef  = useRef(false);
-  const onLockRef = useRef(onLock);
-  onLockRef.current = onLock;
+  const fireRef   = useRef(onFire);
+  fireRef.current = onFire;
 
   useEffect(() => {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
 
-    if (activeValue === null) {
+    if (activeIdx === null) {
       setProgress(0); prevRef.current = null; firedRef.current = false; return;
     }
-    if (activeValue !== prevRef.current) {
-      prevRef.current = activeValue; startRef.current = Date.now();
+    if (activeIdx !== prevRef.current) {
+      prevRef.current = activeIdx; startRef.current = Date.now();
       firedRef.current = false; setProgress(0);
     }
 
-    const captured = activeValue;
+    const captured = activeIdx;
     const tick = () => {
       const pct = Math.min(1, (Date.now() - startRef.current) / dwell);
       setProgress(pct);
@@ -68,28 +90,211 @@ function useDwellWithProgress<T>(
         rafRef.current = requestAnimationFrame(tick);
       } else if (!firedRef.current) {
         firedRef.current = true; rafRef.current = null;
-        onLockRef.current(captured);
+        fireRef.current(captured);
       }
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; } };
-  }, [activeValue, dwell]);
+  }, [activeIdx, dwell]);
 
   return progress;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACORDEÓN: header dwell target + contenido colapsable
-// Contenido siempre montado (display:none cuando cerrado) para preservar estado.
+// BOTÓN INDIVIDUAL de escala
+// ─────────────────────────────────────────────────────────────────────────────
+interface ScaleBtnProps {
+  item:       ScaleItem;
+  testId:     string;
+  isHovered:  boolean;
+  isLocked:   boolean;
+  isDimmed:   boolean;
+  progress:   number;
+  onEnter:    () => void;
+  onSelect:   () => void;
+}
+
+function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnter, onSelect }: ScaleBtnProps) {
+  const fillW = isHovered && !isLocked ? `${progress * 100}%` : "0%";
+
+  return (
+    <div
+      data-gaze-target="true"
+      data-testid={testId}
+      onPointerEnter={onEnter}
+      onClick={onSelect}
+      style={{
+        width: "100%",
+        flexShrink: 0,
+        minHeight: 62,
+        display: "flex",
+        alignItems: "center",
+        padding: "10px 16px",
+        gap: 14,
+        boxSizing: "border-box",
+        background: isLocked ? "#F0FDF4" : item.bg,
+        border: isLocked
+          ? "2.5px solid #22C55E"
+          : isHovered
+          ? "2px solid #F59E0B"
+          : "1.5px solid rgba(0,0,0,0.08)",
+        borderRadius: 12,
+        opacity: isDimmed ? 0.35 : 1,
+        position: "relative",
+        overflow: "hidden",
+        cursor: "pointer",
+        userSelect: "none",
+        touchAction: "manipulation",
+        boxShadow: isLocked
+          ? "0 0 16px rgba(34,197,94,0.35)"
+          : isHovered
+          ? "0 2px 10px rgba(245,158,11,0.25)"
+          : "0 1px 3px rgba(0,0,0,0.06)",
+        transition: "border-color .12s, box-shadow .15s, opacity .2s, background .15s",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      {/* Barra de progreso dwell — se llena de izquierda a derecha */}
+      <div style={{
+        position: "absolute",
+        bottom: 0, left: 0,
+        height: 4,
+        width: fillW,
+        background: "#F59E0B",
+        borderRadius: "0 3px 0 0",
+        transition: "none",
+        pointerEvents: "none",
+      }} />
+
+      {/* Checkmark cuando está bloqueado */}
+      {isLocked && (
+        <div style={{
+          position: "absolute",
+          top: 6, right: 8,
+          fontSize: ".65rem",
+          fontWeight: 900,
+          color: "#16A34A",
+          fontFamily: "'Lexend',sans-serif",
+          pointerEvents: "none",
+        }}>✓</div>
+      )}
+
+      {/* Número */}
+      <span style={{
+        fontFamily: "'Lexend',sans-serif",
+        fontWeight: 900,
+        fontSize: "clamp(1.5rem,4.5vw,2rem)",
+        color: isLocked ? "#16A34A" : "#1A1A1A",
+        lineHeight: 1,
+        minWidth: 36,
+        textAlign: "center",
+        flexShrink: 0,
+        pointerEvents: "none",
+      }}>
+        {item.num}
+      </span>
+
+      {/* Emoji */}
+      <span style={{
+        fontSize: "clamp(1.6rem,5vw,2.2rem)",
+        lineHeight: 1,
+        flexShrink: 0,
+        pointerEvents: "none",
+        filter: isHovered ? "drop-shadow(0 0 4px rgba(245,158,11,0.5))" : "none",
+        transition: "filter .15s",
+      }}>
+        {item.face}
+      </span>
+
+      {/* Etiqueta */}
+      <span style={{
+        fontFamily: "'Lexend',sans-serif",
+        fontWeight: 700,
+        fontSize: "clamp(.82rem,2.4vw,1.05rem)",
+        color: isLocked ? "#14532D" : "#2A2A2A",
+        flex: 1,
+        textAlign: "right",
+        lineHeight: 1.2,
+        pointerEvents: "none",
+      }}>
+        {item.label}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LISTA DE BOTONES con dwell + click directo
+// ─────────────────────────────────────────────────────────────────────────────
+interface ScaleListProps {
+  items:    ScaleItem[];
+  prefix:   string;
+  onLocked: (val: number | null) => void;
+}
+
+function ScaleList({ items, prefix, onLocked }: ScaleListProps) {
+  const { speak }  = useTTS();
+  const [hover,  setHover]  = useState<number | null>(null);
+  const [locked, setLocked] = useState<number | null>(null);
+
+  const fire = useCallback((idx: number) => {
+    setLocked(idx);
+    onLocked(items[idx].num);
+    playBell();
+    speak(items[idx].tts);
+  }, [items, onLocked, speak]);
+
+  const progress = useDwellProgress(hover, DWELL_MS, fire);
+  const isLocked = locked !== null && hover === null;
+
+  const handleSelect = useCallback((idx: number) => {
+    if (locked === idx) return;
+    fire(idx);
+  }, [locked, fire]);
+
+  return (
+    <div
+      onPointerLeave={() => setHover(null)}
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch" as never,
+        overscrollBehavior: "contain",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        paddingRight: 2,
+      }}
+    >
+      {items.map((item, idx) => (
+        <ScaleBtn
+          key={idx}
+          item={item}
+          testId={`${prefix}-btn-${idx}`}
+          isHovered={hover === idx}
+          isLocked={isLocked && locked === idx}
+          isDimmed={isLocked && locked !== idx}
+          progress={progress}
+          onEnter={() => { if (!isLocked || locked !== idx) setHover(idx); }}
+          onSelect={() => handleSelect(idx)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PANEL ACORDEÓN
 // ─────────────────────────────────────────────────────────────────────────────
 function AccordionPanel({
   title, isOpen, lockedBadge, onToggle, children,
 }: {
-  title: string;
-  isOpen: boolean;
-  lockedBadge?: string | null;
-  onToggle: () => void;
-  children: ReactNode;
+  title:       string;
+  isOpen:      boolean;
+  lockedBadge: string | null;
+  onToggle:    () => void;
+  children:    ReactNode;
 }) {
   const rafRef      = useRef<number | null>(null);
   const startRef    = useRef(0);
@@ -123,21 +328,21 @@ function AccordionPanel({
 
   return (
     <div style={{
-      flex: isOpen ? "5 1 0" : "0 0 58px",
+      flex: isOpen ? "1 1 0" : "0 0 62px",
+      minHeight: 62,
       display: "flex",
       flexDirection: "column",
       borderRadius: 14,
       overflow: "hidden",
       border: isOpen ? "2px solid #D4CAB8" : "1.5px solid #E0D8CB",
       background: "#FFFFFF",
-      minHeight: 58,
       boxShadow: isOpen
         ? "0 2px 12px rgba(0,0,0,0.09)"
         : "0 1px 4px rgba(0,0,0,0.05)",
-      transition: "border-color .2s, box-shadow .2s",
+      transition: "flex .22s ease, border-color .2s, box-shadow .2s",
     }}>
 
-      {/* ── Header: siempre visible, es el dwell target ─────────────────── */}
+      {/* Header */}
       <div
         className="gaze-target"
         data-gaze-target="true"
@@ -145,36 +350,34 @@ function AccordionPanel({
         onPointerLeave={cancelDwell}
         onClick={() => onToggleRef.current()}
         style={{
-          height: 58,
+          height: 62,
           flexShrink: 0,
           padding: "0 16px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
           gap: 10,
           background: isOpen ? "#FDF2E2" : "#FFFFFF",
           cursor: "pointer",
           position: "relative",
           overflow: "hidden",
           userSelect: "none",
-          touchAction: "none",
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
           transition: "background .2s",
         }}
       >
-        {/* Título */}
         <span style={{
           fontFamily: "'Lexend',sans-serif",
           fontWeight: 900,
-          fontSize: "clamp(.78rem,2vw,1rem)",
+          fontSize: "clamp(.8rem,2.2vw,1.05rem)",
           color: "#333333",
-          letterSpacing: ".14em",
+          letterSpacing: ".12em",
           textTransform: "uppercase",
           flexShrink: 0,
         }}>
           {title}
         </span>
 
-        {/* Valor confirmado (badge verde) */}
         {lockedBadge && (
           <span style={{
             background: "rgba(34,197,94,.18)",
@@ -190,7 +393,6 @@ function AccordionPanel({
           </span>
         )}
 
-        {/* Indicador abierto/cerrado */}
         <span style={{
           fontSize: "1.1rem",
           color: "#AAAAAA",
@@ -201,7 +403,6 @@ function AccordionPanel({
           transition: "transform .22s",
         }}>▾</span>
 
-        {/* Barra de progreso dwell */}
         {dwellPct > 0 && (
           <div style={{
             position: "absolute", bottom: 0, left: 0,
@@ -209,17 +410,19 @@ function AccordionPanel({
             width: `${dwellPct * 100}%`,
             background: "#fbbf24",
             borderRadius: "0 2px 0 0",
+            pointerEvents: "none",
           }} />
         )}
       </div>
 
-      {/* ── Contenido: siempre montado, oculto con display:none cuando cerrado */}
+      {/* Contenido */}
       <div style={{
         flex: 1,
         minHeight: 0,
-        padding: "8px",
+        padding: isOpen ? "8px 10px 10px" : 0,
         display: isOpen ? "flex" : "none",
         flexDirection: "column",
+        overflow: "hidden",
       }}>
         {children}
       </div>
@@ -228,385 +431,7 @@ function AccordionPanel({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ESCALA 1 — EVA (Dolor): gradiente continuo 0-10
-// Cada número es su propio gaze-target con hit-zone de flex:1 (sin zonas muertas).
-// El contenedor raíz NO tiene data-gaze-target para que el magnetismo no lo capture.
-// ─────────────────────────────────────────────────────────────────────────────
-function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
-  const { speak }   = useTTS();
-  const [hover,  setHover]  = useState<number | null>(null);
-  const [locked, setLocked] = useState<number | null>(null);
-
-  const onLock = useCallback((val: number) => {
-    setLocked(val); onLocked(val);
-    playBell();
-    speak(`Mi nivel de dolor es ${val} sobre diez.`);
-  }, [speak, onLocked]);
-
-  const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
-
-  // Limpia hover cuando el puntero/mirada sale del strip completo
-  const onStripLeave = useCallback(() => setHover(null), []);
-
-  const active   = hover ?? locked;
-  const isLocked = locked !== null && hover === null;
-
-  return (
-    // Sin data-gaze-target: el magnetismo no debe capturar el fondo de la escala
-    <div
-      onPointerLeave={onStripLeave}
-      style={{
-        flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
-        touchAction: "none", userSelect: "none",
-        background: "linear-gradient(to right, #DDF5E0 0%, #F2D7D5 100%)",
-        border: isLocked ? "3px solid #22C55E" : "1.5px solid #E0E0E0",
-        boxShadow: isLocked ? "0 0 22px rgba(34,197,94,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
-        display: "flex", flexDirection: "column",
-        justifyContent: "space-between", padding: "6px 10px",
-        boxSizing: "border-box", transition: "border-color .2s, box-shadow .2s",
-      }}
-    >
-      {/* Emojis extremos + etiqueta */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: "clamp(1rem,3vw,1.5rem)", lineHeight: 1 }}>😊</span>
-        <span style={{
-          fontFamily: "'Lexend',sans-serif", fontWeight: 900,
-          fontSize: "clamp(.6rem,1.6vw,.85rem)", color: "#333",
-          letterSpacing: ".15em", textTransform: "uppercase",
-          textShadow: "0 1px 3px rgba(255,255,255,.65)",
-        }}>
-          DOLOR (EVA)
-          {isLocked && (
-            <span style={{ marginLeft: 8, fontSize: ".6rem", background: "rgba(34,197,94,.22)", color: "#14532D", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
-              ✓ {locked}/10
-            </span>
-          )}
-        </span>
-        <span style={{ fontSize: "clamp(1rem,3vw,1.5rem)", lineHeight: 1 }}>😭</span>
-      </div>
-
-      {/* Números 0-10: cada uno ocupa flex:1 → sin zonas muertas entre ellos */}
-      <div style={{
-        flex: 1, minHeight: 0,
-        display: "flex", alignItems: "stretch",
-        padding: "3px 0",
-        gap: 2,
-      }}>
-        {Array.from({ length: 11 }, (_, i) => i).map((n) => {
-          const isSel    = hover === n;
-          const isThisLk = isLocked && locked === n;
-          const dimmed   = isLocked && locked !== n;
-          const szStr    = isThisLk
-            ? "clamp(22px, 6.5vw, 42px)"
-            : isSel
-            ? "clamp(20px, 5.8vw, 36px)"
-            : "clamp(16px, 4.5vw, 28px)";
-          const ringPx    = isSel && !isThisLk ? 2 + progress * 4 : 0;
-          const ringAlpha = isSel && !isThisLk ? 0.35 + progress * 0.45 : 0;
-          return (
-            // Hit-zone: ocupa 1/11 del ancho, altura completa de la fila
-            <div
-              key={n}
-              data-gaze-target="true"
-              data-testid={`eva-num-${n}`}
-              onPointerEnter={() => setHover(n)}
-              style={{
-                flex: 1, minWidth: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "crosshair",
-              }}
-            >
-              {/* Círculo visual:
-                  hover  → naranja (pre-selección)
-                  locked → verde   (confirmado)    */}
-              <div style={{
-                width: szStr, height: szStr,
-                borderRadius: "50%",
-                position: "relative",
-                background: isThisLk
-                  ? "#16A34A"                   // ✓ confirmado — verde
-                  : isSel
-                  ? "#EA580C"                   // 👁 pre-selección — naranja
-                  : "rgba(0,0,0,.18)",
-                opacity: dimmed ? 0.35 : 1,
-                color: isSel || isThisLk ? "#FFFFFF" : "#333",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "'Lexend',sans-serif",
-                fontWeight: isSel || isThisLk ? 900 : 700,
-                fontSize: isThisLk
-                  ? "clamp(.65rem,2.2vw,1.1rem)"
-                  : isSel
-                  ? "clamp(.6rem,1.9vw,1rem)"
-                  : "clamp(.5rem,1.5vw,.8rem)",
-                border: isThisLk ? "2.5px solid #14532D" : "none",
-                boxShadow: isThisLk
-                  ? "0 0 14px rgba(22,163,74,.75)"         // halo verde
-                  : isSel && ringPx > 0
-                  ? `0 0 0 ${ringPx}px rgba(234,88,12,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(234,88,12,${ringAlpha * 0.5})`  // anillo naranja
-                  : "none",
-                textShadow: "0 1px 2px rgba(0,0,0,.25)",
-                transition: "opacity .2s, background .14s, box-shadow .2s",
-                pointerEvents: "none",
-              }}>
-                {n}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {active === null && (
-        <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontSize: ".56rem", fontWeight: 600, color: "rgba(51,51,51,.5)", textShadow: "0 1px 2px rgba(255,255,255,.5)", flexShrink: 0 }}>
-          Mira un número · 2,5 s para fijar
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ESCALA 2 — BORG (Respiración)
-// Cada bloque es su propio gaze-target. El contenedor raíz NO tiene gaze-target.
-// ─────────────────────────────────────────────────────────────────────────────
-function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
-  const { speak }  = useTTS();
-  const [hover,  setHover]  = useState<number | null>(null);
-  const [locked, setLocked] = useState<number | null>(null);
-
-  const onLock = useCallback((idx: number) => {
-    setLocked(idx); onLocked(idx);
-    playBell();
-    speak(`Mi nivel de esfuerzo es ${idx}, ${BORG_BLOCKS[idx].label}.`);
-  }, [speak, onLocked]);
-
-  const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
-
-  const isLocked = locked !== null && hover === null;
-
-  return (
-    // Sin data-gaze-target en el contenedor raíz
-    <div
-      onPointerLeave={() => setHover(null)}
-      style={{
-        flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
-        touchAction: "none", userSelect: "none",
-        border: isLocked ? "3px solid #22C55E" : "1.5px solid #E0E0E0",
-        boxShadow: isLocked ? "0 0 22px rgba(34,197,94,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
-        display: "flex", flexDirection: "column",
-        padding: "7px 8px", gap: 4, boxSizing: "border-box",
-        background: "#FFFFFF",
-        transition: "border-color .2s, box-shadow .2s",
-      }}
-    >
-      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
-        RESPIRACIÓN (BORG)
-        {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(34,197,94,.22)", color: "#14532D", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
-            ✓ {locked} – {BORG_BLOCKS[locked!].label}
-          </span>
-        )}
-      </div>
-
-      {/* Bloques: cada uno es un gaze-target individual */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 2, borderRadius: 10, overflow: "hidden" }}>
-        {BORG_BLOCKS.map((block, i) => {
-          const isHov    = hover === i;
-          const isThisLk = isLocked && locked === i;
-          const dimmed   = isLocked && locked !== i;
-          const fillDeg  = isHov && !isThisLk ? progress * 360 : 0;
-
-          return (
-            <div
-              key={i}
-              data-gaze-target="true"
-              data-testid={`borg-block-${i}`}
-              onPointerEnter={() => setHover(i)}
-              style={{
-                flex: 1, minWidth: 0,
-                position: "relative",
-                background: block.bg,
-                opacity: dimmed ? 0.38 : 1,
-                border: isThisLk
-                  ? "3px solid #22C55E"                    // ✓ verde confirmado
-                  : isHov
-                  ? "2px solid #EA580C"                    // 👁 naranja pre-selección
-                  : "1px solid transparent",
-                borderRadius: 8,
-                boxShadow: isThisLk
-                  ? "0 0 14px rgba(34,197,94,.7), inset 0 0 6px rgba(34,197,94,.3)"  // halo verde
-                  : "none",
-                display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "space-evenly",
-                padding: "4px 1px",
-                transition: "opacity .2s, border .12s, box-shadow .2s",
-                boxSizing: "border-box",
-                overflow: "hidden",
-              }}
-            >
-              {/* Overlay naranja durante dwell (pre-selección) */}
-              {isHov && !isThisLk && fillDeg > 0 && (
-                <div style={{
-                  position: "absolute", inset: 0,
-                  background: `conic-gradient(from -90deg, rgba(234,88,12,0.45) ${fillDeg}deg, transparent ${fillDeg}deg)`,
-                  pointerEvents: "none", zIndex: 2,
-                  borderRadius: "inherit",
-                }} />
-              )}
-              <span style={{
-                fontFamily: "'Lexend',sans-serif", fontWeight: 900,
-                fontSize: isHov || isThisLk ? "clamp(1rem,3vw,1.4rem)" : "clamp(.85rem,2.4vw,1.1rem)",
-                color: "#333333", lineHeight: 1,
-                transition: "font-size .18s",
-                textShadow: "0 1px 3px rgba(255,255,255,.5)",
-                position: "relative", zIndex: 3,
-                pointerEvents: "none",
-              }}>{block.value}</span>
-              <span style={{
-                fontSize: isHov || isThisLk ? "clamp(1.1rem,3.2vw,1.5rem)" : "clamp(.9rem,2.5vw,1.2rem)",
-                lineHeight: 1, transition: "font-size .18s",
-                position: "relative", zIndex: 3,
-                pointerEvents: "none",
-              }}>{block.face}</span>
-              <span style={{
-                fontFamily: "'Lexend',sans-serif", fontWeight: 700,
-                fontSize: "clamp(.44rem,1.1vw,.62rem)",
-                color: "#2A2A2A",
-                textAlign: "center", lineHeight: 1.15,
-                maxWidth: "100%",
-                overflow: "hidden",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                textShadow: "0 1px 2px rgba(255,255,255,.6)",
-                position: "relative", zIndex: 3,
-                padding: "0 1px",
-                pointerEvents: "none",
-              }}>{block.label}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ESCALA 3 — ANSIEDAD
-// Cada bloque es su propio gaze-target. El contenedor raíz NO tiene gaze-target.
-// ─────────────────────────────────────────────────────────────────────────────
-function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
-  const { speak }  = useTTS();
-  const [hover,  setHover]  = useState<number | null>(null);
-  const [locked, setLocked] = useState<number | null>(null);
-
-  const onLock = useCallback((idx: number) => {
-    setLocked(idx); onLocked(idx);
-    playBell();
-    speak(ANXIETY_LEVELS[idx].tts);
-  }, [speak, onLocked]);
-
-  const progress = useDwellWithProgress(hover, DWELL_MS, onLock);
-
-  const isLocked = locked !== null && hover === null;
-
-  return (
-    // Sin data-gaze-target en el contenedor raíz
-    <div
-      onPointerLeave={() => setHover(null)}
-      style={{
-        flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
-        touchAction: "none", userSelect: "none",
-        border: isLocked ? "3px solid #22C55E" : "1.5px solid #E0E0E0",
-        boxShadow: isLocked ? "0 0 22px rgba(34,197,94,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
-        display: "flex", flexDirection: "column",
-        padding: "7px 8px", gap: 4, boxSizing: "border-box",
-        background: "#FFFFFF",
-        transition: "border-color .2s, box-shadow .2s",
-      }}
-    >
-      <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
-        ANSIEDAD
-        {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(34,197,94,.22)", color: "#14532D", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
-            ✓ {ANXIETY_LEVELS[locked!].label}
-          </span>
-        )}
-      </div>
-
-      {/* Niveles: cada uno es un gaze-target individual */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 2, borderRadius: 10, overflow: "hidden" }}>
-        {ANXIETY_LEVELS.map((level, i) => {
-          const isHov    = hover === i;
-          const isThisLk = isLocked && locked === i;
-          const dimmed   = isLocked && locked !== i;
-          const fillDeg  = isHov && !isThisLk ? progress * 360 : 0;
-
-          return (
-            <div
-              key={i}
-              data-gaze-target="true"
-              data-testid={`anxiety-level-${i}`}
-              onPointerEnter={() => setHover(i)}
-              style={{
-                flex: 1, minWidth: 0,
-                position: "relative",
-                background: level.bg,
-                opacity: dimmed ? 0.38 : 1,
-                border: isThisLk
-                  ? "3px solid #22C55E"                    // ✓ verde confirmado
-                  : isHov
-                  ? "2px solid #EA580C"                    // 👁 naranja pre-selección
-                  : "1px solid transparent",
-                borderRadius: 8,
-                boxShadow: isThisLk
-                  ? "0 0 14px rgba(34,197,94,.7), inset 0 0 6px rgba(34,197,94,.3)"  // halo verde
-                  : "none",
-                display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "space-evenly",
-                padding: "4px 6px",
-                transition: "opacity .2s, border .12s, box-shadow .2s",
-                boxSizing: "border-box",
-                overflow: "hidden",
-              }}
-            >
-              {/* Overlay naranja durante dwell (pre-selección) */}
-              {isHov && !isThisLk && fillDeg > 0 && (
-                <div style={{
-                  position: "absolute", inset: 0,
-                  background: `conic-gradient(from -90deg, rgba(234,88,12,0.42) ${fillDeg}deg, transparent ${fillDeg}deg)`,
-                  pointerEvents: "none", zIndex: 2,
-                  borderRadius: "inherit",
-                }} />
-              )}
-              <span style={{
-                fontSize: isHov || isThisLk ? "clamp(1.4rem,4.5vw,2rem)" : "clamp(1.1rem,3.5vw,1.6rem)",
-                lineHeight: 1, transition: "font-size .18s",
-                position: "relative", zIndex: 3,
-                pointerEvents: "none",
-              }}>{level.face}</span>
-              <span style={{
-                fontFamily: "'Lexend',sans-serif", fontWeight: 900,
-                fontSize: isHov || isThisLk ? "clamp(.72rem,2vw,.98rem)" : "clamp(.62rem,1.7vw,.84rem)",
-                color: "#2A2A2A",
-                textAlign: "center", lineHeight: 1.2,
-                textShadow: "0 1px 3px rgba(255,255,255,.5)",
-                transition: "font-size .18s",
-                position: "relative", zIndex: 3,
-                pointerEvents: "none",
-              }}>{level.label}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PANEL DE PUNTUACIONES (siempre visible al fondo)
+// RESUMEN DE PUNTUACIONES
 // ─────────────────────────────────────────────────────────────────────────────
 interface ScoreSummaryProps {
   evaLocked:     number | null;
@@ -615,22 +440,14 @@ interface ScoreSummaryProps {
 }
 
 function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProps) {
+  const anxietyLabel = anxietyLocked !== null
+    ? ANXIETY_ITEMS[anxietyLocked - 1]?.label ?? null
+    : null;
+
   const items = [
-    {
-      key: "eva",
-      label: "Dolor (EVA)",
-      value: evaLocked !== null ? `${evaLocked} / 10` : null,
-    },
-    {
-      key: "borg",
-      label: "Esfuerzo (BORG)",
-      value: borgLocked !== null ? `${borgLocked} — ${BORG_BLOCKS[borgLocked].label}` : null,
-    },
-    {
-      key: "ansiedad",
-      label: "Ansiedad",
-      value: anxietyLocked !== null ? ANXIETY_LEVELS[anxietyLocked].label : null,
-    },
+    { key: "eva",     label: "Dolor",     value: evaLocked     !== null ? `${evaLocked}/10` : null },
+    { key: "borg",    label: "Esfuerzo",  value: borgLocked    !== null ? `${borgLocked}/10` : null },
+    { key: "ansiedad",label: "Ansiedad",  value: anxietyLabel },
   ];
 
   return (
@@ -640,7 +457,7 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
         flexShrink: 0,
         borderRadius: 14,
         background: "#FFFFFF",
-        border: "1.5px solid #E0E0E0",
+        border: "1.5px solid #E0D8CB",
         boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
         display: "flex",
         alignItems: "stretch",
@@ -658,13 +475,13 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
             alignItems: "center",
             justifyContent: "center",
             padding: "8px 6px",
-            borderRight: idx < items.length - 1 ? "1px solid #E0E0E0" : "none",
+            borderRight: idx < items.length - 1 ? "1px solid #E8E0D4" : "none",
             gap: 3,
           }}
         >
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.46rem,1.2vw,.62rem)",
+            fontSize: "clamp(.45rem,1.2vw,.6rem)",
             fontWeight: 700,
             letterSpacing: ".1em",
             textTransform: "uppercase",
@@ -674,7 +491,7 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
           </span>
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.68rem,1.8vw,.92rem)",
+            fontSize: "clamp(.7rem,1.9vw,.95rem)",
             fontWeight: 900,
             color: item.value !== null ? "#16A34A" : "#CCCCCC",
             textAlign: "center",
@@ -688,7 +505,7 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PÁGINA
+// PÁGINA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 type ScaleKey = "eva" | "borg" | "anxiety";
 
@@ -710,22 +527,23 @@ export default function Scales() {
   const toggle = useCallback((key: ScaleKey) =>
     setOpenScale((prev) => (prev === key ? null : key)), []);
 
-  const toggleEva     = useCallback(() => toggle("eva"),     [toggle]);
-  const toggleBorg    = useCallback(() => toggle("borg"),    [toggle]);
-  const toggleAnxiety = useCallback(() => toggle("anxiety"), [toggle]);
-
-  const evaBadge     = evaLocked     !== null ? `${evaLocked}/10`                          : null;
-  const borgBadge    = borgLocked    !== null ? `${borgLocked} ${BORG_BLOCKS[borgLocked].label}` : null;
-  const anxietyBadge = anxietyLocked !== null ? ANXIETY_LEVELS[anxietyLocked].label          : null;
+  const evaBadge     = evaLocked     !== null ? `${evaLocked}/10`                       : null;
+  const borgBadge    = borgLocked    !== null ? `${borgLocked}/10`                      : null;
+  const anxietyBadge = anxietyLocked !== null ? ANXIETY_ITEMS[anxietyLocked - 1]?.label : null;
 
   return (
     <FullscreenLayout>
       <div style={{
-        display: "flex", flexDirection: "column", height: "100%",
-        padding: "10px", gap: "8px", boxSizing: "border-box", background: "#FDF2E2",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        padding: "8px 10px 10px",
+        gap: 8,
+        boxSizing: "border-box",
+        background: "#FDF2E2",
       }}>
 
-        {/* Barra superior: reiniciar */}
+        {/* ── Botón reiniciar ────────────────────────────────────────────── */}
         <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
           <button
             className="gaze-target"
@@ -733,51 +551,76 @@ export default function Scales() {
             data-testid="button-scale-reset"
             onClick={handleReset}
             style={{
-              background: "#FDF2E2", border: "1.5px solid #E0D8CB",
-              borderRadius: 10, color: "#555555", padding: "5px 13px",
-              cursor: "pointer", fontFamily: "'Lexend',sans-serif", fontWeight: 700,
-              fontSize: ".7rem", letterSpacing: ".08em", textTransform: "uppercase",
-              display: "flex", alignItems: "center", gap: 6,
+              background: "#FFF",
+              border: "1.5px solid #E0D8CB",
+              borderRadius: 10,
+              color: "#555555",
+              padding: "6px 14px",
+              cursor: "pointer",
+              fontFamily: "'Lexend',sans-serif",
+              fontWeight: 700,
+              fontSize: ".72rem",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
               boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-              position: "relative", overflow: "hidden",
+              WebkitTapHighlightColor: "transparent",
+              touchAction: "manipulation",
             }}
           >
             <RotateCcw style={{ width: 12, height: 12 }} />
-            Reiniciar escalas
+            Reiniciar
           </button>
         </div>
 
-        {/* Acordeón — EVA */}
+        {/* ── Acordeón DOLOR (EVA) ───────────────────────────────────────── */}
         <AccordionPanel
           title="Dolor (EVA)"
           isOpen={openScale === "eva"}
           lockedBadge={evaBadge}
-          onToggle={toggleEva}
+          onToggle={() => toggle("eva")}
         >
-          <EvaStrip key={`eva-${resetKey}`} onLocked={setEvaLocked} />
+          <ScaleList
+            key={`eva-${resetKey}`}
+            items={EVA_ITEMS}
+            prefix="eva"
+            onLocked={setEvaLocked}
+          />
         </AccordionPanel>
 
-        {/* Acordeón — BORG */}
+        {/* ── Acordeón RESPIRACIÓN (BORG) ───────────────────────────────── */}
         <AccordionPanel
           title="Respiración (BORG)"
           isOpen={openScale === "borg"}
           lockedBadge={borgBadge}
-          onToggle={toggleBorg}
+          onToggle={() => toggle("borg")}
         >
-          <BorgStrip key={`borg-${resetKey}`} onLocked={setBorgLocked} />
+          <ScaleList
+            key={`borg-${resetKey}`}
+            items={BORG_ITEMS}
+            prefix="borg"
+            onLocked={setBorgLocked}
+          />
         </AccordionPanel>
 
-        {/* Acordeón — ANSIEDAD */}
+        {/* ── Acordeón ANSIEDAD ─────────────────────────────────────────── */}
         <AccordionPanel
           title="Ansiedad"
           isOpen={openScale === "anxiety"}
           lockedBadge={anxietyBadge}
-          onToggle={toggleAnxiety}
+          onToggle={() => toggle("anxiety")}
         >
-          <AnxietyStrip key={`ansiedad-${resetKey}`} onLocked={setAnxietyLocked} />
+          <ScaleList
+            key={`ansiedad-${resetKey}`}
+            items={ANXIETY_ITEMS}
+            prefix="anxiety"
+            onLocked={setAnxietyLocked}
+          />
         </AccordionPanel>
 
-        {/* Recuento de puntuaciones — siempre visible al fondo */}
+        {/* ── Resumen siempre visible ────────────────────────────────────── */}
         <ScoreSummary
           evaLocked={evaLocked}
           borgLocked={borgLocked}
