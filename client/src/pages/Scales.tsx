@@ -174,11 +174,11 @@ function AccordionPanel({
           {title}
         </span>
 
-        {/* Valor bloqueado (badge dorado) */}
+        {/* Valor confirmado (badge verde) */}
         {lockedBadge && (
           <span style={{
-            background: "rgba(251,191,36,.25)",
-            color: "#6B4500",
+            background: "rgba(34,197,94,.18)",
+            color: "#14532D",
             fontSize: ".72rem",
             fontWeight: 800,
             padding: "2px 10px",
@@ -259,8 +259,8 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
         background: "linear-gradient(to right, #DDF5E0 0%, #F2D7D5 100%)",
-        border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
-        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.5)" : "0 1px 4px rgba(0,0,0,0.06)",
+        border: isLocked ? "3px solid #22C55E" : "1.5px solid #E0E0E0",
+        boxShadow: isLocked ? "0 0 22px rgba(34,197,94,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
         justifyContent: "space-between", padding: "6px 10px",
         boxSizing: "border-box", transition: "border-color .2s, box-shadow .2s",
@@ -280,7 +280,7 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
         }}>
           DOLOR (EVA)
           {isLocked && (
-            <span style={{ marginLeft: 8, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4500", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
+            <span style={{ marginLeft: 8, fontSize: ".6rem", background: "rgba(34,197,94,.22)", color: "#14532D", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
               ✓ {locked}/10
             </span>
           )}
@@ -319,14 +319,21 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 cursor: "crosshair",
               }}
             >
-              {/* Círculo visual */}
+              {/* Círculo visual:
+                  hover  → naranja (pre-selección)
+                  locked → verde   (confirmado)    */}
               <div style={{
                 width: szStr, height: szStr,
                 borderRadius: "50%",
                 position: "relative",
-                background: isThisLk ? "#fbbf24" : isSel ? "rgba(0,0,0,.30)" : "rgba(0,0,0,.18)",
+                background: isThisLk
+                  ? "#16A34A"                   // ✓ confirmado — verde
+                  : isSel
+                  ? "#EA580C"                   // 👁 pre-selección — naranja
+                  : "rgba(0,0,0,.18)",
                 opacity: dimmed ? 0.35 : 1,
-                color: "#333", display: "flex", alignItems: "center", justifyContent: "center",
+                color: isSel || isThisLk ? "#FFFFFF" : "#333",
+                display: "flex", alignItems: "center", justifyContent: "center",
                 fontFamily: "'Lexend',sans-serif",
                 fontWeight: isSel || isThisLk ? 900 : 700,
                 fontSize: isThisLk
@@ -334,15 +341,15 @@ function EvaStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                   : isSel
                   ? "clamp(.6rem,1.9vw,1rem)"
                   : "clamp(.5rem,1.5vw,.8rem)",
-                border: isThisLk ? "2.5px solid #7A4500" : "none",
+                border: isThisLk ? "2.5px solid #14532D" : "none",
                 boxShadow: isThisLk
-                  ? "0 0 12px rgba(251,191,36,.7)"
+                  ? "0 0 14px rgba(22,163,74,.75)"         // halo verde
                   : isSel && ringPx > 0
-                  ? `0 0 0 ${ringPx}px rgba(251,191,36,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(251,191,36,${ringAlpha * 0.6})`
+                  ? `0 0 0 ${ringPx}px rgba(234,88,12,${ringAlpha}), 0 0 ${ringPx * 3}px rgba(234,88,12,${ringAlpha * 0.5})`  // anillo naranja
                   : "none",
-                textShadow: "0 1px 2px rgba(255,255,255,.6)",
-                transition: "opacity .2s, background .14s",
-                pointerEvents: "none", // el hit-zone padre gestiona los eventos
+                textShadow: "0 1px 2px rgba(0,0,0,.25)",
+                transition: "opacity .2s, background .14s, box-shadow .2s",
+                pointerEvents: "none",
               }}>
                 {n}
               </div>
@@ -386,8 +393,8 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
-        border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
-        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
+        border: isLocked ? "3px solid #22C55E" : "1.5px solid #E0E0E0",
+        boxShadow: isLocked ? "0 0 22px rgba(34,197,94,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
         padding: "7px 8px", gap: 4, boxSizing: "border-box",
         background: "#FFFFFF",
@@ -397,7 +404,7 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
       <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
         RESPIRACIÓN (BORG)
         {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4C00", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
+          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(34,197,94,.22)", color: "#14532D", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
             ✓ {locked} – {BORG_BLOCKS[locked!].label}
           </span>
         )}
@@ -422,9 +429,15 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 position: "relative",
                 background: block.bg,
                 opacity: dimmed ? 0.38 : 1,
-                border: isThisLk ? "3px solid #fbbf24" : isHov ? "2px solid rgba(0,0,0,.25)" : "1px solid transparent",
+                border: isThisLk
+                  ? "3px solid #22C55E"                    // ✓ verde confirmado
+                  : isHov
+                  ? "2px solid #EA580C"                    // 👁 naranja pre-selección
+                  : "1px solid transparent",
                 borderRadius: 8,
-                boxShadow: isThisLk ? "0 0 14px rgba(251,191,36,.7), inset 0 0 6px rgba(251,191,36,.3)" : "none",
+                boxShadow: isThisLk
+                  ? "0 0 14px rgba(34,197,94,.7), inset 0 0 6px rgba(34,197,94,.3)"  // halo verde
+                  : "none",
                 display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "space-evenly",
                 padding: "4px 1px",
@@ -433,10 +446,11 @@ function BorgStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 overflow: "hidden",
               }}
             >
+              {/* Overlay naranja durante dwell (pre-selección) */}
               {isHov && !isThisLk && fillDeg > 0 && (
                 <div style={{
                   position: "absolute", inset: 0,
-                  background: `conic-gradient(from -90deg, rgba(251,191,36,0.52) ${fillDeg}deg, transparent ${fillDeg}deg)`,
+                  background: `conic-gradient(from -90deg, rgba(234,88,12,0.45) ${fillDeg}deg, transparent ${fillDeg}deg)`,
                   pointerEvents: "none", zIndex: 2,
                   borderRadius: "inherit",
                 }} />
@@ -505,8 +519,8 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
       style={{
         flex: 1, minHeight: 0, borderRadius: 16, cursor: "crosshair",
         touchAction: "none", userSelect: "none",
-        border: isLocked ? "3px solid #fbbf24" : "1.5px solid #E0E0E0",
-        boxShadow: isLocked ? "0 0 22px rgba(251,191,36,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
+        border: isLocked ? "3px solid #22C55E" : "1.5px solid #E0E0E0",
+        boxShadow: isLocked ? "0 0 22px rgba(34,197,94,0.4)" : "0 1px 4px rgba(0,0,0,0.06)",
         display: "flex", flexDirection: "column",
         padding: "7px 8px", gap: 4, boxSizing: "border-box",
         background: "#FFFFFF",
@@ -516,7 +530,7 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
       <div style={{ textAlign: "center", fontFamily: "'Lexend',sans-serif", fontWeight: 900, fontSize: "clamp(.6rem,1.4vw,.82rem)", color: "#333333", letterSpacing: ".18em", textTransform: "uppercase", flexShrink: 0 }}>
         ANSIEDAD
         {isLocked && (
-          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(251,191,36,.35)", color: "#6B4C00", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
+          <span style={{ marginLeft: 10, fontSize: ".6rem", background: "rgba(34,197,94,.22)", color: "#14532D", padding: "1px 8px", borderRadius: 8, fontWeight: 700 }}>
             ✓ {ANXIETY_LEVELS[locked!].label}
           </span>
         )}
@@ -541,9 +555,15 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 position: "relative",
                 background: level.bg,
                 opacity: dimmed ? 0.38 : 1,
-                border: isThisLk ? "3px solid #fbbf24" : isHov ? "2px solid rgba(0,0,0,.22)" : "1px solid transparent",
+                border: isThisLk
+                  ? "3px solid #22C55E"                    // ✓ verde confirmado
+                  : isHov
+                  ? "2px solid #EA580C"                    // 👁 naranja pre-selección
+                  : "1px solid transparent",
                 borderRadius: 8,
-                boxShadow: isThisLk ? "0 0 14px rgba(251,191,36,.7), inset 0 0 6px rgba(251,191,36,.3)" : "none",
+                boxShadow: isThisLk
+                  ? "0 0 14px rgba(34,197,94,.7), inset 0 0 6px rgba(34,197,94,.3)"  // halo verde
+                  : "none",
                 display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "space-evenly",
                 padding: "4px 6px",
@@ -552,10 +572,11 @@ function AnxietyStrip({ onLocked }: { onLocked: (v: number | null) => void }) {
                 overflow: "hidden",
               }}
             >
+              {/* Overlay naranja durante dwell (pre-selección) */}
               {isHov && !isThisLk && fillDeg > 0 && (
                 <div style={{
                   position: "absolute", inset: 0,
-                  background: `conic-gradient(from -90deg, rgba(251,191,36,0.52) ${fillDeg}deg, transparent ${fillDeg}deg)`,
+                  background: `conic-gradient(from -90deg, rgba(234,88,12,0.42) ${fillDeg}deg, transparent ${fillDeg}deg)`,
                   pointerEvents: "none", zIndex: 2,
                   borderRadius: "inherit",
                 }} />
@@ -655,7 +676,7 @@ function ScoreSummary({ evaLocked, borgLocked, anxietyLocked }: ScoreSummaryProp
             fontFamily: "'Lexend',sans-serif",
             fontSize: "clamp(.68rem,1.8vw,.92rem)",
             fontWeight: 900,
-            color: item.value !== null ? "#333333" : "#CCCCCC",
+            color: item.value !== null ? "#16A34A" : "#CCCCCC",
             textAlign: "center",
           }}>
             {item.value ?? "—"}
