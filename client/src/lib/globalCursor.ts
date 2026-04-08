@@ -26,7 +26,9 @@ function createCursorElement(): HTMLDivElement {
 }
 
 function applyBaseStyles(el: HTMLDivElement) {
-  // Estilos inline completos — no dependen del CSS externo para máxima robustez
+  // Estilos inline completos — no dependen del CSS externo para máxima robustez.
+  // El cursor arranca OCULTO (opacity:0) y solo se muestra tras la Splash Screen
+  // mediante setCursorVisible(true) llamado desde App.tsx al salir de la fase splash.
   el.style.cssText = `
     position: fixed !important;
     top: 0 !important;
@@ -39,10 +41,10 @@ function applyBaseStyles(el: HTMLDivElement) {
     box-shadow: 0 0 0 2px rgba(255,255,255,0.6), 0 0 18px rgba(20,184,166,0.7) !important;
     pointer-events: none !important;
     z-index: 99999 !important;
-    opacity: 1 !important;
+    opacity: 0 !important;
     display: block !important;
     will-change: transform !important;
-    transition: box-shadow 0.18s, background 0.12s !important;
+    transition: box-shadow 0.18s, background 0.12s, opacity 0.3s !important;
   `;
   // Posición inicial: centro exacto de la pantalla
   const cx = typeof window !== 'undefined' ? window.innerWidth  / 2 : 0;
@@ -122,4 +124,11 @@ window.addEventListener('touchstart', (e: TouchEvent) => {
 /** Activa/desactiva la prioridad del eye-tracking sobre el ratón */
 export function setGazePriority(active: boolean) {
   _gazePriority = active;
+}
+
+/** Muestra u oculta el cursor.
+ *  Se llama desde App.tsx: false durante la Splash Screen, true al terminarla.
+ *  El cursor arranca con opacity:0 por defecto. */
+export function setCursorVisible(visible: boolean) {
+  globalCursor.style.setProperty('opacity', visible ? '1' : '0', 'important');
 }

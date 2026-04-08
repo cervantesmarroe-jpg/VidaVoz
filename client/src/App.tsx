@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import { setCursorVisible } from "@/lib/globalCursor";
 
 // Pages
 import Urgent from "./pages/Urgent";
@@ -67,8 +68,11 @@ type AppPhase = "splash" | "profile" | "ready";
 function App() {
   const [phase, setPhase] = useState<AppPhase>("splash");
 
-  const handleSplashDone  = useCallback(() => setPhase("profile"), []);
-  const handleProfileDone = useCallback(() => setPhase("ready"),   []);
+  const handleSplashDone  = useCallback(() => {
+    setCursorVisible(true);   // cursor oculto durante la splash → visible ahora
+    setPhase("profile");
+  }, []);
+  const handleProfileDone = useCallback(() => setPhase("ready"), []);
 
   return (
     <ErrorBoundary>

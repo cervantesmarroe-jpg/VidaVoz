@@ -1,4 +1,4 @@
-const CACHE = "vozuci-v1";
+const CACHE = "vidavoz-v3"; // bumped: manifest background_color #fff + new icons
 const OFFLINE_URLS = ["/", "/mensajes", "/escalas", "/teclado"];
 
 self.addEventListener("install", (e) => {
