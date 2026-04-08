@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
@@ -773,33 +773,53 @@ export function useWebGazer() {
     startCalibration, finishCalibration, activateFromProfile, deactivate,
   } = useWebGazerStore();
 
-  // ── Efecto A: Crear/destruir el elemento #gaze-cursor (Cursor Maestro Único) ─
-  useEffect(() => {
-    let el = document.getElementById('gaze-cursor');
+  // ── Efecto A: Crear #gaze-cursor y posicionarlo en el centro desde el instante 0 ─
+  // useLayoutEffect asegura que el elemento está en el DOM ANTES del primer paint
+  // del navegador: el cursor es visible desde el frame 0, sin parpadeo.
+  useLayoutEffect(() => {
+    let el = document.getElementById('gaze-cursor') as HTMLDivElement | null;
     if (!el) {
       el = document.createElement('div');
       el.id = 'gaze-cursor';
       document.body.appendChild(el);
     }
-    el.style.display = 'block';
-    el.style.opacity = '0'; // sin posición inicial: oculto hasta primer movimiento
+    // Posición de rescate: centro de pantalla, visible de inmediato.
+    // La transición CSS de opacidad está en 0.25 s, pero display:block + opacity:1
+    // garantizan que el cursor sea visible desde el primer frame.
+    const cx = window.innerWidth  / 2;
+    const cy = window.innerHeight / 2;
+    el.style.display   = 'block';
+    el.style.opacity   = '1';
+    el.style.transform = `translate(calc(${cx}px - 50%), calc(${cy}px - 50%))`;
     return () => { document.getElementById('gaze-cursor')?.remove(); };
   }, []);
 
-  // ── Efecto B: Cuando la mirada está OFF → cursor sigue el puntero del sistema ─
-  // (mouse o toque físico sin gaze activo)
+  // ── Efecto B: Cuando la mirada está OFF → cursor sigue pointer/touch del sistema ─
   useEffect(() => {
-    if (isActive) return; // la mirada activa gestiona la posición en Efecto C
+    if (isActive) return;
     const cursor = document.getElementById('gaze-cursor');
     if (!cursor) return;
 
-    const onPointerMove = (e: PointerEvent) => {
-      cursor.style.transform = `translate(calc(${e.clientX}px - 50%), calc(${e.clientY}px - 50%))`;
-      cursor.style.opacity   = '1';
+    // Aseguramos que el cursor está visible y ya posicionado en el centro si aún no se movió
+    cursor.style.display = 'block';
+    cursor.style.opacity = '1';
+
+    const updatePos = (x: number, y: number) => {
+      cursor.style.transform = `translate(calc(${x}px - 50%), calc(${y}px - 50%))`;
+    };
+
+    const onPointerMove = (e: PointerEvent) => updatePos(e.clientX, e.clientY);
+    const onTouchMove   = (e: TouchEvent)   => {
+      const t = e.touches[0];
+      if (t) updatePos(t.clientX, t.clientY);
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });
-    return () => window.removeEventListener('pointermove', onPointerMove);
+    window.addEventListener('touchmove',   onTouchMove,   { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('touchmove',   onTouchMove);
+    };
   }, [isActive]);
 
   // ── Efecto C: Calibrando → cámara + detección ────────────────────────────────
@@ -936,7 +956,7 @@ export function useWebGazer() {
       window.removeEventListener('touchstart', onTouchStart, { capture: true });
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);
-      if (cursor) cursor.style.opacity = '0';
+      // No ocultamos el cursor: Efecto B toma el relevo inmediatamente con opacity:1
     };
   }, [isActive]);
 
