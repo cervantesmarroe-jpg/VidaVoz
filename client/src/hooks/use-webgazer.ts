@@ -181,24 +181,8 @@ function hasGazeTarget(x: number, y: number, radius: number): boolean {
   });
 }
 
-// ─── Pop sound (Web Audio API — sin ficheros externos) ───────────────────────
-function playPopSound() {
-  try {
-    const ctx  = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(200, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.28, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.14);
-    osc.onended = () => ctx.close();
-  } catch (_) {}
-}
+// Sonido de blink-click desactivado — feedback solo visual (cursor verde)
+function playPopSound() { /* silenciado */ }
 
 // ─── GazeTracker (singleton) ─────────────────────────────────────────────────
 class GazeTracker {
