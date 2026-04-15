@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { Volume2, Trash2, Delete, Space } from "lucide-react";
+import { useTTS } from "@/hooks/use-tts";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
 // IMPORTANTE: KEY_DWELL_MS debe ser MENOR que DWELL_MS en use-webgazer.ts (3000 ms)
@@ -238,6 +239,8 @@ export default function Keyboard() {
     ? "clamp(.9rem,2.2vw,1.4rem)"
     : "clamp(1.1rem,3.8vw,1.7rem)";
 
+  const { speak } = useTTS();
+
   const [message, setMessage]       = useState("");
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | null>(null);
@@ -276,15 +279,11 @@ export default function Keyboard() {
     setFocusedAct(null);
     if (act === "speak") {
       if (!message.trim()) return;
-      window.speechSynthesis.cancel();
-      const utt = new SpeechSynthesisUtterance(message);
-      utt.lang = "es-ES";
-      utt.rate = 0.9;
-      window.speechSynthesis.speak(utt);
+      speak(message);
     } else if (act === "clear") {
       setMessage("");
     }
-  }, [message]);
+  }, [message, speak]);
 
   const actionProgress = useDwellProgress(focusedAct, ACTION_DWELL_MS, onActionComplete);
 
