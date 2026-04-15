@@ -3,22 +3,23 @@
     "id": "captura_01_elena",
     "profile": "mobile", 
     "model": {
-      "alphaX": 369.1374,
-      "betaX": -1197.6939,
-      "alphaY": 369.3608, 
-      "betaY": -1865.4609,
-      "sensitivityX": -3.3269,
-      "sensitivityY": 2.4417
+      "alphaX":        330.6512,
+      "betaX":        -987.8400,
+      "alphaY":        150.8431,
+      "betaY":        -1696.8440,
+      "sensitivityX":  -2.7440,
+      "sensitivityY":   2.2210
     }
   },
   {
     "id": "captura_02_elena",
     "profile": "tablet",
     "model": {
-      "alphaX": 1491.27,
-      "betaX": -4625.57,
-      "alphaY": 749.63,
-      "betaY": -1040.31
+      "alphaX": 400.00,
+      "betaX": -3515.20,
+      "alphaY": 640.00,
+      "betaY": -5681.97,
+      "sensitivityX": -4.394,
+      "sensitivityY": 4.439
     }
   }
-]
