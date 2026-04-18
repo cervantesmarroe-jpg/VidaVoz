@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { gazeTracker } from "@/hooks/use-webgazer";
 
 interface WelcomePatientProps {
@@ -10,12 +10,22 @@ const STABILIZATION_MS = 2000;
 const SAMPLING_HZ      = 10;
 const VALID_RATE_MIN   = 0.5;
 
+// Color del texto "Hola" según el modo seleccionado:
+//   tablet → verde profundo (acento principal de la app)
+//   mobile → azul profundo (alto contraste sobre crema)
+const TEXT_COLOR_BY_PROFILE: Record<string, string> = {
+  tablet: "#15803D",
+  mobile: "#1D4ED8",
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Pantalla de bienvenida del paciente — "Hola" sobre fondo oscuro.
+// Pantalla de bienvenida del paciente — "Hola" sobre fondo crema cálido.
+// El color del texto cambia según el modo: verde en tablet, azul en móvil.
 //
-// Aparece cuando el cuidador activa la mirada y el tracker confirma detección.
-// Dura 4 s exactos, no es interrumpible y mientras está visible ejecuta un
-// autoajuste silencioso del offset alpha:
+// Aparece UNA SOLA VEZ por sesión, justo después de aceptar el consentimiento
+// de cámara y de que el tracker confirme detección. Dura 4 s exactos, no es
+// interrumpible y mientras está visible ejecuta un autoajuste silencioso del
+// offset alpha:
 //
 //   • Primeros 2 s : estabilización del tracker (no se muestrea).
 //   • Últimos 2 s  : se recogen muestras a 10 Hz mientras el paciente mira el
@@ -30,6 +40,12 @@ const VALID_RATE_MIN   = 0.5;
 // mirada queda visible pero no puede activar nada por debajo.
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WelcomePatient({ onDone }: WelcomePatientProps) {
+  // Color del texto fijado al montar — el perfil no cambia durante los 4 s.
+  const textColor = useMemo(() => {
+    const id = gazeTracker.currentProfile?.id ?? "tablet";
+    return TEXT_COLOR_BY_PROFILE[id] ?? TEXT_COLOR_BY_PROFILE.tablet;
+  }, []);
+
   useEffect(() => {
     let validSamples = 0;
     let attempts     = 0;
@@ -77,7 +93,7 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
         position: "fixed",
         inset: 0,
         zIndex: 9998,
-        background: "#0E1116",
+        background: "#FFF8E7",       // crema cálido en línea con la app
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -88,12 +104,13 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
     >
       <span
         style={{
-          color: "#FFFFFF",
+          color: textColor,
           fontFamily: "'Lexend', sans-serif",
-          fontWeight: 700,
-          fontSize: "clamp(120px, 22vw, 280px)",
+          fontWeight: 800,
+          fontSize: "clamp(140px, 26vw, 320px)",
           letterSpacing: "0.02em",
-          textShadow: "0 4px 40px rgba(125,211,168,0.35)",
+          lineHeight: 1,
+          textShadow: `0 4px 28px ${textColor}33`,
           animation: "welcome-fade 4s ease-in-out forwards",
         }}
       >

@@ -147,15 +147,19 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [showTraining, setShowTraining] = useState(false);
 
   // ── Pantalla de bienvenida del paciente ("Hola" 4 s) ──────────────────────
-  // Aparece cuando isActive transiciona false → true (cuidador acaba de pulsar
-  // "Activar Mirada" y el tracker está listo). Durante esos 4 s se ejecuta el
-  // autoajuste silencioso de centro. La pantalla NO se vuelve a mostrar si la
-  // mirada se reactiva sin haberla desactivado.
+  // Se muestra UNA SOLA VEZ por sesión (flag en sessionStorage), justo cuando
+  // la mirada queda activa por primera vez tras aceptar el consentimiento.
+  // Como FullscreenLayout se remonta en cada cambio de página, el flag impide
+  // que la pantalla "Hola" reaparezca al navegar entre Urgencias/Mensajes/etc.
+  // La calibración obtenida durante estos 4 s se mantiene durante toda la
+  // sesión hasta cerrar la pestaña.
+  const WELCOME_KEY = "vozuci-welcome-shown-v1";
   const [showWelcome, setShowWelcome] = useState(false);
-  const prevActiveRef = useRef(false);
   useEffect(() => {
-    if (isActive && !prevActiveRef.current) setShowWelcome(true);
-    prevActiveRef.current = isActive;
+    if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
+      sessionStorage.setItem(WELCOME_KEY, "1");
+      setShowWelcome(true);
+    }
   }, [isActive]);
 
   // ── Log periódico cuando la mirada está activa ────────────────────────────
@@ -198,10 +202,37 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       activateFromProfile();
     } catch (err) {
       console.error('[VidaVoz] Error iniciando cámara/modelo:', err);
+      // Re-lanza para que el efecto de auto-activación reciba el error y
+      // pueda limpiar el flag — si no, la app quedaría sin mirada y sin
+      // posibilidad de reintento automático en futuras navegaciones.
+      throw err;
     } finally {
       setLoading(false);
     }
   }, [isActive, isCalibrating, deactivate, activateFromProfile]);
+
+  // ── Auto-activación de la mirada al aceptar consentimientos ────────────────
+  // En cuanto el cuidador acepta la cámara, arrancamos el seguimiento ocular
+  // automáticamente — sin pulsar "Activar Mirada". El toque sigue funcionando
+  // siempre (lo gestiona globalCursor.ts en paralelo). Si el cuidador eligió
+  // "modo táctil/scanning" (handleDecline), no arrancamos la cámara.
+  // El flag de sesión garantiza que el arranque automático sucede UNA sola vez:
+  // si el cuidador desactiva luego la mirada manualmente, no se reactiva sola.
+  const AUTOSTART_KEY = "vozuci-gaze-autostarted-v1";
+  useEffect(() => {
+    if (!accepted) return;
+    if (isScanningMode) return;
+    if (isActive || isCalibrating || loading) return;
+    if (sessionStorage.getItem(AUTOSTART_KEY)) return;
+
+    sessionStorage.setItem(AUTOSTART_KEY, "1");
+    handleGazeToggle().catch(() => {
+      // Si arranque falla, limpiamos el flag para que el cuidador pueda
+      // reintentar manualmente con el botón sin que el efecto se vuelva
+      // a disparar automáticamente y bloquee la UI.
+      sessionStorage.removeItem(AUTOSTART_KEY);
+    });
+  }, [accepted, isScanningMode, isActive, isCalibrating, loading, handleGazeToggle]);
 
   // ── Estilo del botón según estado ─────────────────────────────────────────
   const btnStyle: React.CSSProperties = (() => {
