@@ -33,6 +33,16 @@ const SENSITIVITY_Y = GAZE_PROFILES[DEFAULT_PROFILE_ID].sensitivityY;
 const CONTINUOUS_MIN = 6;
 const CONTINUOUS_MAX = 20;   // buffer FIFO
 
+// ── Autoajuste silencioso (2 fases, complementario al perfil maestro) ────────
+// Fase 1: durante el splash de bienvenida, recoge muestras del centro y corrige
+// el offset alpha sin que el paciente haga nada explícito.
+// Fase 2: durante el uso real, cada activación exitosa refina alpha con una
+// media exponencial (LEARNING_RATE) si el error es pequeño (<MAX_ERROR_PX).
+const SILENT_MIN_SAMPLES        = 5;     // mínimo para aplicar la corrección
+const PHASE2_LEARNING_RATE      = 0.25;  // EMA por activación
+const PHASE2_MAX_ERROR_PX       = 80;    // descarta correcciones grandes (target erróneo)
+const PHASE2_STABILIZATION_MS   = 2000;  // ignora correcciones en los 1ºs 2 s
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
 type NormalizedLandmark  = { x: number; y: number; z: number };
@@ -219,6 +229,10 @@ class GazeTracker {
 
   // aprendizaje continuo (clics de uso real)
   private continuousData: TrainingPoint[] = [];
+
+  // ── Autoajuste silencioso (Fase 1 + Fase 2) ─────────────────────────────────
+  private silentSamples: Array<{ eyeX: number; eyeY: number }> = [];
+  private sessionStartTime = 0;
 
   // parpadeo — máquina de estados con ventana de duración
   private wasBlinking     = false;
@@ -650,6 +664,88 @@ class GazeTracker {
     this.regressionModel.alphaY += NUDGE * (screenY - predictedY);
   }
 
+  // ── FASE 1: Autoajuste silencioso del centro durante el splash ──────────────
+  // Recoge una muestra ocular (eyeX/eyeY) si hay rostro detectado. Devuelve
+  // true si se obtuvo muestra, false si todavía no hay detección. La fase 1
+  // se ejecuta durante la pantalla de bienvenida sin que el paciente lo note.
+  collectSilentCenterSample(): boolean {
+    const shapes    = this.currentResults?.categories;
+    const landmarks = this.currentResults?.landmarks;
+    if (!shapes || !landmarks) return false;
+
+    const find = (name: string) => shapes.find(s => s.categoryName === name)?.score ?? 0;
+    const headRotX = landmarks[1].x - landmarks[4].x;
+    const eyeX = (find('eyeLookOutLeft') - find('eyeLookInLeft')) + (headRotX * 2);
+    const eyeY =  find('eyeLookUpLeft')  - find('eyeLookDownLeft');
+
+    this.silentSamples.push({ eyeX, eyeY });
+    return true;
+  }
+
+  // Aplica la corrección de offset alpha calculada con las muestras del centro.
+  // Solo modifica el ajuste de SESIÓN (regressionModel del tracker) — nunca el
+  // perfil de fábrica de GAZE_PROFILES. Si no hay modelo cargado o muestras
+  // insuficientes, no hace nada y se mantiene el perfil de fábrica intacto.
+  applySilentCenterCalibration(): boolean {
+    const samples = this.silentSamples;
+    this.silentSamples = []; // limpia siempre, aunque no apliquemos
+
+    if (!this.regressionModel || samples.length < SILENT_MIN_SAMPLES) {
+      console.log(
+        `[Fase1] Sin corrección: muestras=${samples.length}/${SILENT_MIN_SAMPLES} modelo=${!!this.regressionModel}`,
+      );
+      return false;
+    }
+
+    const n        = samples.length;
+    const meanEyeX = samples.reduce((s, d) => s + d.eyeX, 0) / n;
+    const meanEyeY = samples.reduce((s, d) => s + d.eyeY, 0) / n;
+
+    const { alphaX, betaX, alphaY, betaY } = this.regressionModel;
+    const predictedX = alphaX + betaX * meanEyeX;
+    const predictedY = alphaY + betaY * meanEyeY;
+
+    const cx = window.innerWidth  / 2;
+    const cy = window.innerHeight / 2;
+    const offsetX = cx - predictedX;
+    const offsetY = cy - predictedY;
+
+    this.regressionModel.alphaX += offsetX;
+    this.regressionModel.alphaY += offsetY;
+
+    console.log(
+      `%c[Fase1] Autoajuste silencioso aplicado ✓`,
+      'color:#7DD3A8;font-weight:800',
+      `| n=${n}`,
+      `| offset=(${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})px`,
+    );
+    return true;
+  }
+
+  // Marca el inicio de la sesión activa (cuando se enciende la mirada).
+  // Usado por la Fase 2 para ignorar correcciones durante el periodo de
+  // estabilización inicial del tracker.
+  markSessionStart() {
+    this.sessionStartTime = performance.now();
+    this.silentSamples    = [];
+  }
+
+  // ── FASE 2: Aprendizaje continuo (EMA) durante el uso real ─────────────────
+  // Cada activación exitosa (dwell o blink) refina alpha con una media
+  // exponencial. Solo se aplica si el error es pequeño (< 80 px en cada eje)
+  // y han pasado al menos 2 s desde el inicio de la sesión.
+  learnFromTarget(targetX: number, targetY: number, cursorX: number, cursorY: number) {
+    if (!this.regressionModel) return;
+    if (performance.now() - this.sessionStartTime < PHASE2_STABILIZATION_MS) return;
+
+    const errorX = targetX - cursorX;
+    const errorY = targetY - cursorY;
+    if (Math.abs(errorX) > PHASE2_MAX_ERROR_PX || Math.abs(errorY) > PHASE2_MAX_ERROR_PX) return;
+
+    this.regressionModel.alphaX += errorX * PHASE2_LEARNING_RATE;
+    this.regressionModel.alphaY += errorY * PHASE2_LEARNING_RATE;
+  }
+
   // Métodos legacy (UsaCalibrationOverlay los llama)
   computeCalibration() {
     if (this.trainingData.length >= 4) {
@@ -857,6 +953,8 @@ export function useWebGazer() {
       if (!gazeTracker.hasFaceModel) await gazeTracker.init();
       if (!gazeTracker.hasCamera)    await gazeTracker.startCamera();
       gazeTracker.startDetection();
+      // Marca el inicio de la sesión activa para la Fase 2 (estabilización 2 s).
+      gazeTracker.markSessionStart();
     })();
 
     let targetEl:     HTMLElement | null = null;
@@ -865,9 +963,16 @@ export function useWebGazer() {
     // touchLockUntil eliminado — ahora lo gestiona globalCursor.ts (isTouchLocked())
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-    function activateTarget(el: HTMLElement) {
+    // cursorX/Y son las coordenadas crudas del cursor en el momento de activar:
+    // se usan para la Fase 2 (aprendizaje EMA del offset alpha).
+    function activateTarget(el: HTMLElement, cursorX?: number, cursorY?: number) {
       const rect = el.getBoundingClientRect();
-      gazeTracker.recordClickCalibration(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      const tcx  = rect.left + rect.width  / 2;
+      const tcy  = rect.top  + rect.height / 2;
+      gazeTracker.recordClickCalibration(tcx, tcy);
+      if (cursorX !== undefined && cursorY !== undefined) {
+        gazeTracker.learnFromTarget(tcx, tcy, cursorX, cursorY);
+      }
       el.click();
       resetProgress(el);
       el.style.transform = 'scale(0.95)';
@@ -890,7 +995,7 @@ export function useWebGazer() {
       if (target) {
         target.classList.add('blink-activated');
         setTimeout(() => target.classList.remove('blink-activated'), 500);
-        activateTarget(target);
+        activateTarget(target, x, y);
       }
     }
 
@@ -923,7 +1028,7 @@ export function useWebGazer() {
           if (progress >= 1) {
             // ── Activación por dwell: apagar glow antes de activar ───────────
             setAimGlow(target, false);
-            activateTarget(target);
+            activateTarget(target, x, y);
             dwellCooldown = true;
           }
         }

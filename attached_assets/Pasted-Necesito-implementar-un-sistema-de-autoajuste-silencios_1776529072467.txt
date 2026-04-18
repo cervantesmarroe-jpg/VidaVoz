@@ -1,0 +1,28 @@
+Necesito implementar un sistema de autoajuste silencioso del eye-tracking que corrija el desplazamiento del cursor sin que el paciente tenga que hacer ninguna calibración explícita. El contexto es una app de comunicación asistida para pacientes de UCI con movilidad reducida, por lo que minimizar la carga sobre el paciente es prioritario.
+El sistema tiene dos fases que deben funcionar juntas:
+Fase 1 — Corrección de alpha en pantalla de bienvenida (3 segundos, invisible para el paciente)
+Antes de mostrar la interfaz principal, mostrar una pantalla de bienvenida de 3 segundos con un elemento visual grande y centrado (logo o mensaje de bienvenida). Durante esos 3 segundos, leer continuamente los blendshapes de MediaPipe (eyeLookOutLeft, eyeLookInLeft, eyeLookUpLeft, eyeLookDownLeft) y calcular la señal ocular con la misma fórmula que usa el tracker principal:
+eyeX = eyeLookOutLeft - eyeLookInLeft
+eyeY = eyeLookUpLeft  - eyeLookDownLeft
+Usando el perfil activo de GAZE_PROFILES, calcular dónde predice el modelo que está mirando el usuario:
+predictedX = alphaX + betaX * eyeX
+predictedY = alphaY + betaY * eyeY
+Como el usuario está mirando el centro de pantalla (W/2, H/2), calcular el offset y corregir alpha:
+offsetX = (W/2) - mean(predictedX_samples)
+offsetY = (H/2) - mean(predictedY_samples)
+correctedAlphaX = alphaX + offsetX
+correctedAlphaY = alphaY + offsetY
+Guardar correctedAlphaX y correctedAlphaY en el estado del tracker como ajuste de sesión — sin modificar GAZE_PROFILES ni el perfil de fábrica guardado. Este ajuste solo dura la sesión actual.
+Fase 2 — Aprendizaje continuo durante el uso real (invisible, en segundo plano)
+Cada vez que el paciente realiza una selección exitosa (dwell o parpadeo), la app conoce el botón objetivo (el elemento de UI más cercano a la mirada en ese momento). Usar esa información para refinar alpha progresivamente con una media exponencial:
+const LEARNING_RATE = 0.25;
+const errorX = targetElement.centerX - cursorX;
+const errorY = targetElement.centerY - cursorY;
+correctedAlphaX += errorX * LEARNING_RATE;
+correctedAlphaY += errorY * LEARNING_RATE;
+Aplicar este ajuste solo si el error es menor de 80px en cada eje — errores mayores probablemente indican que el usuario no estaba mirando ese elemento y descartarlos evita correcciones incorrectas.
+Requisitos de implementación:
+El ajuste de sesión (correctedAlphaX, correctedAlphaY) debe vivir en el estado del tracker o en un contexto React separado — nunca en GAZE_PROFILES directamente. Al cerrar y reabrir la app, se vuelve al perfil de fábrica y la fase 1 recalibra de nuevo.
+La fase 1 debe ser transparente: la pantalla de bienvenida se muestra de todas formas como transición natural de inicio, independientemente del eye-tracking. Si el tracker no detecta el rostro durante esos 3 segundos, simplemente no aplica ninguna corrección y usa el perfil de fábrica sin modificar.
+La fase 2 no debe aplicar correcciones durante los primeros 2 segundos tras iniciar la sesión (periodo de estabilización del tracker) ni cuando la confianza de detección del iris es baja.
+No modificar CalibrationScreen.tsx, gazeProfiles.ts ni el flujo de calibración completo existente. Este sistema es complementario, no sustitutivo.
