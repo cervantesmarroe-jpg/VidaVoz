@@ -11,6 +11,7 @@ import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
+import WelcomePatient from "@/components/WelcomePatient";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -145,6 +146,18 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
+  // ── Pantalla de bienvenida del paciente ("Hola" 4 s) ──────────────────────
+  // Aparece cuando isActive transiciona false → true (cuidador acaba de pulsar
+  // "Activar Mirada" y el tracker está listo). Durante esos 4 s se ejecuta el
+  // autoajuste silencioso de centro. La pantalla NO se vuelve a mostrar si la
+  // mirada se reactiva sin haberla desactivado.
+  const [showWelcome, setShowWelcome] = useState(false);
+  const prevActiveRef = useRef(false);
+  useEffect(() => {
+    if (isActive && !prevActiveRef.current) setShowWelcome(true);
+    prevActiveRef.current = isActive;
+  }, [isActive]);
+
   // ── Log periódico cuando la mirada está activa ────────────────────────────
   useEffect(() => {
     if (!isActive) return;
@@ -213,6 +226,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
       {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
       {isCalibrating && <CalibrationScreen />}
+
+      {/* Bienvenida del paciente + autoajuste silencioso de centro (4 s) */}
+      {showWelcome && <WelcomePatient onDone={() => setShowWelcome(false)} />}
 
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}

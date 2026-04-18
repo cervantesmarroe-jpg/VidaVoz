@@ -1,0 +1,21 @@
+Después de que el cuidador pulse "Activar Mirada" y el tracker confirme detección de rostro, mostrar una pantalla de bienvenida dirigida al paciente antes de entrar en la interfaz de comunicación. Esta pantalla tiene dos funciones: dar la bienvenida al paciente de forma cálida y ejecutar el autoajuste silencioso de alpha en segundo plano mientras el paciente la mira.
+Diseño de la pantalla de bienvenida:
+Fondo oscuro, texto grande centrado y legible. Mostrar únicamente el mensaje "Hola" en el centro de la pantalla, con tipografía grande. Sin subtítulos, sin nombre, sin botones ni elementos interactivos adicionales.
+La pantalla se muestra durante 4 segundos y desaparece automáticamente sin que el paciente ni el cuidador tengan que hacer nada.
+Autoajuste silencioso durante esos 4 segundos:
+Mientras la pantalla de bienvenida está visible, el tracker está activo y el paciente está mirando el centro de pantalla de forma natural. Aprovechar esa ventana para corregir alphaX y alphaY con la siguiente lógica:
+Descartar los primeros 2 segundos de estabilización del tracker. Recoger muestras durante los 2 segundos restantes. Con esas muestras calcular dónde predice el modelo que mira el usuario y compararlo con el centro de pantalla donde realmente está mirando:
+typescripteyeX = eyeLookOutLeft - eyeLookInLeft
+eyeY = eyeLookUpLeft  - eyeLookDownLeft
+
+predictedX = alphaX + betaX * mean(eyeX_samples)
+predictedY = alphaY + betaY * mean(eyeY_samples)
+
+correctedAlphaX = alphaX + (W/2 - predictedX)
+correctedAlphaY = alphaY + (H/2 - predictedY)
+Aplicar correctedAlphaX y correctedAlphaY al estado de sesión del tracker sin modificar GAZE_PROFILES ni el perfil de fábrica. Si durante los 2 segundos de muestreo el tracker pierde el rostro o bothEyesOpen es false en más del 50% de las muestras, no aplicar ninguna corrección y continuar con el perfil de fábrica intacto.
+Fase 2 — aprendizaje continuo durante el uso:
+Cada selección exitosa del paciente refina alpha progresivamente con LEARNING_RATE = 0.25, descartando errores mayores de 80px. Sin cambios respecto a la implementación anterior.
+Requisitos:
+La pantalla de bienvenida solo se muestra cuando el tracker está activo. La duración de 4 segundos es fija y no interrumpible. Al cerrar y reabrir la app, la pantalla vuelve a aparecer y el autoajuste se recalcula de nuevo con el perfil de fábrica como base.
+Sonnet 4.6

@@ -730,6 +730,14 @@ class GazeTracker {
     this.silentSamples    = [];
   }
 
+  // Descarta las muestras de Fase 1 sin aplicar corrección. Se usa cuando la
+  // ventana de muestreo perdió el rostro / ojos cerrados en >50 % del tiempo.
+  discardSilentSamples() {
+    const n = this.silentSamples.length;
+    this.silentSamples = [];
+    if (n > 0) console.log(`[Fase1] Muestras descartadas (n=${n}) — rostro inestable`);
+  }
+
   // ── FASE 2: Aprendizaje continuo (EMA) durante el uso real ─────────────────
   // Cada activación exitosa (dwell o blink) refina alpha con una media
   // exponencial. Solo se aplica si el error es pequeño (< 80 px en cada eje)
