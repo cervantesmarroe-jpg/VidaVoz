@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import logoPath from "@assets/VidaVoz_1775644489589.png";
+import logoPath from "@assets/VidaVoz_transparent.png";
 import { gazeTracker } from "@/hooks/use-webgazer";
 
 interface SplashProps {
@@ -50,34 +50,47 @@ export default function Splash({ onDone }: SplashProps) {
     <div
       data-testid="splash-screen"
       style={{
+        // Cubre todo el viewport real del dispositivo (incluida la zona del
+        // navegador móvil que entra/sale al hacer scroll).
         position: "fixed",
         inset: 0,
+        width: "100vw",
+        height: "100dvh",
         zIndex: 10000,
-        background: "#FFFFFF",
+
+        // Crema unificado con el resto de la app — ya no hay rectángulo ni
+        // bordes, el logo (PNG transparente) se apoya directamente sobre el
+        // fondo de la app.
+        background: "#FFF8E7",
+
+        // Centrado perfecto vertical y horizontal vía Flexbox.
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 0,
+
+        // Sin scrollbars durante la transición de carga.
+        overflow: "hidden",
+
+        // Fade-out 500 ms al salir.
         opacity: visible ? 1 : 0,
         transition: "opacity 0.5s ease-out",
         pointerEvents: visible ? "all" : "none",
       }}
     >
-      {/* Logo oficial VidaVoz — tamaño adaptativo basado en vmin (la dimensión
-          menor del viewport) para que se vea bien en móvil portrait, móvil
-          landscape, tablet portrait y tablet landscape sin desbordar. */}
+      {/* Logo oficial VidaVoz — PNG transparente. Tamaño adaptativo basado en
+          vmin (la dimensión menor del viewport) para verse proporcionado tanto
+          en una tablet de 10" anclada al brazo de la cama como en un móvil. */}
       <img
         src={logoPath}
         alt="VidaVoz"
         draggable={false}
         style={{
-          width: "clamp(160px, 48vmin, 520px)",
-          maxWidth: "82vw",
+          width: "clamp(180px, 55vmin, 560px)",
+          maxWidth: "84vw",
           maxHeight: "62vh",
           height: "auto",
           objectFit: "contain",
-          filter: "drop-shadow(0 6px 28px rgba(125,211,168,0.22))",
           userSelect: "none",
           WebkitUserSelect: "none" as const,
         }}
@@ -90,7 +103,7 @@ export default function Splash({ onDone }: SplashProps) {
           width: "clamp(140px, 36vmin, 360px)",
           height: "3px",
           borderRadius: "999px",
-          background: "#E5E7EB",
+          background: "rgba(20, 83, 45, 0.12)",   // verde tenue sobre crema
           overflow: "hidden",
         }}
       >
