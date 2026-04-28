@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { gazeTracker } from "@/hooks/use-webgazer";
 
 interface WelcomePatientProps {
@@ -10,42 +10,32 @@ const STABILIZATION_MS = 2000;
 const SAMPLING_HZ      = 10;
 const VALID_RATE_MIN   = 0.5;
 
-// Color del texto "Hola" según el modo seleccionado:
-//   tablet → verde profundo (acento principal de la app)
-//   mobile → azul profundo (alto contraste sobre crema)
-const TEXT_COLOR_BY_PROFILE: Record<string, string> = {
-  tablet: "#15803D",
-  mobile: "#1D4ED8",
-};
+const BRAND_BLUE = "#1D4ED8";
+const CREAM_BG   = "#FFF8E7";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pantalla de bienvenida del paciente — "Hola" sobre fondo crema cálido.
-// El color del texto cambia según el modo: verde en tablet, azul en móvil.
+// Pantalla de bienvenida del paciente — "Bienvenido a VidaVoz" sobre crema.
 //
-// Aparece UNA SOLA VEZ por sesión, justo después de aceptar el consentimiento
-// de cámara y de que el tracker confirme detección. Dura 4 s exactos, no es
-// interrumpible y mientras está visible ejecuta un autoajuste silencioso del
-// offset alpha:
+// Aparece UNA SOLA VEZ por sesión, justo después de que el cuidador acepte el
+// consentimiento de cámara y se active el seguimiento ocular. Dura 4 s exactos,
+// no es interrumpible y mientras está visible ejecuta un autoajuste silencioso
+// del offset alpha del tracker:
 //
-//   • Primeros 2 s : estabilización del tracker (no se muestrea).
-//   • Últimos 2 s  : se recogen muestras a 10 Hz mientras el paciente mira el
-//                    centro ("Hola"). Si el rostro y los dos ojos abiertos
-//                    están presentes en >50 % de los intentos, se aplica la
-//                    corrección de centro al estado de SESIÓN del tracker.
-//                    En caso contrario las muestras se descartan y el perfil
-//                    de fábrica queda intacto.
+//   • Primeros 2 s : estabilización (no se muestrea).
+//   • Últimos 2 s  : muestreo a 10 Hz mirando el centro. Si el rostro y los dos
+//                    ojos abiertos están presentes en >50 % de los intentos, se
+//                    aplica la corrección al offset de SESIÓN del tracker.
+//                    En caso contrario las muestras se descartan y el perfil de
+//                    fábrica queda intacto.
 //
 // La pantalla cubre toda la interfaz (z-index 9998), bloquea cualquier toque y
-// no contiene ningún elemento interactivo ni .gaze-target — el cursor de
-// mirada queda visible pero no puede activar nada por debajo.
+// no contiene ningún elemento interactivo — el cursor de mirada queda visible
+// pero no puede activar nada por debajo.
+//
+// Tipografía: 'Gliker' (display redondeada, igual que el branding del logo).
+// Si la fuente no está instalada, cae a 'Lexend' (Google Fonts ya cargada).
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WelcomePatient({ onDone }: WelcomePatientProps) {
-  // Color del texto fijado al montar — el perfil no cambia durante los 4 s.
-  const textColor = useMemo(() => {
-    const id = gazeTracker.currentProfile?.id ?? "tablet";
-    return TEXT_COLOR_BY_PROFILE[id] ?? TEXT_COLOR_BY_PROFILE.tablet;
-  }, []);
-
   useEffect(() => {
     let validSamples = 0;
     let attempts     = 0;
@@ -93,10 +83,12 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
         position: "fixed",
         inset: 0,
         zIndex: 9998,
-        background: "#FFF8E7",       // crema cálido en línea con la app
+        background: CREAM_BG,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: "0 6vw",
+        textAlign: "center",
         pointerEvents: "all",
         userSelect: "none",
         WebkitUserSelect: "none" as const,
@@ -104,22 +96,22 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
     >
       <span
         style={{
-          color: textColor,
-          fontFamily: "'Lexend', sans-serif",
+          color: BRAND_BLUE,
+          fontFamily: "'Gliker', 'Lexend', sans-serif",
           fontWeight: 800,
-          fontSize: "clamp(140px, 26vw, 320px)",
-          letterSpacing: "0.02em",
-          lineHeight: 1,
-          textShadow: `0 4px 28px ${textColor}33`,
+          fontSize: "clamp(56px, 9vw, 140px)",
+          letterSpacing: "0.01em",
+          lineHeight: 1.05,
+          textShadow: `0 4px 28px ${BRAND_BLUE}26`,
           animation: "welcome-fade 4s ease-in-out forwards",
         }}
       >
-        Hola
+        Bienvenido a VidaVoz
       </span>
 
       <style>{`
         @keyframes welcome-fade {
-          0%   { opacity: 0; transform: scale(0.94); }
+          0%   { opacity: 0; transform: scale(0.96); }
           10%  { opacity: 1; transform: scale(1); }
           85%  { opacity: 1; transform: scale(1); }
           100% { opacity: 0; transform: scale(1.02); }
