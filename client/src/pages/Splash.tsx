@@ -64,13 +64,17 @@ export default function Splash({ onDone }: SplashProps) {
         pointerEvents: visible ? "all" : "none",
       }}
     >
-      {/* Logo oficial VidaVoz — símbolo + texto "VidaVoz" */}
+      {/* Logo oficial VidaVoz — tamaño adaptativo basado en vmin (la dimensión
+          menor del viewport) para que se vea bien en móvil portrait, móvil
+          landscape, tablet portrait y tablet landscape sin desbordar. */}
       <img
         src={logoPath}
         alt="VidaVoz"
         draggable={false}
         style={{
-          width: "min(260px, 62vw)",
+          width: "clamp(160px, 48vmin, 520px)",
+          maxWidth: "82vw",
+          maxHeight: "62vh",
           height: "auto",
           objectFit: "contain",
           filter: "drop-shadow(0 6px 28px rgba(125,211,168,0.22))",
@@ -79,11 +83,11 @@ export default function Splash({ onDone }: SplashProps) {
         }}
       />
 
-      {/* Barra de progreso verde animada */}
+      {/* Barra de progreso verde animada — ancho proporcional al logo */}
       <div
         style={{
-          marginTop: "32px",
-          width: "min(200px, 48vw)",
+          marginTop: "clamp(20px, 4vmin, 44px)",
+          width: "clamp(140px, 36vmin, 360px)",
           height: "3px",
           borderRadius: "999px",
           background: "#E5E7EB",
