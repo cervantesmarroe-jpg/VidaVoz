@@ -10,19 +10,16 @@ import { useTTS } from "@/hooks/use-tts";
 const KEY_DWELL_MS    = 2000;
 const ACTION_DWELL_MS = 2000;
 
-// Filas en landscape (3×9)
-const ROWS_LANDSCAPE = [
-  ["A","B","C","D","E","F","G","H","I"],
-  ["J","K","L","M","N","O","P","Q","R"],
-  ["S","T","U","V","W","X","Y","Z","Ñ"],
-];
-
-// Filas en portrait (4×7)
-const ROWS_PORTRAIT = [
-  ["A","B","C","D","E","F","G"],
-  ["H","I","J","K","L","M","N"],
-  ["O","P","Q","R","S","T","U"],
-  ["V","W","X","Y","Z","Ñ"],
+// Distribución QWERTY en español (3 filas):
+//   Fila 1: 10 letras (Q-P)
+//   Fila 2: 10 letras (A-Ñ)
+//   Fila 3:  7 letras (Z-M)
+// Mismo layout para landscape y portrait — en portrait las teclas de la
+// tercera fila quedan algo más anchas (efecto natural de QWERTY móvil).
+const QWERTY_ROWS = [
+  ["Q","W","E","R","T","Y","U","I","O","P"],
+  ["A","S","D","F","G","H","J","K","L","Ñ"],
+  ["Z","X","C","V","B","N","M"],
 ];
 
 // ── Hook: orientación ─────────────────────────────────────────────────────────
@@ -234,10 +231,11 @@ function ActionBtn({
 export default function Keyboard() {
   const isLandscape = useIsLandscape();
 
-  const rows        = isLandscape ? ROWS_LANDSCAPE : ROWS_PORTRAIT;
+  const rows        = QWERTY_ROWS;
+  // Tipos algo más pequeños en portrait porque hay 10 teclas por fila.
   const keyFontSize = isLandscape
-    ? "clamp(.9rem,2.2vw,1.4rem)"
-    : "clamp(1.1rem,3.8vw,1.7rem)";
+    ? "clamp(.9rem,2vw,1.5rem)"
+    : "clamp(.8rem,3vw,1.4rem)";
 
   const { speak } = useTTS();
 
