@@ -82,11 +82,23 @@ class HeadOffsetCorrector {
     try {
       if (!this.landmarker) {
         const resolver = await FilesetResolver.forVisionTasks(WASM_PATH);
-        this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
-          baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-          runningMode: "VIDEO",
-          numFaces:    1,
-        });
+        // Intenta GPU primero. Si no hay WebGL disponible (Chromebooks muy
+        // antiguos, navegadores headless, modo software-only), recae en CPU
+        // de forma silenciosa para no romper la app del paciente.
+        try {
+          this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
+            baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+            runningMode: "VIDEO",
+            numFaces:    1,
+          });
+        } catch (gpuErr) {
+          console.warn("[HeadOffsetCorrector] GPU no disponible, usando CPU:", (gpuErr as Error).message);
+          this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
+            baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
+            runningMode: "VIDEO",
+            numFaces:    1,
+          });
+        }
       }
 
       // Reutiliza el video del tracker principal — no abre otra cámara.
@@ -323,7 +335,6 @@ export function applyHeadOffsetCorrection(x: number, y: number): { x: number; y:
 // Exposición global para depuración desde la consola del navegador,
 // sin necesidad de tocar ningún componente:
 //
-//   window.headOffsetCorrector.start()
 //   window.headOffsetCorrector.calibrateBaseline()
 //   window.headOffsetCorrector.setDebugOverlayVisible(true)
 //   window.headOffsetCorrector.status()
@@ -332,3 +343,99 @@ if (typeof window !== "undefined") {
   (window as unknown as { headOffsetCorrector: HeadOffsetCorrector }).headOffsetCorrector =
     headOffsetCorrector;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bootstrap automático.
+//
+// Política de arranque:
+//   • Observa el DOM esperando a que aparezca <video id="gaze-video"> (creado
+//     por el tracker principal cuando el paciente concede permiso de cámara).
+//   • Engancha el evento `playing` del video → llama a start() solo cuando
+//     el stream está reproduciendo frames de verdad. Nunca antes.
+//   • Engancha `pause`, `emptied` y `ended` → llama a stop() para liberar la
+//     CPU si la cámara se apaga.
+//   • Si el elemento <video> desaparece del DOM → stop().
+//   • Si la pestaña se oculta (visibilitychange.hidden) → stop().
+//     Si vuelve a verse y el video sigue reproduciendo → start().
+//
+// El overlay de depuración permanece OCULTO por defecto (debugVisible=false).
+// Solo se enciende manualmente con setDebugOverlayVisible(true) desde consola.
+// ─────────────────────────────────────────────────────────────────────────────
+function installAutoBootstrap(): void {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  // Idempotencia frente a Hot Module Reload de Vite en desarrollo: si el
+  // módulo se re-evalúa, no queremos duplicar MutationObservers ni listeners.
+  const w = window as unknown as { __headOffsetBootstrapInstalled?: boolean };
+  if (w.__headOffsetBootstrapInstalled) return;
+  w.__headOffsetBootstrapInstalled = true;
+
+  let attachedVideo: HTMLVideoElement | null = null;
+  let pageHidden = document.hidden;
+
+  const tryStart = () => {
+    if (pageHidden) return;
+    if (!attachedVideo || attachedVideo.paused || attachedVideo.readyState < 2) return;
+    // Silenciamos cualquier rechazo: si MediaPipe no puede arrancar (sin
+    // WebGL, sin red, etc.) la app del paciente debe seguir funcionando
+    // SIN overlays de error rojos. El corrector simplemente queda inactivo.
+    headOffsetCorrector.start().catch((err) => {
+      console.warn("[HeadOffsetCorrector] Auto-start fallido (modo silencioso):", err);
+    });
+  };
+
+  const tryStop = () => {
+    headOffsetCorrector.stop();
+  };
+
+  const onPlaying  = () => tryStart();
+  const onPause    = () => tryStop();
+  const onEmptied  = () => tryStop();
+  const onEnded    = () => tryStop();
+
+  const detachVideo = () => {
+    if (!attachedVideo) return;
+    attachedVideo.removeEventListener("playing", onPlaying);
+    attachedVideo.removeEventListener("pause",   onPause);
+    attachedVideo.removeEventListener("emptied", onEmptied);
+    attachedVideo.removeEventListener("ended",   onEnded);
+    attachedVideo = null;
+    tryStop();
+  };
+
+  const attachVideo = (video: HTMLVideoElement) => {
+    if (attachedVideo === video) return;
+    detachVideo();
+    attachedVideo = video;
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("pause",   onPause);
+    video.addEventListener("emptied", onEmptied);
+    video.addEventListener("ended",   onEnded);
+    console.log("[HeadOffsetCorrector] Video del tracker detectado, esperando a 'playing'.");
+    // Si ya estaba reproduciendo cuando lo encontramos, dispara el arranque.
+    if (!video.paused && video.readyState >= 2) tryStart();
+  };
+
+  const sweep = () => {
+    const v = document.getElementById("gaze-video") as HTMLVideoElement | null;
+    if (v && v !== attachedVideo)        attachVideo(v);
+    else if (!v && attachedVideo)        detachVideo();
+  };
+
+  const observer = new MutationObserver(sweep);
+
+  const boot = () => {
+    observer.observe(document.body, { childList: true, subtree: true });
+    sweep();
+  };
+
+  if (document.body) boot();
+  else document.addEventListener("DOMContentLoaded", boot, { once: true });
+
+  document.addEventListener("visibilitychange", () => {
+    pageHidden = document.hidden;
+    if (pageHidden) tryStop();
+    else            tryStart();
+  });
+}
+
+installAutoBootstrap();
