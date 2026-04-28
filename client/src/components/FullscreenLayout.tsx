@@ -11,7 +11,6 @@ import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
-import WelcomePatient from "@/components/WelcomePatient";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -146,22 +145,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
-  // ── Pantalla de bienvenida del paciente ("Hola" 4 s) ──────────────────────
-  // Se muestra UNA SOLA VEZ por sesión (flag en sessionStorage), justo cuando
-  // la mirada queda activa por primera vez tras aceptar el consentimiento.
-  // Como FullscreenLayout se remonta en cada cambio de página, el flag impide
-  // que la pantalla "Hola" reaparezca al navegar entre Urgencias/Mensajes/etc.
-  // La calibración obtenida durante estos 4 s se mantiene durante toda la
-  // sesión hasta cerrar la pestaña.
-  const WELCOME_KEY = "vozuci-welcome-shown-v1";
-  const [showWelcome, setShowWelcome] = useState(false);
-  useEffect(() => {
-    if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
-      sessionStorage.setItem(WELCOME_KEY, "1");
-      setShowWelcome(true);
-    }
-  }, [isActive]);
-
   // ── Log periódico cuando la mirada está activa ────────────────────────────
   useEffect(() => {
     if (!isActive) return;
@@ -257,9 +240,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
       {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
       {isCalibrating && <CalibrationScreen />}
-
-      {/* Bienvenida del paciente + autoajuste silencioso de centro (4 s) */}
-      {showWelcome && <WelcomePatient onDone={() => setShowWelcome(false)} />}
 
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}
