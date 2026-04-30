@@ -7,7 +7,7 @@ import {
   Lightbulb, Clock, Users, HeartCrack, Music, Wind,
 } from "lucide-react";
 
-const MSG_DWELL_MS = 2000;
+const MSG_DWELL_MS = 3000;
 
 // Paleta pastel soft — colores alineados con la nueva estética higiénica
 // Salmón:  #FDDEDE  accent #B03060

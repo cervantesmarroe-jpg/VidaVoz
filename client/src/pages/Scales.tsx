@@ -4,8 +4,8 @@ import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
 import { RotateCcw } from "lucide-react";
 
-const DWELL_MS        = 2500;
-const ACCORDION_DWELL = 1400;
+const DWELL_MS        = 3000;
+const ACCORDION_DWELL = 3000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATOS

@@ -27,7 +27,8 @@ export const CALIBRATIONS_LIBRARY = calibrationsLibraryRaw as CalibrationLibrary
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-const DWELL_MS        = 3000;
+const DWELL_MS        = 3100;  // Fallback del tracker: 100 ms por encima del dwell de pantalla (3000 ms)
+                               // para garantizar que el handler local gane la carrera y evitar doble activación.
 const SMOOTH_SAMPLES  = 30;    // tamaño fijo del ring-buffer MA
 const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
 const BLINK_THRESHOLD = 0.85;

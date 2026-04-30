@@ -4,11 +4,14 @@ import { Volume2, Trash2, Delete, Space } from "lucide-react";
 import { useTTS } from "@/hooks/use-tts";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
-// IMPORTANTE: KEY_DWELL_MS debe ser MENOR que DWELL_MS en use-webgazer.ts (3000 ms)
-// para que el dwell interno del teclado dispare primero y el click del tracker
-// (el.click()) sea bloqueado por justActivatedRef.
-const KEY_DWELL_MS    = 2000;
-const ACTION_DWELL_MS = 2000;
+// Todas las elecciones del paciente comparten 3 s de dwell. El dwell global
+// del tracker (DWELL_MS en use-webgazer.ts) está fijado a 3100 ms para
+// garantizar que el handler local gane siempre la carrera. Como red de
+// seguridad adicional, justActivatedRef bloquea cualquier doble click
+// posterior durante 600 ms — ojo: solo cubre las teclas (handleKeyClick),
+// no las acciones speak/clear.
+const KEY_DWELL_MS    = 3000;
+const ACTION_DWELL_MS = 3000;
 
 // Distribución QWERTY en español (3 filas):
 //   Fila 1: 10 letras (Q-P)
@@ -244,7 +247,8 @@ export default function Keyboard() {
   const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | null>(null);
 
   // Guarda temporal: bloquea el onClick durante 600 ms tras que el dwell interno
-  // ya activó una tecla, evitando doble-escritura (dwell 2 s + click 3 s del tracker).
+  // ya activó una tecla, evitando doble-escritura cuando el dwell del tracker
+  // (también 3 s) llegase a disparar un click sobre la misma tecla.
   const justActivatedRef = useRef<string | null>(null);
 
   // ── Función central de escritura ────────────────────────────────────────────

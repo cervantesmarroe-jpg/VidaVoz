@@ -25,7 +25,7 @@ function useIsPortrait() {
   );
 }
 
-const TAB_DWELL_MS = 1500;
+const TAB_DWELL_MS = 3000;
 
 const TABS = [
   { path: "/",         Icon: AlertTriangle,    label: "URGENTE",  color: "#f87171" },
