@@ -1,25 +1,327 @@
 [
   {
-    "id": "captura_01_elena",
-    "profile": "mobile", 
+    "id": "M-007v2",
+    "profile": "mobile",
+    "score": 9,
     "model": {
-      "alphaX":        330.6512,
-      "betaX":        -987.8400,
-      "alphaY":        150.8431,
-      "betaY":        -1696.8440,
-      "sensitivityX":  -2.7440,
-      "sensitivityY":   2.2210
+      "alphaX": 362.84,
+      "betaX": -899.19,
+      "alphaY": 174.53,
+      "betaY": -1865.46,
+      "sensitivityX": -2.5,
+      "sensitivityY": 2.44
+    }
+  },
+  {
+    "id": "M-001v2",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 330.65,
+      "betaX": -972.81,
+      "alphaY": 369.36,
+      "betaY": -1685.75,
+      "sensitivityX": -2.7,
+      "sensitivityY": 2.21
+    }
+  },
+  {
+    "id": "M-003v2",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 375.12,
+      "betaX": -1296.39,
+      "alphaY": 137.82,
+      "betaY": -1650.88,
+      "sensitivityX": -3.6,
+      "sensitivityY": 2.16
+    }
+  },
+  {
+    "id": "M-005v2",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 497.09,
+      "betaX": -1362.7,
+      "alphaY": 506.01,
+      "betaY": -2439.73,
+      "sensitivityX": -3.79,
+      "sensitivityY": 3.19
+    }
+  },
+  {
+    "id": "EXT-MNPTNT5D",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 296.15,
+      "betaX": -1156.35,
+      "alphaY": 149.3,
+      "betaY": -1659.91,
+      "sensitivityX": -3.21,
+      "sensitivityY": 2.61
+    }
+  },
+  {
+    "id": "EXT-MNPUYB8O",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 370.5,
+      "betaX": -890.15,
+      "alphaY": 230.1,
+      "betaY": -1478.94,
+      "sensitivityX": -2.47,
+      "sensitivityY": 2.34
+    }
+  },
+  {
+    "id": "EXT-MNPVPY8P",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 285.09,
+      "betaX": -1155.79,
+      "alphaY": 191.23,
+      "betaY": -1427.88,
+      "sensitivityX": -3.21,
+      "sensitivityY": 1.49
+    }
+  },
+  {
+    "id": "EXT-MNQ2EDDQ",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 145.84,
+      "betaX": -1117.23,
+      "alphaY": 125.88,
+      "betaY": -1298.05,
+      "sensitivityX": -3.1,
+      "sensitivityY": 2.04
+    }
+  },
+  {
+    "id": "EXT-MNQ2L003",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 344.04,
+      "betaX": -1021.0,
+      "alphaY": 94.08,
+      "betaY": -1430.65,
+      "sensitivityX": -2.6,
+      "sensitivityY": 2.22
+    }
+  },
+  {
+    "id": "EXT-MNRFB0SW",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 335.09,
+      "betaX": -929.42,
+      "alphaY": 22.61,
+      "betaY": -1479.89,
+      "sensitivityX": -2.37,
+      "sensitivityY": 2.29
+    }
+  },
+  {
+    "id": "EXT-MNYPCNQ3",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 336.59,
+      "betaX": -825.26,
+      "alphaY": 43.54,
+      "betaY": -1133.56,
+      "sensitivityX": -2.29,
+      "sensitivityY": 1.79
+    }
+  },
+  {
+    "id": "EXT-MNYPNSP3",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 330.23,
+      "betaX": -1129.67,
+      "alphaY": 55.0,
+      "betaY": -1539.91,
+      "sensitivityX": -3.14,
+      "sensitivityY": 2.43
+    }
+  },
+  {
+    "id": "EXT-MNYPQ7N8",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 324.9,
+      "betaX": -1261.41,
+      "alphaY": 137.62,
+      "betaY": -1008.59,
+      "sensitivityX": -3.5,
+      "sensitivityY": 1.59
+    }
+  },
+  {
+    "id": "EXT-MNYQPT65",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 393.77,
+      "betaX": -1084.91,
+      "alphaY": 150.94,
+      "betaY": -1904.38,
+      "sensitivityX": -3.01,
+      "sensitivityY": 3.0
+    }
+  },
+  {
+    "id": "EXT-MNQ3L4QP",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 577.54,
+      "betaX": -1435.22,
+      "alphaY": 28.26,
+      "betaY": -1854.2,
+      "sensitivityX": -3.99,
+      "sensitivityY": 3.08
+    }
+  },
+  {
+    "id": "EXT-MNQCZQXG",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 116.3,
+      "betaX": -854.88,
+      "alphaY": 424.67,
+      "betaY": -1737.29,
+      "sensitivityX": -2.37,
+      "sensitivityY": 2.78
+    }
+  },
+  {
+    "id": "EXT-MNYPGU2A",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 336.66,
+      "betaX": -987.84,
+      "alphaY": 87.43,
+      "betaY": -1191.19,
+      "sensitivityX": -2.74,
+      "sensitivityY": 2.02
+    }
+  },
+  {
+    "id": "M-004v2",
+    "profile": "mobile",
+    "score": 7,
+    "model": {
+      "alphaX": 469.87,
+      "betaX": -1589.57,
+      "alphaY": 530.08,
+      "betaY": -3045.12,
+      "sensitivityX": -4.42,
+      "sensitivityY": 3.99
+    }
+  },
+  {
+    "id": "M-006v2",
+    "profile": "mobile",
+    "score": 7,
+    "model": {
+      "alphaX": 369.14,
+      "betaX": -1197.69,
+      "alphaY": 719.9,
+      "betaY": -2685.33,
+      "sensitivityX": -3.33,
+      "sensitivityY": 3.51
+    }
+  },
+  {
+    "id": "EXT-MNPVR3BE",
+    "profile": "mobile",
+    "score": 7,
+    "model": {
+      "alphaX": 103.18,
+      "betaX": -895.31,
+      "alphaY": 304.84,
+      "betaY": -793.98,
+      "sensitivityX": -2.48,
+      "sensitivityY": 1.04
+    }
+  },
+  {
+    "id": "EXT-MNPWA7HT",
+    "profile": "mobile",
+    "score": 7,
+    "model": {
+      "alphaX": 305.78,
+      "betaX": -859.49,
+      "alphaY": 396.77,
+      "betaY": -848.67,
+      "sensitivityX": -2.37,
+      "sensitivityY": 1.19
+    }
+  },
+  {
+    "id": "EXT-MNYQL5D3",
+    "profile": "mobile",
+    "score": 7,
+    "model": {
+      "alphaX": 337.08,
+      "betaX": -665.17,
+      "alphaY": 304.84,
+      "betaY": -1343.54,
+      "sensitivityX": -1.85,
+      "sensitivityY": 2.12
+    }
+  },
+  {
+    "id": "EXT-MNPX1G77",
+    "profile": "mobile",
+    "score": 6,
+    "model": {
+      "alphaX": 314.29,
+      "betaX": -712.92,
+      "alphaY": 340.65,
+      "betaY": -1270.61,
+      "sensitivityX": -1.98,
+      "sensitivityY": 1.46
+    }
+  },
+  {
+    "id": "EXT-MNQ2EB6N",
+    "profile": "mobile",
+    "score": 6,
+    "model": {
+      "alphaX": 223.43,
+      "betaX": -648.85,
+      "alphaY": 89.14,
+      "betaY": -963.77,
+      "sensitivityX": -1.8,
+      "sensitivityY": 1.68
     }
   },
   {
     "id": "captura_02_elena",
     "profile": "tablet",
+    "score": 5,
     "model": {
-      "alphaX": 400.00,
-      "betaX": -3515.20,
-      "alphaY": 640.00,
+      "alphaX": 400.0,
+      "betaX": -3515.2,
+      "alphaY": 640.0,
       "betaY": -5681.97,
       "sensitivityX": -4.394,
       "sensitivityY": 4.439
     }
   }
+]
