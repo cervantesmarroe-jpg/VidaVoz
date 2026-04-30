@@ -3,6 +3,25 @@ import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuc
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
+// Librería de coeficientes de calibración del eye-tracker.
+//   El modo UI (tablet/mobile) es independiente del modelo de calibración:
+//   el tracker arranca SIEMPRE con un modelo de esta librería (fallback al
+//   primero), y la pantalla de bienvenida lo refina más tarde con
+//   selectBestModel + applyCalibrationModel sobre el array completo.
+//   Los placeholders model:{...} de gazeProfiles.ts no se usan ya como
+//   coeficientes — solo sirven como ADN histórico de referencia.
+import calibrationsLibraryRaw from '../../calibrations_library.json';
+export interface CalibrationLibraryEntry {
+  id: string;
+  profile: string;          // 'mobile' | 'tablet' — informativo, NO se filtra
+  score: number;
+  model: {
+    alphaX: number; betaX: number;
+    alphaY: number; betaY: number;
+    sensitivityX?: number; sensitivityY?: number;
+  };
+}
+export const CALIBRATIONS_LIBRARY = calibrationsLibraryRaw as CalibrationLibraryEntry[];
 
 // ─── MediaPipe ───────────────────────────────────────────────────────────────
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
@@ -464,40 +483,59 @@ class GazeTracker {
     this.lastBlinkEnd   = 0;
   }
 
-  // ── Carga un Perfil Maestro de fábrica ───────────────────────────────────
-  // Si el perfil incluye un ADN de fábrica (model), inicializa regressionModel
-  // inmediatamente y marca isCalibrated = true: el tracker funciona sin esperar
-  // al QuickSync. Si no hay ADN, el tracker queda en espera (null / uncalibrated).
-  // En ambos casos se limpian los datos del perfil anterior para evitar mezclas.
+  // ── Carga un Perfil de UI y arranca con un modelo de calibración ──────────
+  // Separación explícita de DOS conceptos independientes:
+  //
+  //   1) Modo UI (tablet | mobile) — viene del perfil seleccionado por el
+  //      cuidador. Solo afecta al diseño/layout y a metadatos de diagnóstico
+  //      (label, distanceCm). Se guarda en this.activeProfile y queda
+  //      accesible vía currentProfile / getDebugInfo.
+  //
+  //   2) Coeficientes de calibración del tracker (alpha/beta + sensibilidades)
+  //      — vienen SIEMPRE de calibrations_library.json, NUNCA del placeholder
+  //      profile.model. En el arranque se usa la primera entrada de la
+  //      librería como fallback (la mejor por score). La pantalla de
+  //      bienvenida volverá a llamar a applyCalibrationModel con el ganador
+  //      real para este paciente cuando termine sus 2 s de muestreo.
+  //
+  // Si la librería estuviese vacía (situación anómala), el tracker queda en
+  // espera (regressionModel = null) en lugar de caer al placeholder del UI.
   loadProfile(profile: GazeProfile) {
     this.activeProfile  = profile;
-    this.profileSensX   = profile.sensitivityX;
-    this.profileSensY   = profile.sensitivityY;
     // Limpiar siempre datos del perfil anterior (evita mezclar ADNs)
     this.trainingData   = [];
     this.continuousData = [];
 
-    if (profile.model) {
-      // ─ Perfil con ADN de fábrica: usar sus coeficientes directamente ────────
-      // El QuickSync ajustará solo alphaX/Y (offset del paciente); betaX/Y
-      // quedan bloqueados a los valores maestros grabados de fábrica.
-      this.regressionModel = { ...profile.model };
-      this.isCalibrated    = true;
+    const fallback = CALIBRATIONS_LIBRARY[0];
+    if (fallback) {
+      this.regressionModel = {
+        alphaX: fallback.model.alphaX,
+        betaX:  fallback.model.betaX,
+        alphaY: fallback.model.alphaY,
+        betaY:  fallback.model.betaY,
+      };
+      // Las sensibilidades efectivas las decide la librería; si la entrada no
+      // las trae, mantenemos las del perfil UI como red de seguridad.
+      this.profileSensX = (typeof fallback.model.sensitivityX === 'number')
+        ? fallback.model.sensitivityX
+        : profile.sensitivityX;
+      this.profileSensY = (typeof fallback.model.sensitivityY === 'number')
+        ? fallback.model.sensitivityY
+        : profile.sensitivityY;
+      this.isCalibrated = true;
       console.log(
-        `%cGazeTracker: perfil "${profile.label}" cargado con ADN de fábrica ✓`,
+        `%c[GazeTracker]`,
         'color:#7DD3A8;font-weight:800',
-        `| sensX=${profile.sensitivityX} sensY=${profile.sensitivityY}`,
-        `| αX=${profile.model.alphaX.toFixed(1)} βX=${profile.model.betaX.toFixed(1)}`,
-        `| αY=${profile.model.alphaY.toFixed(1)} βY=${profile.model.betaY.toFixed(1)}`,
+        `Modo UI: ${profile.id} | Modelo calibración: ${fallback.id} (score ${fallback.score})`,
       );
     } else {
-      // ─ Sin ADN de fábrica: requiere QuickSync antes de estimar posición ─────
+      // Librería vacía: no caemos al placeholder del UI por diseño.
       this.regressionModel = null;
+      this.profileSensX    = profile.sensitivityX;
+      this.profileSensY    = profile.sensitivityY;
       this.isCalibrated    = false;
-      console.log(
-        `GazeTracker: perfil "${profile.label}" cargado (sin ADN; requiere QuickSync)`,
-        `| sensX=${profile.sensitivityX} sensY=${profile.sensitivityY}`,
-        `| distancia ~${profile.distanceCm} cm`,
+      console.warn(
+        `[GazeTracker] Modo UI: ${profile.id} | Sin modelo de calibración (librería vacía) — el tracker queda a la espera`,
       );
     }
   }

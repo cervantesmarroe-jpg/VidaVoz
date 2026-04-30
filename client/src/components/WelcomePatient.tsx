@@ -1,24 +1,12 @@
 import { useEffect } from "react";
-import { gazeTracker } from "@/hooks/use-webgazer";
-// Librería de modelos de calibración pre-grabados (mobile + tablet juntos).
-// Vite resuelve este JSON en tiempo de build. La ruta es relativa porque el
-// archivo vive en client/ (raíz del front), no dentro de client/src/.
-import CALIBRATIONS_LIBRARY from "../../calibrations_library.json";
+import {
+  gazeTracker,
+  CALIBRATIONS_LIBRARY,
+  type CalibrationLibraryEntry,
+} from "@/hooks/use-webgazer";
 
 interface WelcomePatientProps {
   onDone: () => void;
-}
-
-interface LibraryModel {
-  alphaX: number; betaX: number;
-  alphaY: number; betaY: number;
-  sensitivityX?: number; sensitivityY?: number;
-}
-interface LibraryEntry {
-  id:      string;
-  profile: string;        // 'mobile' | 'tablet' — informativo, NO se filtra por aquí
-  score:   number;
-  model:   LibraryModel;
 }
 
 const TOTAL_MS         = 4000;
@@ -33,14 +21,14 @@ const VALID_RATE_MIN   = 0.5;
 // El error final por modelo es MSE / score: a igual MSE gana el modelo con
 // mayor score (más respaldado). Devuelve null si no hay muestras o librería.
 function selectBestModel(
-  library: ReadonlyArray<LibraryEntry>,
+  library: ReadonlyArray<CalibrationLibraryEntry>,
   samples: ReadonlyArray<{ eyeX: number; eyeY: number }>,
   centerX: number,
   centerY: number,
-): { entry: LibraryEntry; mse: number; weightedError: number } | null {
+): { entry: CalibrationLibraryEntry; mse: number; weightedError: number } | null {
   if (library.length === 0 || samples.length === 0) return null;
 
-  let bestEntry:    LibraryEntry | null = null;
+  let bestEntry:    CalibrationLibraryEntry | null = null;
   let bestWeighted = Infinity;
   let bestMse      = Infinity;
 
@@ -124,7 +112,7 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
         const cx      = window.innerWidth  / 2;
         const cy      = window.innerHeight / 2;
         const winner  = selectBestModel(
-          CALIBRATIONS_LIBRARY as LibraryEntry[],
+          CALIBRATIONS_LIBRARY,
           samples,
           cx,
           cy,
