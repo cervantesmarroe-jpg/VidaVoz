@@ -1,14 +1,70 @@
 import { useEffect } from "react";
 import { gazeTracker } from "@/hooks/use-webgazer";
+// Librería de modelos de calibración pre-grabados (mobile + tablet juntos).
+// Vite resuelve este JSON en tiempo de build. La ruta es relativa porque el
+// archivo vive en client/ (raíz del front), no dentro de client/src/.
+import CALIBRATIONS_LIBRARY from "../../calibrations_library.json";
 
 interface WelcomePatientProps {
   onDone: () => void;
+}
+
+interface LibraryModel {
+  alphaX: number; betaX: number;
+  alphaY: number; betaY: number;
+  sensitivityX?: number; sensitivityY?: number;
+}
+interface LibraryEntry {
+  id:      string;
+  profile: string;        // 'mobile' | 'tablet' — informativo, NO se filtra por aquí
+  score:   number;
+  model:   LibraryModel;
 }
 
 const TOTAL_MS         = 4000;
 const STABILIZATION_MS = 2000;
 const SAMPLING_HZ      = 10;
 const VALID_RATE_MIN   = 0.5;
+
+// ── Selector del mejor modelo ──────────────────────────────────────────────
+// Recorre TODAS las entradas de la librería sin filtrar por profile. Para
+// cada modelo predice (alpha + beta * eye) la posición de pantalla que
+// produciría cada muestra ocular y compara con el centro real del viewport.
+// El error final por modelo es MSE / score: a igual MSE gana el modelo con
+// mayor score (más respaldado). Devuelve null si no hay muestras o librería.
+function selectBestModel(
+  library: ReadonlyArray<LibraryEntry>,
+  samples: ReadonlyArray<{ eyeX: number; eyeY: number }>,
+  centerX: number,
+  centerY: number,
+): { entry: LibraryEntry; mse: number; weightedError: number } | null {
+  if (library.length === 0 || samples.length === 0) return null;
+
+  let bestEntry:    LibraryEntry | null = null;
+  let bestWeighted = Infinity;
+  let bestMse      = Infinity;
+
+  for (const entry of library) {
+    const m = entry.model;
+    let sumSq = 0;
+    for (const s of samples) {
+      const px = m.alphaX + m.betaX * s.eyeX;
+      const py = m.alphaY + m.betaY * s.eyeY;
+      const dx = px - centerX;
+      const dy = py - centerY;
+      sumSq += dx * dx + dy * dy;
+    }
+    const mse      = sumSq / samples.length;
+    const weight   = entry.score > 0 ? entry.score : 1;
+    const weighted = mse / weight;
+    if (weighted < bestWeighted) {
+      bestWeighted = weighted;
+      bestMse      = mse;
+      bestEntry    = entry;
+    }
+  }
+  return bestEntry ? { entry: bestEntry, mse: bestMse, weightedError: bestWeighted } : null;
+}
 
 const BRAND_BLUE = "#1D4ED8";
 const CREAM_BG   = "#FFF8E7";
@@ -60,6 +116,41 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
 
       const validRate = attempts > 0 ? validSamples / attempts : 0;
       if (validRate >= VALID_RATE_MIN) {
+        // 1) Elegir el modelo de la librería que mejor predice el centro
+        //    de pantalla con las muestras oculares actuales del paciente.
+        //    Se evalúan TODAS las entradas (mobile + tablet juntas); el
+        //    perfil del modelo ganador no importa, solo su ajuste real.
+        const samples = gazeTracker.getSilentSamples();
+        const cx      = window.innerWidth  / 2;
+        const cy      = window.innerHeight / 2;
+        const winner  = selectBestModel(
+          CALIBRATIONS_LIBRARY as LibraryEntry[],
+          samples,
+          cx,
+          cy,
+        );
+        if (winner) {
+          gazeTracker.applyCalibrationModel(winner.entry.model);
+          console.log(
+            `%c[Bienvenida] Modelo elegido ✓`,
+            'color:#7DD3A8;font-weight:800',
+            `| id=${winner.entry.id}`,
+            `| profile=${winner.entry.profile}`,
+            `| score=${winner.entry.score}`,
+            `| mse=${winner.mse.toFixed(0)}px²`,
+            `| weighted=${winner.weightedError.toFixed(0)}`,
+            `| n=${samples.length}`,
+          );
+        } else {
+          console.log(
+            `[Bienvenida] No se eligió modelo (librería vacía o sin muestras) — se mantiene el modelo activo del tracker; el ajuste de offset siguiente se aplicará sobre él`,
+          );
+        }
+
+        // 2) Encima del modelo elegido, aplica la corrección de offset
+        //    alpha calculada con las mismas muestras del centro. Esto deja
+        //    los betas (sensibilidad) del modelo ganador y solo desplaza
+        //    su origen al ojo real del paciente.
         gazeTracker.applySilentCenterCalibration();
       } else {
         console.log(

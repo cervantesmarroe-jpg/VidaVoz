@@ -738,6 +738,35 @@ class GazeTracker {
     if (n > 0) console.log(`[Fase1] Muestras descartadas (n=${n}) — rostro inestable`);
   }
 
+  // ── Selección del mejor modelo de calibración (Welcome → librería) ─────────
+  // getSilentSamples devuelve un SNAPSHOT inmutable del buffer de muestras
+  // recogidas por collectSilentCenterSample, sin consumirlas — para que un
+  // selector externo pueda evaluar varios modelos candidatos contra los mismos
+  // datos antes de que applySilentCenterCalibration los use y los limpie.
+  getSilentSamples(): ReadonlyArray<{ eyeX: number; eyeY: number }> {
+    return this.silentSamples.slice();
+  }
+
+  // Aplica un modelo de calibración al estado de SESIÓN del tracker.
+  // Reemplaza regressionModel y, opcionalmente, las sensibilidades de sesión
+  // (profileSensX/Y) si vienen en el modelo. Nunca toca GAZE_PROFILES ni el
+  // perfil de fábrica activo: la próxima vez que loadProfile se invoque, el
+  // ADN de fábrica se restaura íntegro.
+  applyCalibrationModel(m: {
+    alphaX: number; betaX: number;
+    alphaY: number; betaY: number;
+    sensitivityX?: number; sensitivityY?: number;
+  }): void {
+    this.regressionModel = {
+      alphaX: m.alphaX,
+      betaX:  m.betaX,
+      alphaY: m.alphaY,
+      betaY:  m.betaY,
+    };
+    if (typeof m.sensitivityX === 'number') this.profileSensX = m.sensitivityX;
+    if (typeof m.sensitivityY === 'number') this.profileSensY = m.sensitivityY;
+  }
+
   // ── FASE 2: Aprendizaje continuo (EMA) durante el uso real ─────────────────
   // Cada activación exitosa (dwell o blink) refina alpha con una media
   // exponencial. Solo se aplica si el error es pequeño (< 80 px en cada eje)
