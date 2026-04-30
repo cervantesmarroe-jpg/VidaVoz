@@ -62,6 +62,20 @@ const PHASE2_LEARNING_RATE      = 0.25;  // EMA por activación
 const PHASE2_MAX_ERROR_PX       = 80;    // descarta correcciones grandes (target erróneo)
 const PHASE2_STABILIZATION_MS   = 2000;  // ignora correcciones en los 1ºs 2 s
 
+// ── Escalado dinámico de beta tras elegir modelo ────────────────────────────
+// Tras seleccionar el modelo de la librería, los betas vienen optimizados para
+// el ojo de OTRO usuario. Para que el cursor cubra toda la pantalla con el ojo
+// del paciente actual, escalamos beta proporcionalmente al rango real de la
+// señal ocular medida durante la pantalla de bienvenida frente al rango típico
+// esperado (≈0.20 en datos de calibración históricos). Solo se aplica si hay
+// varianza suficiente — si el paciente miró fijo al centro, se deja el beta
+// del modelo sin tocar para no introducir ruido.
+const BETA_SCALE_EXPECTED_RANGE_X = 0.20;
+const BETA_SCALE_EXPECTED_RANGE_Y = 0.20;
+const BETA_SCALE_MIN_VARIANCE     = 0.05; // si rango < esto → no escalar
+const BETA_SCALE_MIN              = 0.5;  // recorte inferior (anti-shrink)
+const BETA_SCALE_MAX              = 2.5;  // recorte superior (anti-blow-up)
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
 type NormalizedLandmark  = { x: number; y: number; z: number };
@@ -724,7 +738,13 @@ class GazeTracker {
   // Solo modifica el ajuste de SESIÓN (regressionModel del tracker) — nunca el
   // perfil de fábrica de GAZE_PROFILES. Si no hay modelo cargado o muestras
   // insuficientes, no hace nada y se mantiene el perfil de fábrica intacto.
-  applySilentCenterCalibration(): boolean {
+  //
+  // Acepta opcionalmente la info de escala dinámica de beta calculada justo
+  // antes (por applyDynamicBetaScaling) para incluirla en la misma línea de
+  // log y dar una traza única del autoajuste completo (offset + escala).
+  applySilentCenterCalibration(
+    scaleInfo?: { scaleX: number; scaleY: number } | null,
+  ): boolean {
     const samples = this.silentSamples;
     this.silentSamples = []; // limpia siempre, aunque no apliquemos
 
@@ -751,13 +771,72 @@ class GazeTracker {
     this.regressionModel.alphaX += offsetX;
     this.regressionModel.alphaY += offsetY;
 
+    const scaleSuffix =
+      scaleInfo === undefined
+        ? ''
+        : scaleInfo === null
+          ? ' | scale=none (varianza insuficiente)'
+          : ` | scaleX=${scaleInfo.scaleX.toFixed(2)} | scaleY=${scaleInfo.scaleY.toFixed(2)}`;
+
     console.log(
-      `%c[Fase1] Autoajuste silencioso aplicado ✓`,
+      `%c[Fase1] Autoajuste aplicado ✓`,
       'color:#7DD3A8;font-weight:800',
       `| n=${n}`,
-      `| offset=(${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})px`,
+      `| offset=(${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})px${scaleSuffix}`,
     );
     return true;
+  }
+
+  // ── Escalado dinámico de beta tras applyCalibrationModel ──────────────────
+  // Recibe el snapshot de muestras oculares de la pantalla de bienvenida y
+  // calcula un factor de escala para betaX y betaY basado en la dispersión
+  // real de la señal del paciente actual frente al rango típico esperado.
+  //
+  // La idea es que el modelo elegido por selectBestModel acierta la DIRECCIÓN
+  // (alpha) pero su ESCALA (beta) viene optimizada para el ojo de otro usuario
+  // — y por eso el cursor podría no llegar a los bordes de pantalla. Con este
+  // ajuste ampliamos o reducimos beta para que el rango ocular del paciente
+  // mapee al rango completo del viewport.
+  //
+  // Devuelve los factores de escala aplicados (recortados a [0.5, 2.5]) o null
+  // si no había varianza suficiente en las muestras (paciente miró fijo) o si
+  // no había modelo cargado. En esos casos beta se queda intacto.
+  applyDynamicBetaScaling(
+    samples: ReadonlyArray<{ eyeX: number; eyeY: number }>,
+  ): { scaleX: number; scaleY: number } | null {
+    if (!this.regressionModel || samples.length === 0) return null;
+
+    let minX =  Infinity, maxX = -Infinity;
+    let minY =  Infinity, maxY = -Infinity;
+    let finiteCount = 0;
+    for (const s of samples) {
+      // Filtra muestras corruptas (NaN/±Infinity) que podrían venir si la
+      // detección de rostro perdiera algún frame durante la bienvenida.
+      if (!Number.isFinite(s.eyeX) || !Number.isFinite(s.eyeY)) continue;
+      finiteCount++;
+      if (s.eyeX < minX) minX = s.eyeX;
+      if (s.eyeX > maxX) maxX = s.eyeX;
+      if (s.eyeY < minY) minY = s.eyeY;
+      if (s.eyeY > maxY) maxY = s.eyeY;
+    }
+    if (finiteCount === 0) return null;
+
+    const rangeX = maxX - minX;
+    const rangeY = maxY - minY;
+
+    if (rangeX <= BETA_SCALE_MIN_VARIANCE || rangeY <= BETA_SCALE_MIN_VARIANCE) {
+      return null;
+    }
+
+    const rawScaleX = BETA_SCALE_EXPECTED_RANGE_X / rangeX;
+    const rawScaleY = BETA_SCALE_EXPECTED_RANGE_Y / rangeY;
+    const scaleX    = Math.min(Math.max(rawScaleX, BETA_SCALE_MIN), BETA_SCALE_MAX);
+    const scaleY    = Math.min(Math.max(rawScaleY, BETA_SCALE_MIN), BETA_SCALE_MAX);
+
+    this.regressionModel.betaX *= scaleX;
+    this.regressionModel.betaY *= scaleY;
+
+    return { scaleX, scaleY };
   }
 
   // Marca el inicio de la sesión activa (cuando se enciende la mirada).

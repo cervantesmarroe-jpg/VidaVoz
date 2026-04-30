@@ -1,0 +1,37 @@
+El sistema de selección de modelo funciona correctamente en dirección pero el cursor no llega a los bordes de pantalla. El problema es que selectBestModel optimiza el error central pero no la escala. Añadir un paso de escalado dinámico de beta después de elegir el modelo ganador.
+Tras aplicar el modelo ganador al tracker, calcular un factor de escala para betaX y betaY basándose en las muestras oculares disponibles de la pantalla de bienvenida:
+typescript// Con las mismas muestras usadas para selectBestModel
+// Calcular la dispersión real de la señal ocular del usuario
+const eyeXValues = eyeSamples.map(s => s.eyeX);
+const eyeYValues = eyeSamples.map(s => s.eyeY);
+const rangeEyeX = Math.max(...eyeXValues) - Math.min(...eyeXValues);
+const rangeEyeY = Math.max(...eyeYValues) - Math.min(...eyeYValues);
+
+// Rango esperado de señal ocular para cubrir la pantalla completa
+// Basado en los datos de calibración: rango típico ~0.15 a 0.25
+const EXPECTED_RANGE_X = 0.20;
+const EXPECTED_RANGE_Y = 0.20;
+
+// Solo aplicar escala si hay suficiente varianza en las muestras
+// (el usuario movió los ojos durante la pantalla de bienvenida)
+if (rangeEyeX > 0.05 && rangeEyeY > 0.05) {
+  const scaleX = EXPECTED_RANGE_X / rangeEyeX;
+  const scaleY = EXPECTED_RANGE_Y / rangeEyeY;
+
+  // Limitar el factor de escala para evitar sobreescalado
+  const clampedScaleX = Math.min(Math.max(scaleX, 0.5), 2.5);
+  const clampedScaleY = Math.min(Math.max(scaleY, 0.5), 2.5);
+
+  correctedBetaX = model.betaX * clampedScaleX;
+  correctedBetaY = model.betaY * clampedScaleY;
+} else {
+  // Sin suficiente varianza — usar beta del modelo sin escalar
+  correctedBetaX = model.betaX;
+  correctedBetaY = model.betaY;
+}
+Aplicar correctedBetaX y correctedBetaY junto con los alpha corregidos por applySilentCenterCalibration al estado de sesión del tracker.
+Añadir al log existente la información de escala:
+[Bienvenida] Modelo elegido ✓ | id=EXT-MNPWA7HT | score=7 | mse=127912px²
+[Fase1] Autoajuste aplicado ✓ | offset=(-23.4, 12.1)px | scaleX=1.42 | scaleY=1.87
+Si rangeEyeX o rangeEyeY son menores de 0.05 (el usuario no movió los ojos durante la pantalla de bienvenida), no aplicar escala y registrar en el log scale=none (varianza insuficiente).
+No modificar selectBestModel, gazeProfiles.ts ni CalibrationScreen.tsx.

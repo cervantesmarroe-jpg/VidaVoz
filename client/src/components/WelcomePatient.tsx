@@ -135,11 +135,18 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
           );
         }
 
-        // 2) Encima del modelo elegido, aplica la corrección de offset
-        //    alpha calculada con las mismas muestras del centro. Esto deja
-        //    los betas (sensibilidad) del modelo ganador y solo desplaza
-        //    su origen al ojo real del paciente.
-        gazeTracker.applySilentCenterCalibration();
+        // 2) Escala dinámica de beta. El modelo ganador acierta la
+        //    dirección pero su escala (beta) viene del ojo de otro
+        //    usuario; ajustamos beta para que el rango ocular real del
+        //    paciente cubra todo el viewport. Devuelve null si no había
+        //    varianza suficiente (paciente miró fijo al centro).
+        const scale = gazeTracker.applyDynamicBetaScaling(samples);
+
+        // 3) Encima del modelo elegido y los betas escalados, aplica la
+        //    corrección de offset alpha calculada con las mismas muestras
+        //    del centro. Loguea offset + scale en una única línea de
+        //    [Fase1] para tener trazabilidad completa del autoajuste.
+        gazeTracker.applySilentCenterCalibration(scale);
       } else {
         console.log(
           `[Bienvenida] Rostro inestable (${(validRate * 100).toFixed(0)}% válido) — sin corrección`,
