@@ -4,6 +4,7 @@ import {
   CALIBRATIONS_LIBRARY,
   type CalibrationLibraryEntry,
 } from "@/hooks/use-webgazer";
+import welcomeImageUrl from "@assets/VidaVoz-removebg-preview_1777535718332.png";
 
 interface WelcomePatientProps {
   onDone: () => void;
@@ -54,7 +55,6 @@ function selectBestModel(
   return bestEntry ? { entry: bestEntry, mse: bestMse, weightedError: bestWeighted } : null;
 }
 
-const BRAND_BLUE = "#1D4ED8";
 const CREAM_BG   = "#FFF8E7";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -180,20 +180,23 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
         WebkitUserSelect: "none" as const,
       }}
     >
-      <span
+      <img
+        src={welcomeImageUrl}
+        alt="Bienvenido a VidaVoz"
+        data-testid="img-welcome"
+        draggable={false}
         style={{
-          color: BRAND_BLUE,
-          fontFamily: "'Gliker', 'Lexend', sans-serif",
-          fontWeight: 800,
-          fontSize: "clamp(56px, 9vw, 140px)",
-          letterSpacing: "0.01em",
-          lineHeight: 1.05,
-          textShadow: `0 4px 28px ${BRAND_BLUE}26`,
+          maxWidth: "min(78vw, 520px)",
+          maxHeight: "78vh",
+          width: "auto",
+          height: "auto",
+          objectFit: "contain",
+          userSelect: "none",
+          WebkitUserSelect: "none" as const,
+          pointerEvents: "none",
           animation: "welcome-fade 4s ease-in-out forwards",
         }}
-      >
-        Bienvenido a VidaVoz
-      </span>
+      />
 
       <style>{`
         @keyframes welcome-fade {
