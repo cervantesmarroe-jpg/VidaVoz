@@ -1,0 +1,82 @@
+Quiero añadir un sistema de seguridad avanzado al eye-tracking para evitar activaciones accidentales por barrido visual (visual scanning).
+
+OBJETIVO:
+Evitar que los elementos interactivos se activen simplemente porque el usuario pase la mirada rápidamente por encima de ellos mientras explora la interfaz.
+
+El sistema debe distinguir entre:
+- una mirada intencional
+- y un simple barrido visual involuntario
+
+COMPORTAMIENTO DESEADO:
+Antes de iniciar el dwell de 3 segundos, el sistema debe validar que la mirada es estable e intencional.
+
+FLUJO COMPLETO:
+1. El usuario mira un elemento
+2. El sistema detecta estabilidad visual mínima
+3. Solo entonces comienza el dwell de 3000ms
+4. Durante el dwell:
+   - mostrar progreso visual
+5. Si la mirada se desvía:
+   - cancelar el proceso
+   - resetear suavemente
+
+ANTI-BARRIDO VISUAL:
+Implementar mecanismos para evitar activaciones accidentales por:
+- movimientos rápidos de ojos
+- exploración natural de pantalla
+- micro fijaciones involuntarias
+- cruces rápidos sobre botones
+
+REQUISITOS FUNCIONALES:
+- No iniciar dwell inmediatamente al detectar hover visual
+- Exigir una fase previa de estabilización de mirada
+- Ignorar fijaciones demasiado cortas
+- Filtrar movimientos bruscos
+- Detectar intención real de interacción
+
+IMPLEMENTACIÓN RECOMENDADA:
+Agregar una fase previa tipo:
+- `gazeIntentDetection`
+- `focusStabilization`
+- `intentConfirmation`
+
+LÓGICA SUGERIDA:
+- La mirada debe permanecer estable sobre el elemento durante un pequeño tiempo inicial antes de arrancar el dwell
+- Ejemplo:
+  - 300–500ms de estabilidad inicial
+  - después iniciar el dwell real de 3000ms
+- Si hay movimientos erráticos:
+  - reiniciar estabilización
+- Aplicar tolerancia espacial pequeña para jitter natural del eye-tracking
+
+REQUISITOS TÉCNICOS:
+- Centralizar toda la lógica en un sistema global reutilizable
+- Mantener compatibilidad con el dwell actual
+- No romper componentes existentes
+- Mantener rendimiento fluido
+- Compatible con móvil, tablet y desktop
+- Mantener accesibilidad
+
+FEEDBACK VISUAL:
+Quiero que el usuario perciba claramente las distintas fases:
+1. Detección inicial de mirada
+2. Confirmación/intención
+3. Progreso de dwell
+4. Activación final
+
+SUGERENCIA VISUAL:
+- Fase inicial:
+  - glow suave
+  - highlight ligero
+- Tras confirmar intención:
+  - iniciar animación completa de progreso
+- Mantener transiciones fluidas y naturales
+
+VALIDACIÓN:
+- Verificar que mirar rápidamente un botón NO lo active
+- Verificar que el dwell solo comienza con mirada estable
+- Verificar que la navegación sigue siendo cómoda y natural
+- Verificar que no aumentan falsos positivos
+
+RESULTADO ESPERADO:
+La aplicación debe sentirse segura, precisa y profesional, evitando activaciones accidentales por barrido visual y permitiendo únicamente interacciones intencionales mediante eye-tracking estable.

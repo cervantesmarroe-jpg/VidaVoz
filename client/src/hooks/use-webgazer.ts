@@ -1112,9 +1112,21 @@ export function useWebGazer() {
       gazeTracker.markSessionStart();
     })();
 
-    let targetEl:     HTMLElement | null = null;
-    let enterTime     = 0;
-    let dwellCooldown = false;
+    // ── Anti-barrido visual ───────────────────────────────────────────────────
+    // Antes de arrancar el dwell de 3 s, exige una fase corta de estabilización
+    // (~400 ms con la mirada quieta dentro de un radio de 40 px). Esto evita
+    // activaciones accidentales cuando el paciente recorre la pantalla con la
+    // mirada (visual scanning). Si la mirada salta más allá de la tolerancia,
+    // se reinicia la estabilización; si sale del botón, se cancela todo.
+    const STABILIZATION_MS    = 400;
+    const STAB_TOLERANCE_PX_2 = 40 * 40; // cuadrado para evitar sqrt en cada frame
+
+    let targetEl:       HTMLElement | null = null;
+    let stabStartTime   = 0;     // inicio de la fase de estabilización
+    let stabAnchorX     = 0;
+    let stabAnchorY     = 0;
+    let dwellStartTime  = 0;     // 0 = aún estabilizando, >0 = dwell activo
+    let dwellCooldown   = false;
     // touchLockUntil eliminado — ahora lo gestiona globalCursor.ts (isTouchLocked())
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -1173,25 +1185,47 @@ export function useWebGazer() {
 
       if (target) {
         if (target !== targetEl) {
-          // ── Cambio de botón: apagar glow del anterior, encender el nuevo ───
+          // ── Cambio de botón: apagar glow del anterior, arrancar fase de
+          //    estabilización del nuevo (todavía sin progreso de dwell) ───────
           if (targetEl) { resetProgress(targetEl); setAimGlow(targetEl, false); }
-          targetEl = target; enterTime = now; dwellCooldown = false;
-          setAimGlow(target, true);
+          targetEl = target;
+          stabStartTime  = now;
+          stabAnchorX    = x;
+          stabAnchorY    = y;
+          dwellStartTime = 0;
+          dwellCooldown  = false;
+          setAimGlow(target, true); // glow suave: "te he detectado, mantén la mirada"
         } else if (!dwellCooldown) {
-          const progress = Math.min((now - enterTime) / DWELL_MS, 1);
-          updateProgress(target, progress);
-          if (progress >= 1) {
-            // ── Activación por dwell: apagar glow antes de activar ───────────
-            setAimGlow(target, false);
-            activateTarget(target, x, y);
-            dwellCooldown = true;
+          if (dwellStartTime === 0) {
+            // ── Fase 1: estabilización (anti-barrido visual) ────────────────
+            const dx = x - stabAnchorX;
+            const dy = y - stabAnchorY;
+            if (dx * dx + dy * dy > STAB_TOLERANCE_PX_2) {
+              // Mirada erráica → reinicia estabilización con nuevo ancla
+              stabStartTime = now;
+              stabAnchorX   = x;
+              stabAnchorY   = y;
+            } else if (now - stabStartTime >= STABILIZATION_MS) {
+              // Intención confirmada → arranca el dwell real de 3 s
+              dwellStartTime = now;
+            }
+          } else {
+            // ── Fase 2: dwell con progreso visual sincronizado ──────────────
+            const progress = Math.min((now - dwellStartTime) / DWELL_MS, 1);
+            updateProgress(target, progress);
+            if (progress >= 1) {
+              setAimGlow(target, false);
+              activateTarget(target, x, y);
+              dwellCooldown = true;
+            }
           }
         }
       } else if (targetEl) {
-        // ── El cursor salió al vacío ──────────────────────────────────────────
+        // ── El cursor salió al vacío: cancela estabilización y dwell ─────────
         resetProgress(targetEl);
         setAimGlow(targetEl, false);
-        targetEl = null;
+        targetEl       = null;
+        dwellStartTime = 0;
       }
     };
 
