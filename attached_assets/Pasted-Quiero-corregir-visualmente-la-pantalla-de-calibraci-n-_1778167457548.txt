@@ -1,0 +1,58 @@
+Quiero corregir visualmente la pantalla de calibración de mi sistema de eye-tracking sin modificar el diseño general ni reemplazar el logotipo completo.
+
+PROBLEMA:
+En el logotipo o elementos visuales de la pantalla de calibración aparece un fondo blanco no deseado detrás de las ondas visuales / elementos gráficos del ojo. Ese fondo blanco rompe la integración visual porque el resto de la pantalla utiliza un fondo beige claro uniforme.
+
+OBJETIVO:
+Eliminar visualmente ese parche blanco y rellenar esa zona exactamente con el mismo color de fondo de la pantalla de calibración para que toda la interfaz se vea limpia, integrada y profesional.
+
+IMPORTANTE:
+La pantalla de calibración debe mantener una estética muy limpia y visualmente estable, ya que forma parte del proceso de seguimiento ocular y no debe introducir distracciones visuales.
+
+REQUISITOS:
+- NO cambiar el logotipo completo
+- NO rediseñar branding ni iconografía
+- NO alterar tamaños, posiciones ni proporciones
+- Mantener intactos:
+  - ondas visuales
+  - elementos del ojo
+  - indicadores de calibración
+  - animaciones existentes
+- Solo corregir el fondo blanco no deseado
+- Igualar perfectamente el color del fondo de la pantalla
+- Mantener transición suave y natural
+- Evitar bordes visibles o halos
+
+IMPLEMENTACIÓN:
+- Detectar automáticamente el color dominante del fondo de calibración
+- Aplicar máscara o corrección únicamente sobre la zona blanca
+- Si el recurso es PNG con fondo incrustado:
+  - usar CSS masking
+  - canvas processing
+  - blend modes
+  - background replacement
+  - o capa correctiva detrás de las ondas
+- Priorizar una solución ligera y mantenible
+- Evitar hacks frágiles o dependientes de resolución
+
+REQUISITOS VISUALES:
+La pantalla de calibración debe verse:
+- minimalista
+- estable
+- suave visualmente
+- limpia
+- profesional
+
+Evitar:
+- parpadeos
+- cambios bruscos
+- artefactos visuales
+- diferencias de color perceptibles
+
+COMPATIBILIDAD:
+- Mantener responsive
+- Compatible con móvil y tablet
+- Compatible con diferentes resoluciones y densidades de pantalla
+
+RESULTADO ESPERADO:
+La pantalla de calibración debe verse exactamente igual que ahora, pero sin el parche blanco detrás de las ondas o elementos visuales del logo, integrándose perfectamente con el fondo beige de la interfaz.

@@ -1392,11 +1392,18 @@ export function useWebGazer() {
 }
 
 // ─── Dwell helpers ────────────────────────────────────────────────────────────
+// Escriben la variable CSS --gaze-progress (0..1) en el botón apuntado. El
+// estilo `.gaze-target::after` (index.css) la consume para pintar el fill
+// progresivo + glow inset, sincronizados con DWELL_MS=3000ms. Como fallback
+// también actualizan la barra legacy `.gaze-progress-bar` si el componente
+// la incluyera manualmente — la inmensa mayoría no la lleva y ya no hace falta.
 function resetProgress(el: HTMLElement) {
+  el.style.setProperty('--gaze-progress', '0');
   const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
   if (bar) bar.style.width = '0%';
 }
 function updateProgress(el: HTMLElement, progress: number) {
+  el.style.setProperty('--gaze-progress', String(progress));
   const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
   if (bar) bar.style.width = `${progress * 100}%`;
 }

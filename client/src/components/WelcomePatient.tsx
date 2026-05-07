@@ -195,6 +195,10 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
           WebkitUserSelect: "none" as const,
           pointerEvents: "none",
           animation: "welcome-fade 4s ease-in-out forwards",
+          // Funde cualquier píxel blanco residual del PNG con el fondo crema:
+          // multiply (blanco × #FFF8E7 = #FFF8E7) → desaparecen los parches
+          // blancos detrás de las ondas/elementos del logo sin tocar colores.
+          mixBlendMode: "multiply",
         }}
       />
 
