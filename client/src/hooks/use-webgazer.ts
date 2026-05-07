@@ -1127,6 +1127,69 @@ export function useWebGazer() {
     let stabAnchorY     = 0;
     let dwellStartTime  = 0;     // 0 = aún estabilizando, >0 = dwell activo
     let dwellCooldown   = false;
+
+    // ── Capa de confianza del tracking (anti tracking-incierto) ──────────────
+    // Distingue 3 estados con histéresis para evitar parpadeos de UI:
+    //   • stable    → todo habilitado, dwell y blink funcionan normal.
+    //   • uncertain → 600 ms sin gaze: se PAUSA el dwell (sin resetear) y se
+    //                 muestra un banner discreto "Buscando mirada…".
+    //   • lost      → 1500 ms sin gaze: banner cambia a "No se detecta mirada".
+    // Para volver a stable se exigen 200 ms de gaze continuo (grace), evitando
+    // recuperaciones espurias por una sola muestra. Cuando se reanuda, los
+    // tiempos de estabilización y dwell se DESPLAZAN hacia adelante por la
+    // duración pausada → el progreso visual no salta ni se reinicia.
+    const UNCERTAIN_AFTER_MS = 600;
+    const LOST_AFTER_MS      = 1500;
+    const RECOVERY_GRACE_MS  = 200;
+
+    let confState: 'stable' | 'uncertain' | 'lost' = 'stable';
+    let lastGazeTime  = performance.now();
+    let recoveryStart = 0;
+    let pausedAt      = 0;       // timestamp en que entramos en uncertain/lost
+
+    const banner = document.createElement('div');
+    banner.id = 'gaze-status-banner';
+    banner.style.cssText = [
+      'position:fixed', 'top:18px', 'left:50%', 'transform:translateX(-50%)',
+      'background:rgba(40,40,40,0.82)', 'color:#fff',
+      'padding:8px 18px', 'border-radius:999px',
+      "font-family:'Lexend',sans-serif", 'font-size:0.85rem', 'font-weight:600',
+      'letter-spacing:0.02em', 'z-index:99998', 'pointer-events:none',
+      'opacity:0', 'transition:opacity 0.4s ease', 'will-change:opacity',
+      'box-shadow:0 4px 12px rgba(0,0,0,0.18)',
+    ].join(';');
+    document.body.appendChild(banner);
+
+    function setBanner(text: string | null) {
+      if (text) { banner.textContent = text; banner.style.opacity = '1'; }
+      else      { banner.style.opacity = '0'; }
+    }
+
+    function pauseProgress() {
+      if (pausedAt === 0) pausedAt = performance.now();
+    }
+    function resumeProgress() {
+      if (pausedAt === 0) return;
+      const pausedFor = performance.now() - pausedAt;
+      if (stabStartTime  > 0) stabStartTime  += pausedFor;
+      if (dwellStartTime > 0) dwellStartTime += pausedFor;
+      pausedAt = 0;
+    }
+
+    const confMonitor = setInterval(() => {
+      const idle = performance.now() - lastGazeTime;
+      if (idle > LOST_AFTER_MS) {
+        if (confState !== 'lost') {
+          confState = 'lost'; pauseProgress();
+          setBanner('No se detecta mirada');
+        }
+      } else if (idle > UNCERTAIN_AFTER_MS) {
+        if (confState === 'stable') {
+          confState = 'uncertain'; pauseProgress();
+          setBanner('Buscando mirada…');
+        }
+      }
+    }, 150);
     // touchLockUntil eliminado — ahora lo gestiona globalCursor.ts (isTouchLocked())
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -1180,8 +1243,26 @@ export function useWebGazer() {
       if (isTouchLocked()) return;
       moveGlobalCursor(x, y);
 
+      const now = performance.now();
+      lastGazeTime = now;
+
+      // ── Recuperación con grace period: 200 ms de gaze continuo para volver
+      //    a stable. Mientras tanto, no procesamos lógica de interacción.
+      if (confState !== 'stable') {
+        if (recoveryStart === 0) recoveryStart = now;
+        if (now - recoveryStart >= RECOVERY_GRACE_MS) {
+          confState = 'stable';
+          setBanner(null);
+          resumeProgress();
+          recoveryStart = 0;
+        } else {
+          return;
+        }
+      } else {
+        recoveryStart = 0;
+      }
+
       const target = hitTest(x, y);
-      const now    = performance.now();
 
       if (target) {
         if (target !== targetEl) {
@@ -1240,6 +1321,7 @@ export function useWebGazer() {
     // ocurre sobre el MISMO botón. Un parpadeo natural mientras la mirada
     // recorre la pantalla queda silenciosamente descartado.
     const onBlink = (x: number, y: number) => {
+      if (confState !== 'stable') return;                 // tracking dudoso → ignorar
       if (!targetEl || dwellStartTime === 0) return;     // sin intención confirmada
       const onTarget = hitTest(x, y);
       if (onTarget !== targetEl) return;                  // blink fuera del foco
@@ -1264,6 +1346,8 @@ export function useWebGazer() {
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);
       setGazeTargetTouchCallback(null);
+      clearInterval(confMonitor);
+      banner.remove();
     };
   }, [isActive]);
 

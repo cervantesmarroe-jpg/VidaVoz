@@ -1,0 +1,152 @@
+Quiero incorporar un sistema avanzado de validación y confianza del eye-tracking para evitar activaciones erróneas cuando el seguimiento ocular no sea suficientemente preciso o estable.
+
+OBJETIVO PRINCIPAL:
+La aplicación debe ejecutar acciones únicamente cuando exista suficiente confianza en la posición real de la mirada del usuario.
+
+Si el sistema detecta dudas, pérdida parcial de tracking o baja precisión:
+- NO debe ejecutar acciones
+- NO debe iniciar dwell
+- NO debe permitir blink activation
+- pero TAMPOCO debe bloquear constantemente la experiencia con falsos estados de error
+
+El sistema debe sentirse:
+- preciso
+- estable
+- usable
+- tolerante al movimiento natural
+- profesional
+
+COMPORTAMIENTO GENERAL:
+El sistema debe trabajar con distintos niveles de confianza del tracking ocular.
+
+ESTADOS DEL SISTEMA:
+
+1. TRACKING ESTABLE
+- Eye tracking confiable
+- Interacciones habilitadas
+- Dwell y blink funcionando normalmente
+
+2. TRACKING INCIERTO
+Cuando el sistema detecte:
+- pérdida parcial de ojos
+- jitter excesivo
+- movimientos erráticos
+- tracking ambiguo
+- baja confianza de gaze
+- saltos rápidos de coordenadas
+- cambios imposibles de foco
+
+ENTONCES:
+- pausar temporalmente cualquier interacción
+- congelar dwell en curso
+- ignorar blink activation
+- NO disparar acciones
+- mostrar feedback suave tipo:
+  - “Buscando mirada”
+  - “Ajustando seguimiento”
+  - “Tracking inestable”
+
+IMPORTANTE:
+El sistema NO debe entrar en este estado por micro variaciones normales.
+
+3. TRACKING PERDIDO
+Solo si realmente no hay seguimiento válido:
+- desactivar interacciones temporalmente
+- mostrar mensaje más claro:
+  - “No se detecta mirada”
+- intentar recuperación automática inmediata
+
+OBJETIVO UX:
+Quiero evitar dos extremos:
+❌ Activaciones erróneas por tracking dudoso
+❌ Una app inutilizable porque constantemente “pierde” la mirada
+
+El sistema debe ser inteligente y tolerante.
+
+REQUISITOS CLAVE:
+- Aplicar smoothing de gaze
+- Añadir thresholds de confianza razonables
+- Ignorar micro jitter natural
+- Permitir pequeñas variaciones de mirada sin cancelar interacción
+- No resetear dwell agresivamente
+- No mostrar mensajes de error continuamente
+- Evitar parpadeos visuales del estado de tracking
+
+IMPLEMENTACIÓN RECOMENDADA:
+Crear un sistema centralizado tipo:
+- `TrackingConfidenceManager`
+- `GazeValidationLayer`
+- `EyeTrackingStabilityEngine`
+
+FUNCIONES DEL SISTEMA:
+- calcular estabilidad de mirada
+- medir confianza del tracking
+- filtrar ruido
+- detectar pérdida real vs jitter normal
+- decidir si:
+  - permitir interacción
+  - pausar interacción
+  - cancelar interacción
+
+LÓGICA RECOMENDADA:
+- Utilizar ventanas temporales cortas para validar estabilidad
+- Aplicar hysteresis para evitar cambios constantes de estado
+- No cambiar inmediatamente entre:
+  - tracking válido
+  - tracking inválido
+- Exigir persistencia mínima antes de marcar tracking como perdido
+
+EJEMPLO DE COMPORTAMIENTO IDEAL:
+- pequeñas oscilaciones → ignorar
+- movimiento natural → permitido
+- tracking dudoso breve → pausar discretamente
+- pérdida real prolongada → mostrar aviso claro
+
+INTEGRACIÓN CON DWELL:
+- Si el tracking se vuelve incierto:
+  - pausar progreso visual
+- Si se recupera rápidamente:
+  - continuar dwell
+- Solo cancelar completamente si la pérdida persiste
+
+INTEGRACIÓN CON BLINK:
+- Blink solo válido con tracking estable
+- Ignorar blink durante estados inciertos
+- Evitar activaciones por ruido o falsas detecciones
+
+FEEDBACK VISUAL:
+El feedback debe ser:
+- discreto
+- calmado
+- no invasivo
+- profesional
+
+SUGERENCIAS:
+- pequeño indicador de estado
+- glow sutil
+- texto breve y limpio
+- transiciones suaves
+- evitar overlays agresivos
+
+NO QUIERO:
+- mensajes constantes apareciendo/desapareciendo
+- bloqueos frecuentes
+- resets continuos
+- sensibilidad extrema
+- falsas pérdidas de tracking
+
+QUIERO:
+- una experiencia robusta
+- tolerante al movimiento humano real
+- precisa pero usable
+- segura pero fluida
+
+VALIDACIÓN:
+- Verificar que el sistema ignora jitter normal
+- Verificar que las acciones solo ocurren con tracking confiable
+- Verificar que el dwell puede pausarse y continuar
+- Verificar que el blink no genera falsos positivos
+- Verificar que la interfaz sigue siendo usable en condiciones reales
+
+RESULTADO ESPERADO:
+La aplicación debe comportarse como un sistema profesional de eye-tracking avanzado: estable, preciso y tolerante, evitando tanto activaciones accidentales como bloqueos innecesarios por pequeñas pérdidas de seguimiento.
