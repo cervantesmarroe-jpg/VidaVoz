@@ -186,14 +186,15 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
       {/* Label */}
       <span style={{
         fontFamily: "'Lexend', sans-serif",
-        fontSize: "clamp(0.62rem, 1.4vw, 0.9rem)",
-        fontWeight: 700,
+        fontSize: "clamp(0.85rem, 1.9vw, 1.15rem)",
+        fontWeight: 800,
         textTransform: "uppercase",
-        letterSpacing: "0.05em",
+        letterSpacing: "0.04em",
         textAlign: "center",
-        lineHeight: 1.15,
-        color: "#333333",
+        lineHeight: 1.2,
+        color: "#1A1A1A",
         width: "100%",
+        marginTop: "4px",
       }}>
         {label}
       </span>
