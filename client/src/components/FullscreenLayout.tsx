@@ -2,8 +2,13 @@ import { ReactNode, useRef, useCallback, useEffect, useState, useSyncExternalSto
 import { Link, useLocation } from "wouter";
 import {
   Eye, EyeOff, ClipboardCopy,
-  AlertTriangle, MessageSquareText, ActivitySquare, Keyboard as KeyboardIcon,
 } from "lucide-react";
+import {
+  SirenColor as AlertTriangle,
+  ChatColor as MessageSquareText,
+  BarsColor as ActivitySquare,
+  KeyboardColor as KeyboardIcon,
+} from "@/components/icons/ColorIcons";
 
 import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";

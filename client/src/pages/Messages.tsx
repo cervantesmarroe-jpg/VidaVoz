@@ -3,9 +3,9 @@ import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
 import {
-  Thermometer, UtensilsCrossed, MoveHorizontal, Bath,
-  Lightbulb, Clock, Users, HeartCrack, Music, Wind,
-} from "lucide-react";
+  TempColor, HungerColor, PositionColor, ToiletColor,
+  LightColor, ClockColor, FamilyColor, FearColor, MusicColor, SuctionColor,
+} from "@/components/icons/ColorIcons";
 
 const MSG_DWELL_MS = 3000;
 
@@ -23,65 +23,65 @@ const MSGS: {
   {
     id: "familia", label: "QUIERO VER A MI FAMILIA",
     phrase: "Quiero ver a mi familia. Por favor, déjenles pasar.",
-    icon: Users,
+    icon: FamilyColor,
     bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
   {
     id: "wc", label: "IR AL WC",
     phrase: "Necesito ir al baño urgentemente.",
-    icon: Bath,
+    icon: ToiletColor,
     bg: "#D5F5E3", bgHover: "#B8EDD1", accent: "#145A30",
   },
   // Fila 2 ─────────────────────────────────────────────────────────
   {
     id: "frio-calor", label: "TENGO FRÍO / CALOR",
     phrase: "Tengo frío o calor. Por favor regule la temperatura.",
-    icon: Thermometer,
+    icon: TempColor,
     bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
   {
     id: "miedo", label: "TENGO MIEDO / NERVIOS",
     phrase: "Tengo miedo. Estoy nervioso. Necesito apoyo.",
-    icon: HeartCrack,
+    icon: FearColor,
     bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
   // Fila 3 ─────────────────────────────────────────────────────────
   {
     id: "hambre", label: "TENGO HAMBRE",
     phrase: "Tengo hambre. Quisiera comer algo.",
-    icon: UtensilsCrossed,
+    icon: HungerColor,
     bg: "#FCF3CF", bgHover: "#F7E89E", accent: "#6B4C00",
   },
   {
     id: "luz", label: "LUZ: ENCENDER / APAGAR",
     phrase: "Por favor, encienda o apague la luz.",
-    icon: Lightbulb,
+    icon: LightColor,
     bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
   // Fila 4 ─────────────────────────────────────────────────────────
   {
     id: "aspiracion", label: "NECESITO ASPIRACIÓN",
     phrase: "Necesito aspiración de secreciones. Tengo mocos o flemas.",
-    icon: Wind,
+    icon: SuctionColor,
     bg: "#D5F5E3", bgHover: "#B8EDD1", accent: "#145A30",
   },
   {
     id: "posicion", label: "CAMBIAR DE POSICIÓN",
     phrase: "Necesito cambiar de posición. Estoy incómodo.",
-    icon: MoveHorizontal,
+    icon: PositionColor,
     bg: "#FCF3CF", bgHover: "#F7E89E", accent: "#6B4C00",
   },
   // Fila 5 ─────────────────────────────────────────────────────────
   {
     id: "musica", label: "QUIERO LA RADIO / MÚSICA",
     phrase: "Quiero escuchar música o la radio.",
-    icon: Music,
+    icon: MusicColor,
     bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
   {
     id: "hora", label: "¿QUÉ HORA ES?",
     phrase: "¿Qué hora es? ¿Es de día o de noche?",
-    icon: Clock,
+    icon: ClockColor,
     bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
 ];

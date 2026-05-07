@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
-import { Volume2, Trash2, Delete, Space } from "lucide-react";
+import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, SpaceColor as Space } from "@/components/icons/ColorIcons";
 import { useTTS } from "@/hooks/use-tts";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
