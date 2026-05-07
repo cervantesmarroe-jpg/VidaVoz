@@ -30,7 +30,7 @@ function useIsPortrait() {
   );
 }
 
-const TAB_DWELL_MS = 3000;
+import { DWELL_MS as TAB_DWELL_MS } from "@/lib/dwell";
 
 const TABS = [
   { path: "/",         Icon: AlertTriangle,    label: "URGENTE",  color: "#f87171" },

@@ -1,0 +1,70 @@
+Quiero que unifiques y mejores todo el sistema de interacción por eye-tracking de la webapp.
+
+OBJETIVO PRINCIPAL:
+Toda la aplicación debe utilizar un sistema global de dwell (permanencia de mirada) de exactamente 3 segundos, acompañado de un feedback visual progresivo que haga sentir que el usuario está “manteniendo pulsado” el elemento hasta su activación.
+
+COMPORTAMIENTO GLOBAL:
+- Cualquier interacción por mirada debe activarse únicamente tras 3 segundos completos de dwell
+- Durante esos 3 segundos debe mostrarse una animación/progreso visual continuo
+- Si la mirada se pierde antes de completar el tiempo:
+  - cancelar la acción
+  - resetear la animación suavemente
+- Al completar los 3 segundos:
+  - ejecutar automáticamente la acción correspondiente
+
+APLICAR A:
+- Botones
+- Inputs interactivos
+- Cards clicables
+- Menús
+- Navegación
+- Modales
+- Controles multimedia
+- Elementos flotantes
+- Cualquier componente controlado mediante eye-tracking
+
+REQUISITOS TÉCNICOS:
+- Centralizar el dwell time en una única configuración global
+- Valor exacto: 3000ms
+- Eliminar hardcodes repartidos por el proyecto
+- Todos los componentes deben consumir el mismo valor global
+- Mantener compatibilidad con toda la lógica actual
+- No romper navegación ni animaciones existentes
+- Mantener buen rendimiento
+
+FEEDBACK VISUAL DURANTE EL DWELL:
+Quiero un sistema visual moderno, accesible y consistente que indique claramente el progreso de activación.
+
+Implementar una combinación elegante de:
+- Progreso circular alrededor del elemento
+- Fill progresivo del botón
+- Cambio gradual de color/opacidad
+- Ligero efecto “pressed”
+- Glow suave mientras avanza el dwell
+- Transiciones fluidas y naturales
+
+COMPORTAMIENTO VISUAL:
+- El feedback visual comienza inmediatamente al detectar la mirada
+- El progreso debe estar perfectamente sincronizado con los 3000ms
+- El usuario debe percibir claramente cuánto falta para activar el elemento
+- El reset visual debe ser suave cuando se pierde la mirada
+- Evitar parpadeos o reinicios bruscos
+
+IMPLEMENTACIÓN:
+- Crear un componente reusable tipo:
+  - `DwellIndicator`
+  - `GazeProgress`
+  - o equivalente
+- Centralizar toda la lógica del eye-tracking y dwell
+- Reutilizar el sistema visual en toda la interfaz
+- Usar animaciones fluidas con CSS transitions o Framer Motion
+- Mantener responsive y compatibilidad móvil/tablet/desktop
+
+VALIDACIÓN:
+- Verificar que ningún elemento interactivo se active antes de 3000ms
+- Verificar que todos los elementos usan exactamente el mismo tiempo
+- Verificar que el feedback visual aparece en todos los componentes interactivos
+- Verificar que el progreso visual se sincroniza correctamente con la activación
+
+RESULTADO ESPERADO:
+Toda la aplicación debe tener una experiencia de eye-tracking uniforme, profesional y accesible, donde cualquier interacción requiera exactamente 3 segundos de permanencia de mirada y muestre un progreso visual claro y fluido durante la activación.

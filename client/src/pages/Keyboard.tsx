@@ -10,8 +10,9 @@ import { useTTS } from "@/hooks/use-tts";
 // seguridad adicional, justActivatedRef bloquea cualquier doble click
 // posterior durante 600 ms — ojo: solo cubre las teclas (handleKeyClick),
 // no las acciones speak/clear.
-const KEY_DWELL_MS    = 3000;
-const ACTION_DWELL_MS = 3000;
+import { DWELL_MS } from "@/lib/dwell";
+const KEY_DWELL_MS    = DWELL_MS;
+const ACTION_DWELL_MS = DWELL_MS;
 
 // Distribución QWERTY en español (3 filas):
 //   Fila 1: 10 letras (Q-P)

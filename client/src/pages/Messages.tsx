@@ -7,7 +7,7 @@ import {
   LightColor, ClockColor, FamilyColor, FearColor, MusicColor, SuctionColor,
 } from "@/components/icons/ColorIcons";
 
-const MSG_DWELL_MS = 3000;
+import { DWELL_MS as MSG_DWELL_MS } from "@/lib/dwell";
 
 // Paleta pastel soft — colores alineados con la nueva estética higiénica
 // Salmón:  #FDDEDE  accent #B03060

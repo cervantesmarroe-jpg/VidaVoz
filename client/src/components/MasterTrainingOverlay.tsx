@@ -3,7 +3,7 @@ import { gazeTracker } from "@/hooks/use-webgazer";
 import { X, ClipboardCopy, CheckCheck, Dna, RotateCcw, ChevronRight } from "lucide-react";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
-const DWELL_MS     = 3000;
+import { DWELL_MS } from "@/lib/dwell";
 const COLLECT_MS   = 50;
 const WARMUP_MS    = 500;
 const R_RING       = 52;
