@@ -40,6 +40,21 @@ const BLINK_MAX_MS    = 500;   // parpadeo máximo válido (ms) — ignora sueñ
 const SNAP_RADIUS_PX  = 58;    // imán: si el cursor está a <58 px de un botón, salta al centro (+15% área)
 const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-temblor)
 
+// ── Edge expansion (corrección no-lineal anti-compresión hacia el centro) ───
+// El modelo lineal αX·eyeX + βX comprime los extremos por la curvatura natural
+// del ojo y la geometría de la cámara frontal: el gaze no llega bien a bordes
+// y esquinas, queda "atrapado" hacia el centro. Aplicamos una amplificación
+// CUADRÁTICA en coordenadas normalizadas (-1..+1):
+//
+//   factor = 1 + EDGE_BOOST · n²
+//
+// → en el centro (n=0) el factor es 1 → precisión central INTACTA
+// → en el borde (|n|=1) el factor es 1+EDGE_BOOST → alcance pleno
+// → la curva es suave (sin saltos), por lo que el smoothing y el dead zone
+//   anteriores siguen funcionando bien y no se introduce jitter.
+const EDGE_BOOST_X    = 0.28;  // 28% extra al alcanzar el borde horizontal
+const EDGE_BOOST_Y    = 0.22;  // 22% extra al alcanzar el borde vertical (más conservador)
+
 // ── One-Euro: parámetros clínicos (máximo suavizado en reposo) ────────────────
 const OEF_MIN_CUTOFF  = 0.20;  // Hz — más bajo = más inercial/pesado en reposo
 const OEF_BETA        = 0.004; // baja sensibilidad a velocidad → más suave en transiciones
@@ -410,6 +425,21 @@ class GazeTracker {
               ? this.lastEmitX : fX;
             let outY = (this.lastEmitY >= 0 && Math.hypot(dx, dy) < DEAD_ZONE_PX)
               ? this.lastEmitY : fY;
+
+            // ── Etapa 3.5: Edge Expansion — corrige compresión hacia el centro ──
+            // Trabajamos en coordenadas normalizadas centradas (-1..+1) para ser
+            // independientes de resolución y orientación. Factor cuadrático: 1
+            // en el centro (precisión intacta), 1+EDGE_BOOST en el borde.
+            // Aplicado DESPUÉS del smoothing y del dead zone para que la
+            // amplificación no genere oscilaciones en reposo.
+            const cxN = window.innerWidth  / 2;
+            const cyN = window.innerHeight / 2;
+            const nx  = (outX - cxN) / cxN;
+            const ny  = (outY - cyN) / cyN;
+            const exN = nx * (1 + EDGE_BOOST_X * nx * nx);
+            const eyN = ny * (1 + EDGE_BOOST_Y * ny * ny);
+            outX = cxN + Math.max(-1, Math.min(1, exN)) * cxN;
+            outY = cyN + Math.max(-1, Math.min(1, eyN)) * cyN;
 
             // ── Clamp a pantalla ──────────────────────────────────────────────
             outX = Math.max(0, Math.min(window.innerWidth,  outX));

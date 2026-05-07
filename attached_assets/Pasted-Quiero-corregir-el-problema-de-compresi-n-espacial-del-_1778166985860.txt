@@ -1,0 +1,212 @@
+Quiero corregir el problema de compresión espacial del eye-tracking en mi aplicación.
+
+PROBLEMA ACTUAL:
+El sistema detecta correctamente la dirección general de la mirada, pero el gaze no alcanza correctamente:
+- laterales
+- bordes
+- esquinas
+- extremos de pantalla
+
+La mirada queda comprimida hacia el centro.
+
+El problema es especialmente visible en mobile/tablet.
+
+IMPORTANTE:
+NO quiero simplemente aumentar sensibilidad global porque eso:
+- aumenta jitter
+- empeora estabilidad
+- rompe precisión central
+- genera falsos positivos
+
+OBJETIVO:
+Conseguir cobertura completa y precisa de toda la pantalla manteniendo:
+- estabilidad
+- suavidad
+- precisión central
+- buena UX
+
+CONTEXTO TÉCNICO:
+El sistema utiliza modelos de calibración tipo:
+
+screenX = alphaX * eyeX + betaX
+screenY = alphaY * eyeY + betaY
+
+Actualmente el comportamiento lineal no es suficiente para representar correctamente la mirada humana en extremos de pantalla.
+
+IMPLEMENTAR LAS SIGUIENTES MEJORAS:
+
+--------------------------------------------------
+1. EDGE EXPANSION / EDGE AMPLIFICATION
+--------------------------------------------------
+
+Aplicar expansión progresiva hacia bordes.
+
+Cuanto más lejos esté la mirada del centro:
+- mayor amplificación espacial controlada
+
+IMPORTANTE:
+- mantener precisión en el centro
+- amplificar progresivamente solo extremos
+- evitar saltos bruscos
+
+Ejemplo conceptual:
+
+correctedX = centerX + (rawX - centerX) * edgeBoost
+
+donde edgeBoost aumenta gradualmente según distancia al centro.
+
+--------------------------------------------------
+2. CORRECCIÓN NO LINEAL
+--------------------------------------------------
+
+Reemplazar mapping puramente lineal por corrección no lineal.
+
+Usar:
+- gamma correction
+- sigmoid
+- bezier
+- o curva equivalente
+
+OBJETIVO:
+Compensar compresión natural de gaze en bordes.
+
+El centro debe mantenerse estable mientras los extremos se expanden suavemente.
+
+--------------------------------------------------
+3. NORMALIZACIÓN DE COORDENADAS
+--------------------------------------------------
+
+Separar claramente:
+- coordenadas cámara
+- coordenadas gaze
+- coordenadas viewport
+
+Trabajar internamente con coordenadas normalizadas:
+- rango 0 → 1
+
+Evitar dependencia de:
+- resolución
+- tamaño de pantalla
+- orientación
+- ratio del dispositivo
+
+--------------------------------------------------
+4. CORRECCIÓN REGIONAL
+--------------------------------------------------
+
+Dividir pantalla en regiones:
+- centro
+- lateral izquierdo
+- lateral derecho
+- zona superior
+- esquinas
+
+Aplicar microcorrecciones específicas por zona.
+
+OBJETIVO:
+Corregir drift y subalcance lateral.
+
+--------------------------------------------------
+5. MEJORAR SISTEMA DE CALIBRACIÓN
+--------------------------------------------------
+
+Actualmente las calibraciones no cubren correctamente extremos reales.
+
+Modificar calibración para:
+- incluir puntos muy cercanos a bordes
+- incluir esquinas reales
+- aumentar peso de muestras extremas
+- mantener fijación más tiempo en extremos
+
+IMPORTANTE:
+Los puntos extremos deben tener más influencia en el modelo final.
+
+--------------------------------------------------
+6. SISTEMA DE CONFIANZA Y VALIDACIÓN
+--------------------------------------------------
+
+NO aplicar correcciones agresivas si:
+- tracking confidence baja
+- jitter excesivo
+- mirada inestable
+
+Mantener:
+- smoothing
+- hysteresis
+- filtros anti jitter
+
+Evitar:
+- saltos bruscos
+- oscilaciones
+- sobrecompensación lateral
+
+--------------------------------------------------
+7. GESTIÓN INTELIGENTE DE CALIBRACIONES
+--------------------------------------------------
+
+Actualmente existen múltiples perfiles de calibración con parámetros muy distintos.
+
+NO hacer averaging simple entre calibraciones incompatibles.
+
+Implementar:
+- selección inteligente por dispositivo
+- clustering de perfiles similares
+- descarte de calibraciones extremas/anómalas
+- priorizar calibraciones con mejor score
+
+Dar más peso a modelos:
+- estables
+- equilibrados
+- menos agresivos
+
+--------------------------------------------------
+8. MOBILE/TABLET OPTIMIZATION
+--------------------------------------------------
+
+Optimizar específicamente para cámaras frontales móviles:
+- inclinación variable
+- distancia variable cara-pantalla
+- distorsión angular
+- movimientos naturales de mano
+
+Añadir adaptación dinámica según:
+- orientación
+- tamaño viewport
+- distancia estimada rostro-cámara
+
+--------------------------------------------------
+9. COMPATIBILIDAD TOTAL
+--------------------------------------------------
+
+Mantener compatibilidad con:
+- dwell de 3000ms
+- blink activation
+- anti visual scanning
+- tracking confidence system
+- feedback visual
+- smoothing actual
+
+No romper:
+- navegación
+- UX
+- rendimiento
+
+--------------------------------------------------
+VALIDACIÓN FINAL
+--------------------------------------------------
+
+Verificar:
+- cobertura real de esquinas
+- alcance lateral completo
+- precisión horizontal
+- estabilidad vertical
+- ausencia de jitter excesivo
+- estabilidad del centro
+
+Comprobar que:
+- el gaze llega realmente a extremos
+- no queda comprimido hacia el centro
+- la experiencia sigue siendo fluida y natural
+
+RESULTADO ESPERADO:
+El eye-tracking debe cubrir toda la superficie de pantalla de forma precisa y natural, incluyendo bordes y esquinas, manteniendo estabilidad, suavidad y precisión profesional.
