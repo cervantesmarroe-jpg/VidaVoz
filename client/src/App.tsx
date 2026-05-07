@@ -15,6 +15,7 @@ import Scales from "./pages/Scales";
 import Keyboard from "./pages/Keyboard";
 import Splash from "./pages/Splash";
 import ProfileSelect from "./pages/ProfileSelect";
+import WireframeApp from "./wireframe/WireframeApp";
 
 // Error boundary to prevent white screen crashes
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -66,6 +67,15 @@ function Router() {
 type AppPhase = "splash" | "profile" | "ready";
 
 function App() {
+  // ── Wireframe mode (rama AISLADA) ─────────────────────────────────────────
+  // Si la URL empieza por /wireframe, montamos el árbol wireframe sin pasar
+  // por splash, profile, providers de query/toasts/scanning ni tracker de
+  // mirada. Así el modo wireframe es una experiencia 100% independiente y
+  // no puede romper ni alterar la app de producción.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/wireframe")) {
+    return <WireframeApp />;
+  }
+
   const [phase, setPhase] = useState<AppPhase>("splash");
 
   const handleSplashDone  = useCallback(() => {
