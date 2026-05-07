@@ -1,0 +1,556 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * VidaVoz · Wireframe Mode
+ * ─────────────────────────────────────────────────────────────────────────
+ * Hoja de estilos AISLADA para la versión wireframe (low-fidelity, B/N).
+ * Todas las clases están namespaced con .wf-* para no colisionar nunca con
+ * los estilos de producción (.gaze-target, shadcn, etc.).
+ * Solo se carga cuando el usuario entra en /wireframe.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.wf-root {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: #2a2a2a;
+  background: #f5f5f5;
+  min-height: 100vh;
+  min-height: 100dvh;
+  letter-spacing: 0.01em;
+}
+
+.wf-root *,
+.wf-root *::before,
+.wf-root *::after {
+  box-sizing: border-box;
+}
+
+/* ── Layout shell ────────────────────────────────────────────────────── */
+.wf-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #f5f5f5;
+}
+
+.wf-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #ffffff;
+  border-bottom: 1.5px dashed #b8b8b8;
+}
+
+.wf-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.wf-logo-mark {
+  width: 36px;
+  height: 36px;
+  border: 1.5px dashed #888;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  color: #888;
+}
+
+.wf-header-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.wf-pill {
+  padding: 5px 12px;
+  border: 1.5px dashed #999;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: #555;
+  background: #fafafa;
+}
+
+.wf-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  padding: 10px;
+}
+
+.wf-content {
+  flex: 1;
+  background: #ffffff;
+  border: 1.5px dashed #c4c4c4;
+  border-radius: 12px;
+  padding: 14px;
+  overflow: auto;
+}
+
+/* ── Footer tabs ─────────────────────────────────────────────────────── */
+.wf-tabs {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #ffffff;
+  border-top: 1.5px dashed #b8b8b8;
+}
+
+.wf-tab {
+  background: none;
+  border: none;
+  padding: 14px 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #777;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-top: 3px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+.wf-tab:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.wf-tab.is-active {
+  color: #1a1a1a;
+  border-top-color: #555;
+  background: #f5f5f5;
+}
+
+/* ── Buttons & blocks ────────────────────────────────────────────────── */
+.wf-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1.5px solid #bdbdbd;
+  border-radius: 14px;
+  font-family: inherit;
+  color: #333;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.wf-btn:hover {
+  background: #f0f0f0;
+  border-color: #888;
+}
+
+.wf-btn-priority {
+  border-width: 2.5px;
+  border-style: dashed;
+  border-color: #555;
+  background: #ededed;
+}
+
+.wf-btn-icon {
+  width: 56px;
+  height: 56px;
+  border: 1.5px dashed #999;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #888;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.wf-btn-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.wf-btn-sublabel {
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Dwell/gaze visual feedback (preserved in wireframe) ─────────────── */
+.wf-btn[data-gaze-active="true"] {
+  border-color: #555;
+  border-style: dashed;
+  background: #e8e8e8;
+}
+
+.wf-btn[data-gaze-active="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    to top,
+    rgba(60, 60, 60, 0.18) 0%,
+    rgba(60, 60, 60, 0.18) calc(var(--wf-progress, 0) * 100%),
+    transparent           calc(var(--wf-progress, 0) * 100%),
+    transparent 100%
+  );
+  box-shadow: inset 0 0 calc(var(--wf-progress, 0) * 22px) rgba(0, 0, 0, 0.14);
+  transition: background 0.18s, box-shadow 0.18s;
+}
+
+/* Gaze cursor placeholder (visible para mostrar intención visual) */
+.wf-cursor {
+  position: fixed;
+  width: 32px;
+  height: 32px;
+  border: 2px dashed #444;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Tracking state badge (mirrors production "Buscando mirada" UX) */
+.wf-tracking-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1.5px dashed #888;
+  color: #555;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  z-index: 99998;
+  pointer-events: none;
+}
+
+/* ── Grids ──────────────────────────────────────────────────────────── */
+.wf-grid-quad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+  height: 100%;
+}
+
+.wf-grid-msg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 10px;
+  height: 100%;
+}
+
+@media (orientation: landscape) {
+  .wf-grid-quad {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: 1fr;
+  }
+  .wf-grid-msg {
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: 1fr 1fr;
+  }
+}
+
+/* ── Scales ─────────────────────────────────────────────────────────── */
+.wf-scale {
+  margin-bottom: 28px;
+}
+
+.wf-scale-title {
+  font-weight: 700;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px dashed #c4c4c4;
+}
+
+.wf-scale-row {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 6px;
+}
+
+.wf-scale-cell {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: #fafafa;
+  border: 1.5px solid #bdbdbd;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #444;
+  cursor: pointer;
+}
+
+.wf-scale-cell:hover { background: #ededed; border-color: #777; }
+
+/* ── Keyboard ───────────────────────────────────────────────────────── */
+.wf-kb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.wf-kb-display {
+  flex-shrink: 0;
+  border: 1.5px dashed #aaa;
+  border-radius: 10px;
+  padding: 16px;
+  min-height: 80px;
+  background: #fafafa;
+  color: #888;
+  font-style: italic;
+}
+
+.wf-kb-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: space-around;
+}
+
+.wf-kb-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.wf-kb-key {
+  flex: 1;
+  max-width: 64px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: #fafafa;
+  border: 1.5px solid #bdbdbd;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #444;
+  cursor: pointer;
+}
+
+.wf-kb-key:hover { background: #ededed; border-color: #777; }
+
+/* ── Splash & welcome screens ────────────────────────────────────────── */
+.wf-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  height: 100dvh;
+  gap: 28px;
+  background: #f5f5f5;
+}
+
+.wf-splash-logo {
+  width: 180px;
+  height: 180px;
+  border: 2px dashed #999;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #777;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.wf-splash-bar {
+  width: 240px;
+  height: 4px;
+  background: #ddd;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.wf-splash-bar > div {
+  height: 100%;
+  background: #777;
+  width: 0;
+  animation: wf-fill 2s ease-in-out forwards;
+}
+
+@keyframes wf-fill {
+  to { width: 100%; }
+}
+
+/* ── Image placeholder ──────────────────────────────────────────────── */
+.wf-img {
+  background: repeating-linear-gradient(
+    45deg,
+    #e8e8e8 0,
+    #e8e8e8 8px,
+    #f0f0f0 8px,
+    #f0f0f0 16px
+  );
+  border: 1.5px dashed #aaa;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #888;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Notice ─────────────────────────────────────────────────────────── */
+.wf-notice {
+  position: fixed;
+  bottom: 12px;
+  right: 14px;
+  background: #fff;
+  border: 1.5px dashed #999;
+  color: #555;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  z-index: 99999;
+}
+
+/* ── Landing (TFM standalone export) ─────────────────────────────────── */
+.wf-landing {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: #f5f5f5;
+}
+
+.wf-landing-inner {
+  max-width: 880px;
+  width: 100%;
+  background: #ffffff;
+  border: 1.5px dashed #c4c4c4;
+  border-radius: 14px;
+  padding: 44px 36px;
+  text-align: center;
+}
+
+.wf-landing-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 2px dashed #888;
+  border-radius: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #555;
+  margin-bottom: 18px;
+}
+
+.wf-landing-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #2a2a2a;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.wf-landing-sub {
+  font-size: 1.05rem;
+  color: #555;
+  margin: 0 0 16px;
+}
+
+.wf-landing-desc {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #666;
+  max-width: 580px;
+  margin: 0 auto 32px;
+}
+
+.wf-landing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+}
+
+@media (max-width: 560px) {
+  .wf-landing-grid { grid-template-columns: 1fr; }
+}
+
+.wf-landing-card {
+  display: block;
+  text-align: left;
+  padding: 18px 20px;
+  background: #fafafa;
+  border: 1.5px solid #c4c4c4;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.wf-landing-card:hover {
+  background: #f0f0f0;
+  border-color: #777;
+  transform: translateY(-1px);
+}
+
+.wf-landing-card-title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #2a2a2a;
+  margin-bottom: 4px;
+}
+
+.wf-landing-card-desc {
+  font-size: 0.85rem;
+  color: #666;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.wf-landing-card-cta {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+}
+
+.wf-logo-link {
+  text-decoration: none;
+  cursor: pointer;
+}

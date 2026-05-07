@@ -1,0 +1,127 @@
+Quiero extraer todo el sistema wireframe actual a un proyecto completamente independiente orientado a documentación y presentación de TFM.
+
+OBJETIVO:
+Crear una versión standalone del wireframe separada totalmente de la app principal.
+
+IMPORTANTE:
+NO modificar producción.
+NO eliminar el wireframe interno existente.
+Crear una copia/export independiente preparada para:
+- exportar
+- compartir
+- presentar
+- documentar
+
+--------------------------------------------------
+REQUISITOS
+--------------------------------------------------
+
+Crear una nueva estructura standalone con:
+
+- componentes wireframe
+- páginas wireframe
+- estilos wireframe
+- navegación wireframe
+
+SIN dependencias de:
+- eye tracking real
+- cámara
+- backend
+- calibración
+- lógica de producción
+
+--------------------------------------------------
+ESTRUCTURA
+--------------------------------------------------
+
+Crear carpeta independiente tipo:
+
+/wireframe-export
+
+o equivalente.
+
+Debe contener:
+- App standalone
+- routing standalone
+- estilos standalone
+- componentes standalone
+
+--------------------------------------------------
+LIMPIEZA
+--------------------------------------------------
+
+Eliminar dependencias innecesarias:
+- tracking real
+- APIs
+- cámara
+- providers no usados
+- lógica de producción
+
+Mantener solamente:
+- layouts
+- navegación
+- UX
+- componentes visuales
+- simulaciones visuales necesarias
+
+--------------------------------------------------
+OBJETIVO ACADÉMICO
+--------------------------------------------------
+
+La versión exportada debe verse:
+- profesional
+- limpia
+- minimalista
+- presentable
+- fácil de ejecutar
+
+Debe servir para:
+- anexar al TFM
+- mostrar arquitectura UX
+- demostrar navegación gaze-driven
+- enseñar diseño accesible
+
+--------------------------------------------------
+AÑADIR
+--------------------------------------------------
+
+1. README.md específico explicando:
+- objetivo del wireframe
+- estructura
+- pantallas
+- navegación
+- propósito UX
+
+2. Landing simple inicial:
+- título del proyecto
+- explicación breve
+- acceso a pantallas wireframe
+
+3. Navegación clara entre:
+- Urgente
+- Mensajes
+- Escalas
+- Teclado
+
+--------------------------------------------------
+NO INCLUIR
+--------------------------------------------------
+
+- lógica compleja de producción
+- tracking real
+- calibración
+- APIs
+- backend
+- autenticación
+- analytics
+
+--------------------------------------------------
+RESULTADO ESPERADO
+--------------------------------------------------
+
+Quiero poder:
+- descargar el wireframe como proyecto independiente
+- ejecutarlo sin la app principal
+- adjuntarlo al TFM
+- compartirlo fácilmente
+- mostrarlo como prototipo UX standalone
