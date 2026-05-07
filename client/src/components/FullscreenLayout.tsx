@@ -120,6 +120,8 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
       <Icon style={{
         width: isPortrait ? 20 : 22, height: isPortrait ? 20 : 22,
         color: active ? color : "#AAAAAA", position: "relative", zIndex: 1, flexShrink: 0,
+        filter: active ? "none" : "grayscale(0.7) opacity(0.55)",
+        transition: "filter 0.2s",
       }} />
       <span style={{
         fontSize: isPortrait ? "0.58rem" : "0.5rem",

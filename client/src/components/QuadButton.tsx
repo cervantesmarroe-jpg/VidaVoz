@@ -76,7 +76,7 @@ export function QuadButton({
         border: priority ? `4px solid ${textColor}44` : border,
         boxShadow: glow,
         borderRadius: "20px",
-        padding: "20px",
+        padding: "12px 14px",
         outline: priority ? `3px solid ${textColor}22` : "none",
         outlineOffset: priority ? "4px" : "0",
         color: textColor,
@@ -89,7 +89,7 @@ export function QuadButton({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "10px",
+        gap: "6px",
         transition: "filter 0.15s",
       }}
     >
@@ -104,13 +104,28 @@ export function QuadButton({
         background: "linear-gradient(to bottom, rgba(255,255,255,0.25) 0%, transparent 45%)",
       }} />
 
-      {/* Icon */}
-      <Icon style={{
-        width: "4rem", height: "4rem", strokeWidth: 1.8,
-        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.12))",
-        position: "relative", zIndex: 1, flexShrink: 0,
-        color: textColor,
-      }} aria-hidden="true" />
+      {/* Icon — wrapper flex:1 captura todo el espacio sobrante */}
+      <div style={{
+        flex: 1,
+        width: "100%",
+        minHeight: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        zIndex: 1,
+      }}>
+        <Icon style={{
+          width: "auto",
+          height: "100%",
+          maxWidth: "100%",
+          maxHeight: "24rem",
+          minHeight: "4.5rem",
+          strokeWidth: 1.8,
+          filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.18))",
+          color: textColor,
+        }} aria-hidden="true" />
+      </div>
 
       {/* Label */}
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.1, textAlign: "center" }}>

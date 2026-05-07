@@ -141,9 +141,11 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
       style={{
         position: "relative",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
-        gap: "14px",
-        padding: "0 16px",
+        justifyContent: "center",
+        gap: "4px",
+        padding: "8px 8px 10px",
         background: bg,
         border: `1.5px solid #E0E0E0`,
         borderLeft: `5px solid ${accent}`,
@@ -155,27 +157,43 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
         overflow: "hidden",
         minHeight: "0",
         width: "100%",
+        height: "100%",
         transition: "background 0.18s",
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
-      {/* Icon */}
-      <Icon style={{
-        width: "1.6rem", height: "1.6rem",
-        color: accent, flexShrink: 0,
-        strokeWidth: 2,
-      }} aria-hidden="true" />
+      {/* Icon — wrapper flex:1 ocupa todo el alto sobrante */}
+      <div style={{
+        flex: 1,
+        width: "100%",
+        minHeight: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        <Icon style={{
+          width: "auto",
+          height: "100%",
+          maxWidth: "100%",
+          maxHeight: "12rem",
+          minHeight: "2.6rem",
+          color: accent,
+          strokeWidth: 2,
+          filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.15))",
+        }} aria-hidden="true" />
+      </div>
 
       {/* Label */}
       <span style={{
         fontFamily: "'Lexend', sans-serif",
-        fontSize: "clamp(0.68rem, 1.7vw, 1rem)",
+        fontSize: "clamp(0.62rem, 1.4vw, 0.9rem)",
         fontWeight: 700,
         textTransform: "uppercase",
-        letterSpacing: "0.06em",
-        textAlign: "left",
-        lineHeight: 1.25,
+        letterSpacing: "0.05em",
+        textAlign: "center",
+        lineHeight: 1.15,
         color: "#333333",
+        width: "100%",
       }}>
         {label}
       </span>
