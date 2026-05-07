@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "PtEHU7n8eHLMU-u-V7iQ4"
+uri = "file://dist/vidavoz-wireframe.zip"
+type = "unspecified"
+title = "VidaVoz · Wireframe (TFM) — Proyecto standalone"
