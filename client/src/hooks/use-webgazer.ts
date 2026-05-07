@@ -1230,7 +1230,21 @@ export function useWebGazer() {
     };
 
     // ── PARPADEO ─────────────────────────────────────────────────────────────
-    const onBlink = (x: number, y: number) => triggerClick(x, y);
+    // Filtros del tracker (ya activos en GazeTracker):
+    //   • BLINK_MIN_MS=200 / BLINK_MAX_MS=500 → ignora microparpadeos y cierres
+    //     largos por sueño/mirada perdida.
+    //   • BLINK_COOLDOWN=1200 → impide doble activación.
+    // Filtro adicional aquí (anti-falso positivo intencional): el blink solo
+    // activa si el paciente ya confirmó intención sobre un botón — es decir,
+    // si superó la fase de estabilización (dwellStartTime > 0) y el blink
+    // ocurre sobre el MISMO botón. Un parpadeo natural mientras la mirada
+    // recorre la pantalla queda silenciosamente descartado.
+    const onBlink = (x: number, y: number) => {
+      if (!targetEl || dwellStartTime === 0) return;     // sin intención confirmada
+      const onTarget = hitTest(x, y);
+      if (onTarget !== targetEl) return;                  // blink fuera del foco
+      triggerClick(x, y);                                 // activación inmediata
+    };
 
     // Touch lo maneja globalCursor.ts (siempre activo, passive, sin preventDefault).
     // Aquí solo registramos gaze y blink.

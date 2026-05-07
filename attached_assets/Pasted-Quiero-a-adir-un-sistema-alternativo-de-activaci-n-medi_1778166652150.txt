@@ -1,0 +1,102 @@
+Quiero añadir un sistema alternativo de activación mediante parpadeo (blink activation) integrado con el sistema actual de eye-tracking, pero con filtros de seguridad para evitar activaciones accidentales.
+
+OBJETIVO:
+Permitir que el usuario pueda activar botones mediante un parpadeo intencional, evitando falsos positivos provocados por:
+- parpadeos naturales
+- micro parpadeos involuntarios
+- fatiga ocular
+- movimientos rápidos
+- ruido del tracking
+
+COMPORTAMIENTO GENERAL:
+La aplicación debe soportar dos métodos de activación:
+1. Dwell de 3 segundos
+2. Blink intencional
+
+Ambos sistemas deben convivir sin conflictos.
+
+COMPORTAMIENTO DEL BLINK:
+- El usuario fija la mirada sobre un elemento interactivo
+- El sistema detecta intención estable de mirada
+- Solo entonces se permite activación por parpadeo
+- Un parpadeo válido activa inmediatamente el elemento
+
+ANTI-FALSOS POSITIVOS:
+Implementar filtros estrictos para ignorar:
+- Parpadeos demasiado rápidos
+- Parpadeos involuntarios naturales
+- Cierres parciales del ojo
+- Movimientos bruscos
+- Pérdida momentánea de tracking
+- Cambios rápidos entre elementos
+
+REQUISITOS FUNCIONALES:
+- El blink NO debe activarse globalmente sin contexto
+- Solo permitir blink sobre elemento enfocado y estabilizado
+- Exigir una fijación previa mínima antes de aceptar blink
+- Ignorar secuencias erráticas
+- Añadir cooldown entre activaciones
+
+LÓGICA RECOMENDADA:
+Fases del sistema:
+1. Eye focus detection
+2. Estabilización de mirada
+3. Habilitación temporal de blink
+4. Detección de blink válido
+5. Activación segura
+
+PARÁMETROS SUGERIDOS:
+- Estabilización previa:
+  - 300–500ms
+- Duración mínima de blink válida:
+  - ignorar microparpadeos muy rápidos
+- Cooldown tras activación:
+  - 1–2 segundos
+- Tolerancia espacial para jitter natural
+
+IMPLEMENTACIÓN:
+Crear un sistema modular tipo:
+- `BlinkActivationManager`
+- `BlinkIntentDetector`
+- `SafeBlinkTrigger`
+
+CENTRALIZAR:
+- sensibilidad
+- thresholds
+- cooldowns
+- filtros anti ruido
+- validación de intención
+
+FEEDBACK VISUAL:
+El usuario debe saber cuándo el blink está habilitado.
+
+SUGERENCIAS:
+- Glow suave cuando el elemento entra en modo “blink-ready”
+- Indicador visual discreto de que puede parpadear para activar
+- Animación breve al detectar blink válido
+- Mantener consistencia visual con el sistema de dwell
+
+COMPATIBILIDAD:
+- Mantener el dwell de 3000ms existente
+- Blink y dwell deben coexistir
+- Si ocurre blink válido:
+  - activar inmediatamente
+  - cancelar dwell en progreso
+- No romper navegación actual
+
+REQUISITOS TÉCNICOS:
+- Mantener rendimiento fluido
+- Compatible con móvil/tablet/desktop
+- Arquitectura reusable y escalable
+- Evitar hardcodes
+- Mantener accesibilidad
+
+VALIDACIÓN:
+- Verificar que parpadeos naturales NO activan botones
+- Verificar que solo funciona con mirada estable
+- Verificar que movimientos rápidos no generan activaciones
+- Verificar que el cooldown evita dobles activaciones
+- Verificar convivencia correcta con dwell
+
+RESULTADO ESPERADO:
+La aplicación debe permitir activación por parpadeo de forma precisa, segura y profesional, diferenciando claramente entre parpadeos intencionales y movimientos involuntarios, sin generar falsos positivos.
