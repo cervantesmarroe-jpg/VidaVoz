@@ -93,6 +93,10 @@ export default function Splash({ onDone }: SplashProps) {
           objectFit: "contain",
           userSelect: "none",
           WebkitUserSelect: "none" as const,
+          // Funde las zonas blancas del PNG con el fondo beige (#FFF8E7).
+          // multiply: blanco × fondo = fondo, así desaparecen los parches
+          // blancos tras las ondas de voz; los demás colores se conservan.
+          mixBlendMode: "multiply",
         }}
       />
 
