@@ -12,7 +12,6 @@ import {
 
 import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
-import { useScanning } from "@/context/ScanningContext";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
@@ -140,7 +139,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const isPortrait = useIsPortrait();
   const { accepted, mode, accept, decline } = useConsent();
-  const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
   const {
     isActive, isCalibrating,
     activateFromProfile, deactivate,
@@ -176,18 +174,10 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     return () => clearInterval(iv);
   }, [isActive]);
 
-  // Modo táctil: persistimos la decisión en localStorage y activamos el
-  // barrido. Tras esto, el modal NO debe volver a aparecer en ninguna
-  // navegación de la sesión (ni tras recargar la pestaña).
-  const handleDecline = () => { decline(); activateScanning(); };
-
-  // Restaurar barrido al remontar / recargar si el usuario ya había elegido
-  // modo táctil en una visita anterior. Sin esto, navegar entre pantallas
-  // reseteaba el modo de barrido a desactivado (ScanningContext vive en
-  // memoria a nivel de App, pero un refresh completo lo perdería).
-  useEffect(() => {
-    if (mode === "tactile" && !isScanningMode) activateScanning();
-  }, [mode, isScanningMode, activateScanning]);
+  // Modo táctil: persistimos la decisión en localStorage. El paciente usa
+  // toque directo sobre los botones sin que la cámara se active. Tras esto,
+  // el modal NO debe volver a aparecer en ninguna navegación de la sesión.
+  const handleDecline = () => { decline(); };
 
   // ── "Activar / Desactivar Mirada" ─────────────────────────────────────────
   //
@@ -232,7 +222,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // En cuanto el cuidador acepta la cámara, arrancamos el seguimiento ocular
   // automáticamente — sin pulsar "Activar Mirada". El toque sigue funcionando
   // siempre (lo gestiona globalCursor.ts en paralelo). Si el cuidador eligió
-  // "modo táctil/scanning" (handleDecline), no arrancamos la cámara.
+  // "modo táctil" (handleDecline), no arrancamos la cámara.
   // El flag de sesión garantiza que el arranque automático sucede UNA sola vez:
   // si el cuidador desactiva luego la mirada manualmente, no se reactiva sola.
   const AUTOSTART_KEY = "vozuci-gaze-autostarted-v1";
@@ -241,7 +231,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     // En modo táctil NUNCA arrancamos la cámara, aunque el componente se
     // remonte al navegar entre pantallas.
     if (mode === "tactile") return;
-    if (isScanningMode) return;
     if (isActive || isCalibrating || loading) return;
     if (sessionStorage.getItem(AUTOSTART_KEY)) return;
 
@@ -252,7 +241,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       // a disparar automáticamente y bloquee la UI.
       sessionStorage.removeItem(AUTOSTART_KEY);
     });
-  }, [accepted, mode, isScanningMode, isActive, isCalibrating, loading, handleGazeToggle]);
+  }, [accepted, mode, isActive, isCalibrating, loading, handleGazeToggle]);
 
   // ── Estilo del botón según estado ─────────────────────────────────────────
   const btnStyle: React.CSSProperties = (() => {
@@ -284,21 +273,10 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}
 
-      {/* Scanning banner */}
-      {isScanningMode && (
-        <div className="fixed top-0 left-0 right-0 z-[9990] flex items-center justify-between gap-4 px-5 py-2 bg-amber-400 text-amber-950">
-          <span className="font-bold text-sm">👆 MODO BARRIDO — Toque para seleccionar el botón resaltado</span>
-          <button data-testid="button-stop-scanning" onClick={deactivateScanning}
-            className="text-xs font-black px-3 py-1 rounded-lg bg-amber-950/20 border border-amber-950/30">
-            ✕ Detener
-          </button>
-        </div>
-      )}
-
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header style={{
         height: "48px",
-        marginTop: isScanningMode ? "40px" : "0",
+        marginTop: "0",
         background: "#FFFFFF",
         borderBottom: "1px solid #E0E0E0",
         display: "flex", alignItems: "center", justifyContent: "space-between",

@@ -2,8 +2,9 @@ import { useState } from "react";
 import { ShieldCheck, Eye, Wifi, Server, HardDrive, X, RefreshCw, Camera } from "lucide-react";
 
 const STORAGE_KEY = "vozuci-consent-v1";
-// "accepted" → cámara/mirada permitida.  "tactile" → modo táctil/barrido, sin
-// cámara. Ambos valores ocultan el modal en futuras navegaciones de la sesión.
+// "accepted" → cámara/mirada permitida.  "tactile" → modo táctil sin cámara
+// (el paciente toca directamente los botones). Ambos valores ocultan el
+// modal en futuras navegaciones de la sesión.
 type ConsentMode = "accepted" | "tactile";
 
 interface ConsentModalProps {
@@ -71,7 +72,7 @@ export function ConsentModal({ onAccept, onDecline }: ConsentModalProps) {
           <div className="px-8 py-6 bg-stone-50 rounded-b-3xl flex flex-col gap-3">
             {onDecline && (
               <button
-                data-testid="button-scanning-mode"
+                data-testid="button-tactile-mode"
                 onClick={onDecline}
                 className="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-white font-black text-lg py-5 px-6 rounded-2xl transition-colors shadow-lg"
               >

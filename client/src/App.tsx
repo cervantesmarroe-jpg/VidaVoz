@@ -1,5 +1,4 @@
 import { Component, ReactNode, useState, useCallback } from "react";
-import { ScanningProvider } from "@/context/ScanningContext";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -69,8 +68,8 @@ type AppPhase = "splash" | "profile" | "ready";
 function App() {
   // ── Wireframe mode (rama AISLADA) ─────────────────────────────────────────
   // Si la URL empieza por /wireframe, montamos el árbol wireframe sin pasar
-  // por splash, profile, providers de query/toasts/scanning ni tracker de
-  // mirada. Así el modo wireframe es una experiencia 100% independiente y
+  // por splash, profile, providers de query/toasts ni tracker de mirada.
+  // Así el modo wireframe es una experiencia 100% independiente y
   // no puede romper ni alterar la app de producción.
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/wireframe")) {
     return <WireframeApp />;
@@ -87,24 +86,22 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ScanningProvider>
-          <TooltipProvider>
-            <Toaster />
+        <TooltipProvider>
+          <Toaster />
 
-            {/* 1. Splash animado */}
-            {phase === "splash" && (
-              <Splash onDone={handleSplashDone} />
-            )}
+          {/* 1. Splash animado */}
+          {phase === "splash" && (
+            <Splash onDone={handleSplashDone} />
+          )}
 
-            {/* 2. Selección de perfil + QuickSync */}
-            {phase === "profile" && (
-              <ProfileSelect onDone={handleProfileDone} />
-            )}
+          {/* 2. Selección de perfil + QuickSync */}
+          {phase === "profile" && (
+            <ProfileSelect onDone={handleProfileDone} />
+          )}
 
-            {/* 3. App principal (solo cuando perfil+sync completados) */}
-            {phase === "ready" && <Router />}
-          </TooltipProvider>
-        </ScanningProvider>
+          {/* 3. App principal (solo cuando perfil+sync completados) */}
+          {phase === "ready" && <Router />}
+        </TooltipProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

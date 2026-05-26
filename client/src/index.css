@@ -202,19 +202,6 @@
   animation: blink-activate 0.5s ease-out forwards !important;
 }
 
-/* ── Modo Barrido Secuencial — botón resaltado ─────────────────────────── */
-.scanning-highlight {
-  outline: 5px solid #facc15 !important;
-  outline-offset: 3px;
-  box-shadow:
-    0 0 0 8px rgba(250, 204, 21, 0.45),
-    0 0 40px rgba(250, 204, 21, 0.7) !important;
-  transform: scale(1.05) !important;
-  z-index: 50;
-  position: relative;
-  transition: outline 0.15s, box-shadow 0.15s, transform 0.15s !important;
-}
-
 /* ── Botón URGENTE — latido durante dwell ───────────────────────────────── */
 @keyframes button-pulse {
   0%, 100% { transform: scale(1);    filter: brightness(1); }
