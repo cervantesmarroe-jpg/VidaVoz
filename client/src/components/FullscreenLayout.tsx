@@ -273,74 +273,15 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header style={{
-        height: "48px",
-        marginTop: "0",
-        background: "#FFFFFF",
-        borderBottom: "1px solid #E0E0E0",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        paddingLeft: "12px", paddingRight: "12px",
-        flexShrink: 0, zIndex: 50, gap: 8,
-      }}>
-        {/* Logo */}
-        <img
-          src={logoPath} alt="VidaVoz" draggable={false}
-          style={{ height: "36px", width: "auto", objectFit: "contain", flexShrink: 0, userSelect: "none" }}
-        />
-
-        {/* Controles */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-          {/* Activar / desactivar mirada */}
-          <button
-            data-testid="button-toggle-eyetracking"
-            onClick={handleGazeToggle}
-            disabled={loading}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "5px 12px", borderRadius: 12,
-              fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.78rem",
-              cursor: loading ? "wait" : "pointer",
-              border: "1.5px solid", transition: "all 0.2s",
-              ...btnStyle,
-            }}
-          >
-            {/* Spinner cuando carga, icono de ojo en otro caso */}
-            {loading ? (
-              <span style={{
-                display: "inline-block", width: 12, height: 12,
-                border: "2px solid rgba(107,76,0,0.3)",
-                borderTop: "2px solid #6B4C00",
-                borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-                flexShrink: 0,
-              }} />
-            ) : isActive || isCalibrating ? (
-              <Eye style={{ width: 14, height: 14, flexShrink: 0 }} />
-            ) : (
-              <EyeOff style={{ width: 14, height: 14, flexShrink: 0 }} />
-            )}
-            <span>{btnLabel}</span>
-          </button>
-
-          {/* Calibrar ADN */}
-          <button
-            data-testid="button-master-training"
-            onClick={() => setShowTraining(true)}
-            title="Abrir sistema de entrenamiento maestro"
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "5px 10px", borderRadius: 10,
-              fontFamily: "'Lexend',sans-serif", fontWeight: 700, fontSize: "0.7rem",
-              cursor: "pointer", border: "1.5px solid", transition: "all 0.2s",
-              background: "#F0F4FF", color: "#4455AA", borderColor: "#C8D4F8",
-            }}
-          >
-            <ClipboardCopy style={{ width: 12, height: 12 }} />
-            <span>Calibrar ADN</span>
-          </button>
-        </div>
-      </header>
+      {/* ── Header eliminado ─────────────────────────────────────────────
+          La cabecera blanca con logo + "Activar mirada" + "Calibrar ADN"
+          se retiró por petición del usuario. Toda la lógica subyacente
+          permanece intacta (handleGazeToggle, btnStyle, btnLabel, loading,
+          isActive, isCalibrating, showTraining, MasterTrainingOverlay)
+          para poder reactivar los controles desde otra pantalla sin
+          tener que reescribir el comportamiento. La cuadrícula principal
+          ocupa ahora el 100% del alto disponible.
+       ──────────────────────────────────────────────────────────────── */}
 
       {/* ── Cuerpo: nav + contenido ────────────────────────────────────── */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, flexDirection: isPortrait ? "column" : "row" }}>
