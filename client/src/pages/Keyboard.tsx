@@ -278,7 +278,21 @@ export default function Keyboard() {
   }, [handleKeyPress]);
 
   // ── Acciones HABLAR / BORRAR ────────────────────────────────────────────────
+  // El TTS del botón HABLAR sólo se ejecuta en handleActionClick — es decir,
+  // tras un clic real (tap táctil o .click() sintético del tracker al
+  // completar su propio dwell). El dwell visual interno NO pronuncia el
+  // mensaje, evitando que la voz se adelante a la confirmación real.
+  // BORRAR sí se mantiene auto-activable por dwell visual porque es una
+  // acción reversible y no genera audio.
   const onActionComplete = useCallback((act: string) => {
+    setFocusedAct(null);
+    if (act === "clear") setMessage("");
+    // "speak": intencionalmente NO se dispara aquí.
+  }, []);
+
+  const actionProgress = useDwellProgress(focusedAct, ACTION_DWELL_MS, onActionComplete);
+
+  const handleActionClick = useCallback((act: "speak" | "clear") => {
     setFocusedAct(null);
     if (act === "speak") {
       if (!message.trim()) return;
@@ -287,12 +301,6 @@ export default function Keyboard() {
       setMessage("");
     }
   }, [message, speak]);
-
-  const actionProgress = useDwellProgress(focusedAct, ACTION_DWELL_MS, onActionComplete);
-
-  const handleActionClick = useCallback((act: "speak" | "clear") => {
-    onActionComplete(act);
-  }, [onActionComplete]);
 
   // ── Handlers de hover (para dwell visual en ratón/toque) ───────────────────
   const handleKeyEnter = useCallback((key: string) => {

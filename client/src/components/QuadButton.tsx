@@ -48,12 +48,16 @@ export function QuadButton({
     circRef.current?.classList.remove("animating");
     void circRef.current?.getBoundingClientRect();
     circRef.current?.classList.add("animating");
+    // El temporizador interno SÓLO mantiene el feedback visual del ring.
+    // No dispara fire() — la activación (y por tanto el TTS) ocurre
+    // exclusivamente en onClick, que se ejecuta con un tap táctil real
+    // o con el .click() sintético del tracker de mirada al completar su
+    // propio dwell (~2,5 s). Así evitamos el doble disparo de voz.
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       cancelDwell();
-      fire();
     }, DWELL_MS);
-  }, [fire, onDwellStart]);
+  }, [onDwellStart]);
 
   const cancelDwell = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }

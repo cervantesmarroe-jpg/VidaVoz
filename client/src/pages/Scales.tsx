@@ -247,7 +247,12 @@ function ScaleGrid({ items, prefix, onLocked }: ScaleGridProps) {
     speak(items[idx].tts);
   }, [items, onLocked, speak]);
 
-  const progress  = useDwellProgress(hover, DWELL_MS, fire);
+  // El temporizador interno (useDwellProgress) sólo pinta el progreso
+  // visual de la barra inferior. No dispara fire() — la activación y
+  // el TTS sólo ocurren en onClick (tap real o .click() sintético del
+  // tracker de mirada al completar su propio dwell). Así la voz no se
+  // adelanta a la confirmación real de la selección.
+  const progress  = useDwellProgress(hover, DWELL_MS, () => {});
   const isLocked  = locked !== null && hover === null;
 
   const handleSelect = useCallback((idx: number) => {

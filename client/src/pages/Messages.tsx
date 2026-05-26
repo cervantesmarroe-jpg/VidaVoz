@@ -115,10 +115,15 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
       bar.style.transition = `width ${MSG_DWELL_MS}ms linear`;
       bar.style.width = "100%";
     }
+    // El temporizador interno sólo pinta el progreso visual. La
+    // activación (y el TTS) sucede únicamente en onClick — disparado
+    // por un tap táctil real o por el .click() sintético del tracker
+    // de mirada al completar su propio dwell. Así el mensaje no se
+    // pronuncia antes de que la acción se confirme realmente.
     timerRef.current = setTimeout(() => {
-      timerRef.current = null; cancelDwell(); fire();
+      timerRef.current = null; cancelDwell();
     }, MSG_DWELL_MS);
-  }, [bg, bgHover, fire]);
+  }, [bg, bgHover]);
 
   const cancelDwell = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
