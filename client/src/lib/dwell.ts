@@ -1,1 +1,1 @@
-export const DWELL_MS = 3000;
+export const DWELL_MS = 2000;

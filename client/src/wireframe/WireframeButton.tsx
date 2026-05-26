@@ -12,7 +12,7 @@ interface Props {
 }
 
 /**
- * Botón wireframe con dwell visible (3000 ms, mismo valor central que la app
+ * Botón wireframe con dwell visible (2000 ms, mismo valor central que la app
  * real). El feedback visual está aislado en CSS scoped (wf-*) y no toca el
  * sistema de producción. Sirve para que el wireframe muestre cómo se siente
  * la activación por mirada / hover prolongado.

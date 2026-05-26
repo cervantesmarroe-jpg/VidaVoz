@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, ReactNode } from "react";
 
-const DWELL_MS = 3000;
+const DWELL_MS = 2000;
 
 interface Props {
   label?: string;

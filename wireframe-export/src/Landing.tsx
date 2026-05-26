@@ -38,7 +38,7 @@ export default function Landing() {
         <p className="wf-landing-desc">
           Esta versión presenta la arquitectura UX y la navegación
           gaze-driven sin lógica de producción ni acceso a cámara.
-          Los botones simulan el dwell de 3 segundos para mostrar la
+          Los botones simulan el dwell de 2 segundos para mostrar la
           experiencia de activación por mirada.
         </p>
 

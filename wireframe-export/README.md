@@ -10,7 +10,7 @@ Mostrar de forma limpia y reproducible:
 
 - La **arquitectura de pantallas** del asistente.
 - La **navegación entre módulos** (Urgente, Mensajes, Escalas, Teclado).
-- El **patrón de activación por mirada** (dwell de 3 segundos) simulado visualmente al pasar el cursor sobre cada botón.
+- El **patrón de activación por mirada** (dwell de 2 segundos) simulado visualmente al pasar el cursor sobre cada botón.
 - La sensación de UX accesible: tipografía clara, jerarquía visual estable y feedback progresivo.
 
 ---
@@ -28,7 +28,7 @@ wireframe-export/
     ├── App.tsx                  ← router (wouter)
     ├── Landing.tsx              ← portada con acceso a las 4 pantallas
     ├── WireframeLayout.tsx      ← header + tabs de navegación
-    ├── WireframeButton.tsx      ← botón con dwell 3s simulado
+    ├── WireframeButton.tsx      ← botón con dwell 2s simulado
     ├── wireframe.css            ← estilos monocromos (.wf-*)
     └── pages/
         ├── WireframeUrgent.tsx  ← 4 botones críticos
@@ -58,7 +58,7 @@ La navegación entre módulos vive en las **tabs inferiores** del layout, replic
 Cada botón implementa el mismo patrón de activación que la app de producción:
 
 1. La mirada entra en el botón → arranca un **fill progresivo desde abajo** y un **glow interior**.
-2. A los **3000 ms** el botón se activa.
+2. A los **2000 ms** el botón se activa.
 3. Si la mirada sale antes, el progreso se cancela suavemente.
 
 En esta versión standalone el dwell se dispara con `pointer-enter` para que un revisor pueda probarlo con ratón/táctil sin necesidad de cámara.

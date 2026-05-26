@@ -27,7 +27,7 @@ export const CALIBRATIONS_LIBRARY = calibrationsLibraryRaw as CalibrationLibrary
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
-const DWELL_MS        = 3100;  // Fallback del tracker: 100 ms por encima del dwell de pantalla (3000 ms)
+const DWELL_MS        = 2100;  // Fallback del tracker: 100 ms por encima del dwell de pantalla (2000 ms)
                                // para garantizar que el handler local gane la carrera y evitar doble activación.
 const SMOOTH_SAMPLES  = 30;    // tamaño fijo del ring-buffer MA
 const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
@@ -1394,7 +1394,7 @@ export function useWebGazer() {
 // ─── Dwell helpers ────────────────────────────────────────────────────────────
 // Escriben la variable CSS --gaze-progress (0..1) en el botón apuntado. El
 // estilo `.gaze-target::after` (index.css) la consume para pintar el fill
-// progresivo + glow inset, sincronizados con DWELL_MS=3000ms. Como fallback
+// progresivo + glow inset, sincronizados con DWELL_MS=2000ms. Como fallback
 // también actualizan la barra legacy `.gaze-progress-bar` si el componente
 // la incluyera manualmente — la inmensa mayoría no la lleva y ya no hace falta.
 function resetProgress(el: HTMLElement) {
