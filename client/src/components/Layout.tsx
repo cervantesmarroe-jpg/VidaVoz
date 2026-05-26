@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useCallback, useState } from "react";
+import { ReactNode, useRef, useCallback, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -29,7 +29,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const [location]  = useLocation();
   const mainRef     = useRef<HTMLElement>(null);
   const { isActive, isCalibrating, startCalibration, deactivate } = useWebGazer();
-  const { accepted, accept, revoke } = useConsent();
+  const { accepted, mode, accept, decline, revoke } = useConsent();
   const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
 
   // Diálogo de confirmación para "Finalizar Sesión"
@@ -41,9 +41,15 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   const handleDecline = () => {
-    accept();           // hide the consent modal
-    activateScanning(); // start sequential scanning mode (no camera)
+    decline();          // persiste la decisión "modo táctil" en localStorage
+    activateScanning(); // arranca el barrido secuencial sin cámara
   };
+
+  // Si el usuario eligió modo táctil en una sesión anterior, restaurar el
+  // barrido automáticamente al montar el layout (el modal ya no aparecerá).
+  useEffect(() => {
+    if (mode === "tactile" && !isScanningMode) activateScanning();
+  }, [mode, isScanningMode, activateScanning]);
 
   const scrollUp   = useCallback(() => {
     mainRef.current?.scrollBy({ top: -SCROLL_STEP, behavior: "smooth" });

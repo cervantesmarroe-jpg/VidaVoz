@@ -2,6 +2,9 @@ import { useState } from "react";
 import { ShieldCheck, Eye, Wifi, Server, HardDrive, X, RefreshCw, Camera } from "lucide-react";
 
 const STORAGE_KEY = "vozuci-consent-v1";
+// "accepted" → cámara/mirada permitida.  "tactile" → modo táctil/barrido, sin
+// cámara. Ambos valores ocultan el modal en futuras navegaciones de la sesión.
+type ConsentMode = "accepted" | "tactile";
 
 interface ConsentModalProps {
   onAccept: () => void;
@@ -173,10 +176,7 @@ export function ConsentModal({ onAccept, onDecline }: ConsentModalProps) {
         <div className="px-8 py-6 bg-stone-50 rounded-b-3xl flex flex-col sm:flex-row gap-3 shrink-0">
           <button
             data-testid="button-consent-accept"
-            onClick={() => {
-              sessionStorage.setItem(STORAGE_KEY, "accepted");
-              onAccept();
-            }}
+            onClick={() => onAccept()}
             className="flex-1 flex items-center justify-center gap-3 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-black text-xl py-5 px-8 rounded-2xl transition-colors shadow-lg"
           >
             <ShieldCheck className="w-7 h-7 shrink-0" />
@@ -211,17 +211,44 @@ function Guarantee({
 }
 
 // ── Hook que gestiona el estado del consentimiento ────────────────────────────
-// Usa sessionStorage → volátil: desaparece al cerrar la pestaña (no localStorage)
+// Persiste en localStorage para que la decisión del usuario (aceptar cámara o
+// elegir modo táctil) sobreviva a:
+//   • Cambios de pantalla / remount de Layouts (Urgente, Mensajes, …)
+//   • Recargas de página / refresh del navegador
+// Sin esta persistencia, el modal de consentimiento reaparecía cada vez que
+// FullscreenLayout se remontaba, porque `accept()` y `decline()` sólo cambiaban
+// el estado React local.
+//
+// `accepted` (boolean) se mantiene para compatibilidad con el código existente:
+// es `true` SIEMPRE que el usuario ya haya tomado una decisión (cualquiera de
+// las dos), de modo que el modal nunca se muestre de nuevo.
+// `mode` permite a los layouts saber qué modo activar (cámara vs táctil).
+function readMode(): ConsentMode | null {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === "accepted" || v === "tactile" ? v : null;
+  } catch { return null; }
+}
+
+function writeMode(v: ConsentMode | null) {
+  try {
+    if (v) localStorage.setItem(STORAGE_KEY, v);
+    else   localStorage.removeItem(STORAGE_KEY);
+  } catch { /* storage bloqueado: degradación silenciosa */ }
+}
+
 export function useConsent() {
-  const [accepted, setAccepted] = useState<boolean>(() => {
-    return sessionStorage.getItem(STORAGE_KEY) === "accepted";
-  });
+  const [mode, setMode] = useState<ConsentMode | null>(() => readMode());
 
-  const accept  = () => setAccepted(true);
-  const revoke  = () => {
-    sessionStorage.removeItem(STORAGE_KEY);
-    setAccepted(false);
+  const accept  = () => { writeMode("accepted"); setMode("accepted"); };
+  const decline = () => { writeMode("tactile");  setMode("tactile");  };
+  const revoke  = () => { writeMode(null);       setMode(null);       };
+
+  return {
+    accepted: mode !== null, // decisión tomada (cualquiera) → no mostrar modal
+    mode,                    // "accepted" | "tactile" | null
+    accept,
+    decline,
+    revoke,
   };
-
-  return { accepted, accept, revoke };
 }

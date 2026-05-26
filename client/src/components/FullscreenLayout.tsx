@@ -139,7 +139,7 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const isPortrait = useIsPortrait();
-  const { accepted, accept } = useConsent();
+  const { accepted, mode, accept, decline } = useConsent();
   const { isScanningMode, activateScanning, deactivateScanning } = useScanning();
   const {
     isActive, isCalibrating,
@@ -176,7 +176,18 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     return () => clearInterval(iv);
   }, [isActive]);
 
-  const handleDecline = () => { accept(); activateScanning(); };
+  // Modo táctil: persistimos la decisión en localStorage y activamos el
+  // barrido. Tras esto, el modal NO debe volver a aparecer en ninguna
+  // navegación de la sesión (ni tras recargar la pestaña).
+  const handleDecline = () => { decline(); activateScanning(); };
+
+  // Restaurar barrido al remontar / recargar si el usuario ya había elegido
+  // modo táctil en una visita anterior. Sin esto, navegar entre pantallas
+  // reseteaba el modo de barrido a desactivado (ScanningContext vive en
+  // memoria a nivel de App, pero un refresh completo lo perdería).
+  useEffect(() => {
+    if (mode === "tactile" && !isScanningMode) activateScanning();
+  }, [mode, isScanningMode, activateScanning]);
 
   // ── "Activar / Desactivar Mirada" ─────────────────────────────────────────
   //
@@ -227,6 +238,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   const AUTOSTART_KEY = "vozuci-gaze-autostarted-v1";
   useEffect(() => {
     if (!accepted) return;
+    // En modo táctil NUNCA arrancamos la cámara, aunque el componente se
+    // remonte al navegar entre pantallas.
+    if (mode === "tactile") return;
     if (isScanningMode) return;
     if (isActive || isCalibrating || loading) return;
     if (sessionStorage.getItem(AUTOSTART_KEY)) return;
@@ -238,7 +252,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       // a disparar automáticamente y bloquee la UI.
       sessionStorage.removeItem(AUTOSTART_KEY);
     });
-  }, [accepted, isScanningMode, isActive, isCalibrating, loading, handleGazeToggle]);
+  }, [accepted, mode, isScanningMode, isActive, isCalibrating, loading, handleGazeToggle]);
 
   // ── Estilo del botón según estado ─────────────────────────────────────────
   const btnStyle: React.CSSProperties = (() => {
