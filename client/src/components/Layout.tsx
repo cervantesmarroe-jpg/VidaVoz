@@ -39,7 +39,7 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   const handleDecline = () => {
-    decline();          // persiste la decisión "modo táctil" en localStorage
+    decline();          // guarda "modo táctil" SOLO en memoria de sesión
   };
 
   const scrollUp   = useCallback(() => {

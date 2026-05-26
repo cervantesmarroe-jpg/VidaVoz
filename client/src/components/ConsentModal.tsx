@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ShieldCheck, Eye, Wifi, Server, HardDrive, X, RefreshCw, Camera } from "lucide-react";
 
 const STORAGE_KEY = "vozuci-consent-v1";
@@ -212,44 +212,55 @@ function Guarantee({
 }
 
 // ── Hook que gestiona el estado del consentimiento ────────────────────────────
-// Persiste en localStorage para que la decisión del usuario (aceptar cámara o
-// elegir modo táctil) sobreviva a:
-//   • Cambios de pantalla / remount de Layouts (Urgente, Mensajes, …)
-//   • Recargas de página / refresh del navegador
-// Sin esta persistencia, el modal de consentimiento reaparecía cada vez que
-// FullscreenLayout se remontaba, porque `accept()` y `decline()` sólo cambiaban
-// el estado React local.
+// IMPORTANTE — política de privacidad reforzada:
 //
-// `accepted` (boolean) se mantiene para compatibilidad con el código existente:
-// es `true` SIEMPRE que el usuario ya haya tomado una decisión (cualquiera de
-// las dos), de modo que el modal nunca se muestre de nuevo.
-// `mode` permite a los layouts saber qué modo activar (cámara vs táctil).
-function readMode(): ConsentMode | null {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    return v === "accepted" || v === "tactile" ? v : null;
-  } catch { return null; }
-}
+// El estado del consentimiento NO se persiste en localStorage, sessionStorage
+// ni cookies. Vive ÚNICAMENTE en memoria mediante un store global a nivel de
+// módulo, compartido entre todos los componentes que llaman a useConsent().
+//
+// Comportamiento resultante:
+//   • Al cargar/recargar la app (F5, cerrar pestaña, reinicio, etc.) el
+//     estado vuelve siempre a `null` → el modal de consentimiento SIEMPRE
+//     se muestra al arranque.
+//   • Mientras el paciente navega entre pantallas (Urgente, Mensajes,
+//     Escalas, Teclado) la decisión se mantiene en memoria — el modal no
+//     reaparece al cambiar de pestaña porque todos los layouts leen del
+//     mismo store en memoria.
+//   • Al hacer "Finalizar sesión" se llama a revoke() y el estado vuelve
+//     a null dentro de la misma sesión (modal vuelve a aparecer).
+//
+// Migración: limpiamos cualquier valor antiguo en localStorage que pudiera
+// haber quedado de versiones previas, para no leerlo nunca más.
+try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
 
-function writeMode(v: ConsentMode | null) {
-  try {
-    if (v) localStorage.setItem(STORAGE_KEY, v);
-    else   localStorage.removeItem(STORAGE_KEY);
-  } catch { /* storage bloqueado: degradación silenciosa */ }
+// Store global en memoria + pub/sub mínimo para sincronizar todos los
+// componentes que usen useConsent() dentro de la misma sesión.
+let _mode: ConsentMode | null = null;
+const _listeners = new Set<() => void>();
+
+function setModeGlobal(next: ConsentMode | null) {
+  if (_mode === next) return;
+  _mode = next;
+  _listeners.forEach(l => l());
 }
 
 export function useConsent() {
-  const [mode, setMode] = useState<ConsentMode | null>(() => readMode());
+  const [mode, setMode] = useState<ConsentMode | null>(_mode);
 
-  const accept  = () => { writeMode("accepted"); setMode("accepted"); };
-  const decline = () => { writeMode("tactile");  setMode("tactile");  };
-  const revoke  = () => { writeMode(null);       setMode(null);       };
+  useEffect(() => {
+    const listener = () => setMode(_mode);
+    _listeners.add(listener);
+    // Sincroniza por si _mode cambió entre el render inicial y el efecto.
+    if (_mode !== mode) setMode(_mode);
+    return () => { _listeners.delete(listener); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     accepted: mode !== null, // decisión tomada (cualquiera) → no mostrar modal
     mode,                    // "accepted" | "tactile" | null
-    accept,
-    decline,
-    revoke,
+    accept:  () => setModeGlobal("accepted"),
+    decline: () => setModeGlobal("tactile"),
+    revoke:  () => setModeGlobal(null),
   };
 }
