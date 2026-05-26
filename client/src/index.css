@@ -41,13 +41,21 @@
     background: #FAFAFA;
     @apply text-stone-800 antialiased overflow-hidden selection:bg-teal-200;
     font-family: 'Lexend', sans-serif;
-    cursor: none !important;
+    cursor: default;
   }
 
-  /* ── Cursor maestro único: ocultar cursor nativo en todos los elementos ── */
-  /* El cursor visual lo gestiona exclusivamente #gaze-cursor (DOM puro). */
-  html, html * {
-    cursor: none !important;
+  /* ── Cursor nativo visible durante la previsualización ─────────────────
+   * Antes se ocultaba el cursor nativo globalmente para dejar que
+   * #gaze-cursor fuera la única referencia visible. Lo mantenemos visible
+   * para poder testear y ver dónde apunta la simulación. El #gaze-cursor
+   * sigue dibujándose por encima (pointer-events: none) sin interferir
+   * con los clicks. Los elementos interactivos usan `cursor: pointer`.
+   */
+  html, body {
+    cursor: default;
+  }
+  button, a, [role="button"], [data-gaze-target="true"] {
+    cursor: pointer;
   }
 
   h1, h2, h3, h4, h5, h6 {

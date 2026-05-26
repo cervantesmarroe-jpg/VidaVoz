@@ -323,5 +323,135 @@
       "sensitivityX": -4.394,
       "sensitivityY": 4.439
     }
+  },
+  {
+    "id": "EXT-VCV78LWX",
+    "profile": "tablet",
+    "score": 10,
+    "model": {
+      "alphaX": 192.11,
+      "betaX": -619.34,
+      "alphaY": 58.56,
+      "betaY": -1106.2,
+      "sensitivityX": -1.75,
+      "sensitivityY": 1.36
+    }
+  },
+  {
+    "id": "EXT-P6L1PD09",
+    "profile": "desktop",
+    "score": 10,
+    "model": {
+      "alphaX": 179.23,
+      "betaX": -601.69,
+      "alphaY": 68.75,
+      "betaY": -1022.4,
+      "sensitivityX": -1.94,
+      "sensitivityY": 1.87
+    }
+  },
+  {
+    "id": "EXT-WWWX6A2G",
+    "profile": "mobile",
+    "score": 9,
+    "model": {
+      "alphaX": 240.72,
+      "betaX": -542.65,
+      "alphaY": 92.95,
+      "betaY": -966.59,
+      "sensitivityX": -1.51,
+      "sensitivityY": 1.35
+    }
+  },
+  {
+    "id": "EXT-OVLBJTMW",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 206.43,
+      "betaX": -670.66,
+      "alphaY": 83.72,
+      "betaY": -909.64,
+      "sensitivityX": -1.96,
+      "sensitivityY": 1.59
+    }
+  },
+  {
+    "id": "EXT-839FMWJY",
+    "profile": "mobile",
+    "score": 9,
+    "model": {
+      "alphaX": 256.47,
+      "betaX": -537.17,
+      "alphaY": 87.76,
+      "betaY": -882.54,
+      "sensitivityX": -1.8,
+      "sensitivityY": 1.55
+    }
+  },
+  {
+    "id": "EXT-J3YTCZOC",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 262.91,
+      "betaX": -620.13,
+      "alphaY": 81.08,
+      "betaY": -825.86,
+      "sensitivityX": -1.67,
+      "sensitivityY": 1.69
+    }
+  },
+  {
+    "id": "EXT-5IAGQDHF",
+    "profile": "desktop",
+    "score": 8,
+    "model": {
+      "alphaX": 181.56,
+      "betaX": -590.4,
+      "alphaY": 86.36,
+      "betaY": -1118.83,
+      "sensitivityX": -1.43,
+      "sensitivityY": 1.45
+    }
+  },
+  {
+    "id": "EXT-M5GW0WQH",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 204.69,
+      "betaX": -647.41,
+      "alphaY": 74.0,
+      "betaY": -1030.78,
+      "sensitivityX": -1.44,
+      "sensitivityY": 1.88
+    }
+  },
+  {
+    "id": "EXT-5GYDY0SG",
+    "profile": "tablet",
+    "score": 10,
+    "model": {
+      "alphaX": 205.65,
+      "betaX": -660.81,
+      "alphaY": 96.93,
+      "betaY": -847.66,
+      "sensitivityX": -2.13,
+      "sensitivityY": 1.61
+    }
+  },
+  {
+    "id": "EXT-EGT3B41U",
+    "profile": "mobile",
+    "score": 8,
+    "model": {
+      "alphaX": 259.98,
+      "betaX": -594.87,
+      "alphaY": 100.34,
+      "betaY": -918.25,
+      "sensitivityX": -2.27,
+      "sensitivityY": 2.04
+    }
   }
 ]
