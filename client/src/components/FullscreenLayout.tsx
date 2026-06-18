@@ -32,9 +32,11 @@ function useIsPortrait() {
 
 import { DWELL_MS as TAB_DWELL_MS } from "@/lib/dwell";
 
-// Pantalla "Bienvenido a VidaVoz" al activar la mirada — desactivada
-// temporalmente. Cambiar a true para reactivarla.
-const SHOW_SPLASH = false;
+// Controla SOLO la visibilidad del overlay "Bienvenido a VidaVoz" al activar
+// la mirada. El autoajuste de calibración que corre durante esos 4 s
+// (selección de modelo, escalado de beta, offset) NO depende de esta
+// constante y sigue ejecutándose aunque se ponga en false.
+const SHOW_SPLASH = true;
 
 const TABS = [
   { path: "/",         Icon: AlertTriangle,    label: "URGENTE",  color: "#f87171" },
@@ -267,18 +269,19 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
-  // ── Pantalla de bienvenida + autoajuste silencioso de centro (4 s) ─────────
-  // Se muestra UNA SOLA VEZ por sesión (flag en sessionStorage) cuando la
-  // mirada se activa por primera vez tras aceptar el consentimiento. Como
-  // FullscreenLayout se remonta en cada cambio de página, el flag impide que
-  // la pantalla "Bienvenido a VidaVoz" reaparezca al navegar entre las 4
-  // pantallas. La calibración obtenida se mantiene durante toda la sesión.
-  //
-  // Desactivada temporalmente: cambiar SHOW_SPLASH a true para reactivarla.
+  // ── Bienvenida + autoajuste silencioso de centro (4 s) ──────────────────
+  // Se ejecuta UNA SOLA VEZ por sesión (flag en sessionStorage) cuando la
+  // mirada se activa por primera vez tras aceptar el consentimiento. Esto
+  // SIEMPRE debe montarse — WelcomePatient no es solo un splash visual: en
+  // su efecto interno selecciona el mejor modelo de calibración, escala
+  // beta para cubrir toda la pantalla y corrige el offset alpha. Sin este
+  // paso el cursor queda comprimido/descentrado (ver SHOW_SPLASH abajo).
+  // SHOW_SPLASH solo controla si esos 4 s se muestran visualmente al
+  // paciente; la calibración corre igual con la pantalla oculta.
   const WELCOME_KEY = "vozuci-welcome-shown-v1";
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => {
-    if (SHOW_SPLASH && isActive && !sessionStorage.getItem(WELCOME_KEY)) {
+    if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
       sessionStorage.setItem(WELCOME_KEY, "1");
       setShowWelcome(true);
     }
@@ -398,7 +401,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {isCalibrating && <CalibrationScreen />}
 
       {/* Bienvenida del paciente + autoajuste silencioso de centro (4 s) */}
-      {showWelcome && <WelcomePatient onDone={() => setShowWelcome(false)} />}
+      {showWelcome && <WelcomePatient visible={SHOW_SPLASH} onDone={() => setShowWelcome(false)} />}
 
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}

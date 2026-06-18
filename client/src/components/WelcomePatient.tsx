@@ -8,6 +8,10 @@ import welcomeImageUrl from "@assets/VidaVoz-removebg-preview_1777535718332.png"
 
 interface WelcomePatientProps {
   onDone: () => void;
+  // Controla solo el overlay visual. El autoajuste de calibración (efecto
+  // de abajo) corre siempre, visible o no — ver comentario en SHOW_SPLASH
+  // dentro de FullscreenLayout.tsx.
+  visible?: boolean;
 }
 
 const TOTAL_MS         = 4000;
@@ -79,7 +83,7 @@ const CREAM_BG   = "#FFF8E7";
 // Tipografía: 'Gliker' (display redondeada, igual que el branding del logo).
 // Si la fuente no está instalada, cae a 'Lexend' (Google Fonts ya cargada).
 // ─────────────────────────────────────────────────────────────────────────────
-export default function WelcomePatient({ onDone }: WelcomePatientProps) {
+export default function WelcomePatient({ onDone, visible = true }: WelcomePatientProps) {
   useEffect(() => {
     let validSamples = 0;
     let attempts     = 0;
@@ -161,6 +165,8 @@ export default function WelcomePatient({ onDone }: WelcomePatientProps) {
       clearTimeout(finish);
     };
   }, [onDone]);
+
+  if (!visible) return null;
 
   return (
     <div

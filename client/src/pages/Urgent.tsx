@@ -1,3 +1,4 @@
+import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { QuadButton, QuadGrid } from "@/components/QuadButton";
 import { useTTS } from "@/hooks/use-tts";
 import { WindColor, PainColor, NauseaColor, ThirstColor } from "@/components/icons/ColorIcons";
@@ -54,23 +55,25 @@ export default function Urgent() {
   const { speak } = useTTS();
 
   return (
-    <QuadGrid>
-      {URGENT.map((msg) => (
-        <QuadButton
-          key={msg.sublabel}
-          label={msg.label}
-          sublabel={msg.sublabel}
-          phrase={msg.phrase}
-          icon={msg.icon}
-          bg={msg.bg}
-          border={msg.border}
-          glow={msg.glow}
-          textColor={msg.textColor}
-          priority={msg.priority}
-          testId={msg.testId}
-          onActivate={() => speak(msg.phrase)}
-        />
-      ))}
-    </QuadGrid>
+    <FullscreenLayout>
+      <QuadGrid>
+        {URGENT.map((msg) => (
+          <QuadButton
+            key={msg.sublabel}
+            label={msg.label}
+            sublabel={msg.sublabel}
+            phrase={msg.phrase}
+            icon={msg.icon}
+            bg={msg.bg}
+            border={msg.border}
+            glow={msg.glow}
+            textColor={msg.textColor}
+            priority={msg.priority}
+            testId={msg.testId}
+            onActivate={() => speak(msg.phrase)}
+          />
+        ))}
+      </QuadGrid>
+    </FullscreenLayout>
   );
 }

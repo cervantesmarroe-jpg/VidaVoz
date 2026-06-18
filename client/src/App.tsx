@@ -7,7 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { setCursorVisible } from "@/lib/globalCursor";
 import { ScanningProvider } from "@/context/ScanningContext";
-import { FullscreenLayout } from "@/components/FullscreenLayout";
 
 // Pages
 import Urgent from "./pages/Urgent";
@@ -52,21 +51,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-// FullscreenLayout se monta aquí, fuera del Switch, para que persista entre
-// navegaciones: si se montara dentro de cada página, el tracker de mirada
-// (hooks, cámara, buffers de suavizado) se reiniciaría en cada cambio de
-// pantalla, perdiendo el seguimiento ocular activo.
 function Router() {
   return (
-    <FullscreenLayout>
-      <Switch>
-        <Route path="/" component={Urgent} />
-        <Route path="/mensajes" component={Messages} />
-        <Route path="/escalas" component={Scales} />
-        <Route path="/teclado" component={Keyboard} />
-        <Route component={NotFound} />
-      </Switch>
-    </FullscreenLayout>
+    <Switch>
+      <Route path="/" component={Urgent} />
+      <Route path="/mensajes" component={Messages} />
+      <Route path="/escalas" component={Scales} />
+      <Route path="/teclado" component={Keyboard} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
