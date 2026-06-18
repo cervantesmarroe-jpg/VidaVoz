@@ -523,6 +523,19 @@ class GazeTracker {
     if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0; }
   }
 
+  // Descarta el historial de suavizado sin interrumpir el loop de detección.
+  // Usar al cambiar de pantalla para que los buffers heredados de la pantalla
+  // anterior no arrastren el cursor a posiciones erróneas en la nueva pantalla.
+  // No toca calibración ni coeficientes de regresión.
+  resetSmoothing() {
+    this.smoothFill  = 0;
+    this.smoothIdx   = 0;
+    this.filterX.reset();
+    this.filterY.reset();
+    this.lastEmitX   = -1;
+    this.lastEmitY   = -1;
+  }
+
   // Reinicia el loop de detección sin tocar la cámara ni el modelo de calibración.
   // Útil cuando MediaPipe se queda en estado colgado (timestamps acumulados, cara
   // fuera de frame durante varios segundos). Resetea buffers de suavizado y

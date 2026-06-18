@@ -278,6 +278,18 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     }
   }, [isActive]);
 
+  // ── Estabilización al cambiar de pantalla ────────────────────────────────
+  // Los buffers de suavizado (ring-buffer MA + One-Euro) acumulan muestras de
+  // la pantalla anterior; al montar una nueva pantalla el cursor puede dispararse
+  // a los extremos hasta que el buffer se "llena" con muestras válidas.
+  // resetSmoothing() descarta el historial sin interrumpir el loop de detección
+  // ni perder la calibración, de modo que el primer frame de la nueva pantalla
+  // se toma como valor inicial limpio.
+  useEffect(() => {
+    if (!isActive) return;
+    gazeTracker.resetSmoothing();
+  }, [location, isActive]);
+
   // ── Log periódico cuando la mirada está activa ────────────────────────────
   useEffect(() => {
     if (!isActive) return;
