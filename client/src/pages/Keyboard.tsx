@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, SpaceColor as Space } from "@/components/icons/ColorIcons";
 import { useTTS } from "@/hooks/use-tts";
 
@@ -313,7 +312,7 @@ export default function Keyboard() {
   }, []);
 
   return (
-    <FullscreenLayout>
+    <>
       <style>{`
         @keyframes blink { 50% { opacity: 0; } }
 
@@ -467,6 +466,6 @@ export default function Keyboard() {
           />
         </div>
       </div>
-    </FullscreenLayout>
+    </>
   );
 }

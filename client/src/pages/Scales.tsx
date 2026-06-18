@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect, ReactNode } from "react";
-import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
 import { RotateCcw } from "lucide-react";
@@ -547,103 +546,101 @@ export default function Scales() {
   const anxietyBadge = anxietyLocked !== null ? ANXIETY_ITEMS[anxietyLocked - 1]?.label : null;
 
   return (
-    <FullscreenLayout>
-      <div style={{
-        display: "flex",
-        flexDirection: "column",
-        /* altura total sin scroll: el acordeón absorbe el espacio disponible */
-        height: "100%",
-        overflow: "hidden",
-        padding: "6px 8px 8px",
-        gap: 6,
-        boxSizing: "border-box",
-        background: "#FDF2E2",
-      }}>
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      /* altura total sin scroll: el acordeón absorbe el espacio disponible */
+      height: "100%",
+      overflow: "hidden",
+      padding: "6px 8px 8px",
+      gap: 6,
+      boxSizing: "border-box",
+      background: "#FDF2E2",
+    }}>
 
-        {/* ── Botón reiniciar ─────────────────────────────────────────────── */}
-        <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-          <button
-            className="gaze-target"
-            data-gaze-target="true"
-            data-testid="button-scale-reset"
-            onClick={handleReset}
-            style={{
-              background: "#FFF",
-              border: "1.5px solid #E0D8CB",
-              borderRadius: 9,
-              color: "#555555",
-              padding: "5px 12px",
-              cursor: "pointer",
-              fontFamily: "'Lexend',sans-serif",
-              fontWeight: 700,
-              fontSize: ".68rem",
-              letterSpacing: ".07em",
-              textTransform: "uppercase",
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <RotateCcw style={{ width: 11, height: 11 }} />
-            Reiniciar
-          </button>
-        </div>
-
-        {/* ── Acordeón DOLOR (EVA) ──────────────────────────────────────── */}
-        <AccordionPanel
-          title="Dolor (EVA)"
-          isOpen={openScale === "eva"}
-          lockedBadge={evaBadge}
-          onToggle={() => toggle("eva")}
+      {/* ── Botón reiniciar ─────────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
+        <button
+          className="gaze-target"
+          data-gaze-target="true"
+          data-testid="button-scale-reset"
+          onClick={handleReset}
+          style={{
+            background: "#FFF",
+            border: "1.5px solid #E0D8CB",
+            borderRadius: 9,
+            color: "#555555",
+            padding: "5px 12px",
+            cursor: "pointer",
+            fontFamily: "'Lexend',sans-serif",
+            fontWeight: 700,
+            fontSize: ".68rem",
+            letterSpacing: ".07em",
+            textTransform: "uppercase",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
+          }}
         >
-          <ScaleGrid
-            key={`eva-${resetKey}`}
-            items={EVA_ITEMS}
-            prefix="eva"
-            onLocked={setEvaLocked}
-          />
-        </AccordionPanel>
-
-        {/* ── Acordeón RESPIRACIÓN (BORG) ──────────────────────────────── */}
-        <AccordionPanel
-          title="Respiración (BORG)"
-          isOpen={openScale === "borg"}
-          lockedBadge={borgBadge}
-          onToggle={() => toggle("borg")}
-        >
-          <ScaleGrid
-            key={`borg-${resetKey}`}
-            items={BORG_ITEMS}
-            prefix="borg"
-            onLocked={setBorgLocked}
-          />
-        </AccordionPanel>
-
-        {/* ── Acordeón ANSIEDAD ────────────────────────────────────────── */}
-        <AccordionPanel
-          title="Ansiedad"
-          isOpen={openScale === "anxiety"}
-          lockedBadge={anxietyBadge}
-          onToggle={() => toggle("anxiety")}
-        >
-          <ScaleGrid
-            key={`ansiedad-${resetKey}`}
-            items={ANXIETY_ITEMS}
-            prefix="anxiety"
-            onLocked={setAnxietyLocked}
-          />
-        </AccordionPanel>
-
-        {/* ── Resumen de puntuaciones ───────────────────────────────────── */}
-        <ScoreSummary
-          evaLocked={evaLocked}
-          borgLocked={borgLocked}
-          anxietyLocked={anxietyLocked}
-        />
+          <RotateCcw style={{ width: 11, height: 11 }} />
+          Reiniciar
+        </button>
       </div>
-    </FullscreenLayout>
+
+      {/* ── Acordeón DOLOR (EVA) ──────────────────────────────────────── */}
+      <AccordionPanel
+        title="Dolor (EVA)"
+        isOpen={openScale === "eva"}
+        lockedBadge={evaBadge}
+        onToggle={() => toggle("eva")}
+      >
+        <ScaleGrid
+          key={`eva-${resetKey}`}
+          items={EVA_ITEMS}
+          prefix="eva"
+          onLocked={setEvaLocked}
+        />
+      </AccordionPanel>
+
+      {/* ── Acordeón RESPIRACIÓN (BORG) ──────────────────────────────── */}
+      <AccordionPanel
+        title="Respiración (BORG)"
+        isOpen={openScale === "borg"}
+        lockedBadge={borgBadge}
+        onToggle={() => toggle("borg")}
+      >
+        <ScaleGrid
+          key={`borg-${resetKey}`}
+          items={BORG_ITEMS}
+          prefix="borg"
+          onLocked={setBorgLocked}
+        />
+      </AccordionPanel>
+
+      {/* ── Acordeón ANSIEDAD ────────────────────────────────────────── */}
+      <AccordionPanel
+        title="Ansiedad"
+        isOpen={openScale === "anxiety"}
+        lockedBadge={anxietyBadge}
+        onToggle={() => toggle("anxiety")}
+      >
+        <ScaleGrid
+          key={`ansiedad-${resetKey}`}
+          items={ANXIETY_ITEMS}
+          prefix="anxiety"
+          onLocked={setAnxietyLocked}
+        />
+      </AccordionPanel>
+
+      {/* ── Resumen de puntuaciones ───────────────────────────────────── */}
+      <ScoreSummary
+        evaLocked={evaLocked}
+        borgLocked={borgLocked}
+        anxietyLocked={anxietyLocked}
+      />
+    </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useRef, useCallback, ElementType } from "react";
-import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
 import {
@@ -221,19 +220,17 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
 // ── Página ───────────────────────────────────────────────────────────────────
 export default function Messages() {
   return (
-    <FullscreenLayout>
-      <div className="msg-grid-container" style={{
-        gap: "8px",
-        padding: "10px",
-        height: "100%",
-        boxSizing: "border-box",
-        background: "#FAFAFA",
-        overflowY: "auto",
-      }}>
-        {MSGS.map((m) => (
-          <MessageButton key={m.id} {...m} />
-        ))}
-      </div>
-    </FullscreenLayout>
+    <div className="msg-grid-container" style={{
+      gap: "8px",
+      padding: "10px",
+      height: "100%",
+      boxSizing: "border-box",
+      background: "#FAFAFA",
+      overflowY: "auto",
+    }}>
+      {MSGS.map((m) => (
+        <MessageButton key={m.id} {...m} />
+      ))}
+    </div>
   );
 }

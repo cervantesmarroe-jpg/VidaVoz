@@ -32,6 +32,10 @@ function useIsPortrait() {
 
 import { DWELL_MS as TAB_DWELL_MS } from "@/lib/dwell";
 
+// Pantalla "Bienvenido a VidaVoz" al activar la mirada — desactivada
+// temporalmente. Cambiar a true para reactivarla.
+const SHOW_SPLASH = false;
+
 const TABS = [
   { path: "/",         Icon: AlertTriangle,    label: "URGENTE",  color: "#f87171" },
   { path: "/mensajes", Icon: MessageSquareText, label: "MENSAJES", color: "#38bdf8" },
@@ -269,10 +273,12 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // FullscreenLayout se remonta en cada cambio de página, el flag impide que
   // la pantalla "Bienvenido a VidaVoz" reaparezca al navegar entre las 4
   // pantallas. La calibración obtenida se mantiene durante toda la sesión.
+  //
+  // Desactivada temporalmente: cambiar SHOW_SPLASH a true para reactivarla.
   const WELCOME_KEY = "vozuci-welcome-shown-v1";
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => {
-    if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
+    if (SHOW_SPLASH && isActive && !sessionStorage.getItem(WELCOME_KEY)) {
       sessionStorage.setItem(WELCOME_KEY, "1");
       setShowWelcome(true);
     }
