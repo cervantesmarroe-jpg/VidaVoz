@@ -17,7 +17,7 @@ import {
 
 export const SCAN_INTERVAL_MIN_S = 1;
 export const SCAN_INTERVAL_MAX_S = 5;
-const DEFAULT_MS = 2000;
+const DEFAULT_MS = 5000;
 
 interface ScanningCtx {
   active:        boolean;
