@@ -37,7 +37,8 @@ const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora invol
 const BLINK_MAX_MS    = 500;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
-const SNAP_RADIUS_PX  = 58;    // imán: si el cursor está a <58 px de un botón, salta al centro (+15% área)
+const SNAP_RADIUS_PX  = 80;    // imán: si el cursor está a <80 px de un botón, salta al centro — ampliado para móvil
+const HIT_EXPANSION_PX = 24;   // margen adicional en cada lado del botón para hitTest (captura bordes)
 const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-temblor)
 
 // ── Edge expansion (corrección no-lineal anti-compresión hacia el centro) ───
@@ -505,6 +506,23 @@ class GazeTracker {
 
   stopDetection() {
     if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0; }
+  }
+
+  // Reinicia el loop de detección sin tocar la cámara ni el modelo de calibración.
+  // Útil cuando MediaPipe se queda en estado colgado (timestamps acumulados, cara
+  // fuera de frame durante varios segundos). Resetea buffers de suavizado y
+  // timestamps para que el próximo frame se procese como si fuera el primero.
+  restartDetection() {
+    this.stopDetection();
+    this.lastVideoTime = -1;
+    this.lastMpTs      = 0;
+    this.smoothFill    = 0;
+    this.smoothIdx     = 0;
+    this.filterX.reset();
+    this.filterY.reset();
+    this.lastEmitX     = -1;
+    this.lastEmitY     = -1;
+    if (this.video && this.landmarker) this.startDetection();
   }
 
   stopCamera() {
@@ -1173,9 +1191,10 @@ export function useWebGazer() {
     const RECOVERY_GRACE_MS  = 200;
 
     let confState: 'stable' | 'uncertain' | 'lost' = 'stable';
-    let lastGazeTime  = performance.now();
-    let recoveryStart = 0;
-    let pausedAt      = 0;       // timestamp en que entramos en uncertain/lost
+    let lastGazeTime   = performance.now();
+    let recoveryStart  = 0;
+    let pausedAt       = 0;       // timestamp en que entramos en uncertain/lost
+    let restartTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const banner = document.createElement('div');
     banner.id = 'gaze-status-banner';
@@ -1212,12 +1231,26 @@ export function useWebGazer() {
         if (confState !== 'lost') {
           confState = 'lost'; pauseProgress();
           setBanner('No se detecta mirada');
+          // Programa reinicio automático de detección a los 2 s de estar perdido.
+          // Si el tracking se recupera antes, el timeout se cancela en la rama
+          // de recuperación de onGaze.
+          if (!restartTimeout) {
+            restartTimeout = setTimeout(() => {
+              restartTimeout = null;
+              if (confState === 'lost') gazeTracker.restartDetection();
+            }, 2000);
+          }
         }
       } else if (idle > UNCERTAIN_AFTER_MS) {
         if (confState === 'stable') {
           confState = 'uncertain'; pauseProgress();
           setBanner('Buscando mirada…');
         }
+        // Tracking parcialmente recuperado — cancelar restart pendiente
+        if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
+      } else {
+        // Idle < UNCERTAIN_AFTER_MS → gaze activo, cancelar restart si lo había
+        if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
       }
     }, 150);
     // touchLockUntil eliminado — ahora lo gestiona globalCursor.ts (isTouchLocked())
@@ -1245,7 +1278,25 @@ export function useWebGazer() {
       if (cur) cur.style.visibility = 'hidden';
       const hit = document.elementFromPoint(x, y) as HTMLElement | null;
       if (cur) cur.style.visibility = '';
-      return hit?.closest('[data-gaze-target="true"]') as HTMLElement | null;
+      const direct = hit?.closest('[data-gaze-target="true"]') as HTMLElement | null;
+      if (direct) return direct;
+
+      // Fallback: si el punto exacto no cae dentro de ningún botón, comprueba si
+      // está dentro de los bounds expandidos de algún [data-gaze-target]. Captura
+      // el caso "cursor en el borde exterior del botón" sin falsa activación.
+      let best: HTMLElement | null = null;
+      let bestDist = Infinity;
+      document.querySelectorAll<HTMLElement>('[data-gaze-target="true"]').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (
+          x >= r.left   - HIT_EXPANSION_PX && x <= r.right  + HIT_EXPANSION_PX &&
+          y >= r.top    - HIT_EXPANSION_PX && y <= r.bottom + HIT_EXPANSION_PX
+        ) {
+          const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+          if (d < bestDist) { bestDist = d; best = el; }
+        }
+      });
+      return best;
     }
 
     // ── triggerClick: función unificada para BLINK y TOQUE ───────────────────
@@ -1377,6 +1428,7 @@ export function useWebGazer() {
       gazeTracker.removeBlinkListener(onBlink);
       setGazeTargetTouchCallback(null);
       clearInterval(confMonitor);
+      if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
       banner.remove();
     };
   }, [isActive]);
