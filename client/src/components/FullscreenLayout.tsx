@@ -211,7 +211,13 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   } = useWebGazer();
 
   // ── Modo GUIADO (escaneo secuencial) ─────────────────────────────────────
-  const { active: scanActive, enable: scanEnable, disable: scanDisable, activate: scanActivate } = useScanning();
+  const { active: scanActive, enable: scanEnable, disable: scanDisable, activate: scanActivate, setIntervalMs: scanSetInterval } = useScanning();
+
+  // Ajusta el intervalo según la pantalla: 3 s en Mensajes, 5 s en el resto
+  useEffect(() => {
+    if (!scanActive) return;
+    scanSetInterval(location === '/mensajes' ? 3000 : 5000);
+  }, [location, scanActive, scanSetInterval]);
 
   // Toque en cualquier parte excepto la barra de navegación → confirma el
   // botón resaltado. También cubre pulsadores externos Bluetooth/WiFi que
