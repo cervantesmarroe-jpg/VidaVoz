@@ -31,10 +31,13 @@ const DWELL_MS        = 2100;  // Fallback del tracker: 100 ms por encima del dw
                                // para garantizar que el handler local gane la carrera y evitar doble activación.
 const SMOOTH_SAMPLES  = 30;    // tamaño fijo del ring-buffer MA
 const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
-const BLINK_THRESHOLD = 0.85;
-const BLINK_COOLDOWN  = 1200;  // periodo refractario entre blink-clicks (ms)
-const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora involuntarios
-const BLINK_MAX_MS    = 500;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
+const BLINK_THRESHOLD    = 0.85;
+const BLINK_COOLDOWN     = 1200; // periodo refractario entre blink-clicks (ms)
+const BLINK_MIN_MS       = 200;  // parpadeo mínimo válido (ms) — ignora involuntarios
+const BLINK_MAX_MS       = 500;  // parpadeo máximo válido para click de mirada (ms)
+// Parpadeo sostenido (escaneo secuencial): por encima de BLINK_MAX_MS,
+// hasta un máximo de 3 s (más allá se considera posible pérdida del ojo).
+const SCAN_BLINK_MAX_MS  = 3000;
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
 const SNAP_RADIUS_PX  = 120;   // imán: si el cursor está a <120 px de un botón, salta al centro
@@ -299,7 +302,8 @@ class GazeTracker {
   private blinkUnfreezeAt = 0;
 
   private gazeListeners:  Set<GazeCallback>  = new Set();
-  private blinkListeners: Set<BlinkCallback> = new Set();
+  private blinkListeners:     Set<BlinkCallback> = new Set();
+  private scanBlinkListeners: Set<() => void>   = new Set();
 
   onCameraReady: (() => void) | null = null;
   onCameraError: (() => void) | null = null;
@@ -488,6 +492,12 @@ class GazeTracker {
                 this.lastBlinkEnd = nowMs;
                 // Disparar con coords CONGELADAS (antes del ruido de párpado)
                 this.fireBlinkClick(this.blinkFrozenX, this.blinkFrozenY);
+              }
+              // Parpadeo sostenido (>500 ms, ≤3 s) → señal para escaneo secuencial.
+              // No comparte ventana de duración con el blink-click normal,
+              // por lo que ambos modos coexisten sin conflicto.
+              if (dur > BLINK_MAX_MS && dur <= SCAN_BLINK_MAX_MS && this.blinkEnabled) {
+                this.scanBlinkListeners.forEach(cb => cb());
               }
             }
             this.wasBlinking = isBlink;
@@ -1099,8 +1109,10 @@ class GazeTracker {
 
   addGazeListener(cb: GazeCallback)     { this.gazeListeners.add(cb); }
   removeGazeListener(cb: GazeCallback)  { this.gazeListeners.delete(cb); }
-  addBlinkListener(cb: BlinkCallback)   { this.blinkListeners.add(cb); }
-  removeBlinkListener(cb: BlinkCallback){ this.blinkListeners.delete(cb); }
+  addBlinkListener(cb: BlinkCallback)       { this.blinkListeners.add(cb); }
+  removeBlinkListener(cb: BlinkCallback)    { this.blinkListeners.delete(cb); }
+  addScanBlinkListener(cb: () => void)      { this.scanBlinkListeners.add(cb); }
+  removeScanBlinkListener(cb: () => void)   { this.scanBlinkListeners.delete(cb); }
 
   get hasFaceModel() { return this.landmarker !== null; }
   get hasCamera()    { return !!(this.video && this.video.readyState >= 2); }

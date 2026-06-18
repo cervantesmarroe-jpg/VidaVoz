@@ -16,6 +16,7 @@ import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
+import { useScanning, SCAN_INTERVAL_MIN_S, SCAN_INTERVAL_MAX_S } from "@/context/ScanningContext";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -143,6 +144,35 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     isActive, isCalibrating,
     activateFromProfile, deactivate,
   } = useWebGazer();
+
+  // ── Modo de Escaneo Secuencial ────────────────────────────────────────────
+  const {
+    active: scanActive,
+    intervalMs,
+    enable: scanEnable,
+    disable: scanDisable,
+    activate: scanActivate,
+    setIntervalMs,
+  } = useScanning();
+  const [showScanPanel, setShowScanPanel] = useState(false);
+
+  // 1) Toque en cualquier parte → activa escaneo (excluye el propio panel)
+  useEffect(() => {
+    if (!scanActive) return;
+    const handler = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest('[data-scan-panel="true"]')) return;
+      scanActivate();
+    };
+    document.addEventListener('pointerdown', handler, { capture: true });
+    return () => document.removeEventListener('pointerdown', handler, { capture: true });
+  }, [scanActive, scanActivate]);
+
+  // 2) Parpadeo sostenido >500 ms (método cámara) → activa escaneo
+  useEffect(() => {
+    if (!scanActive || !isActive) return;
+    gazeTracker.addScanBlinkListener(scanActivate);
+    return () => gazeTracker.removeScanBlinkListener(scanActivate);
+  }, [scanActive, isActive, scanActivate]);
 
   // ── Estado de activación ──────────────────────────────────────────────────
   // "loading" = cargando modelo ML y/o cámara por primera vez / tras parar
@@ -324,8 +354,137 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {/* ── Overlay Entrenamiento Maestro ─────────────────────────────── */}
       {showTraining && <MasterTrainingOverlay onClose={() => setShowTraining(false)} />}
 
-      {/* Keyframes para el spinner del botón */}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      {/* ── Panel de control del modo Escaneo ─────────────────────────── */}
+      <div
+        data-scan-panel="true"
+        style={{
+          position: "fixed",
+          top: 10,
+          right: 10,
+          zIndex: 60,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 6,
+        }}
+      >
+        {/* Badge / botón de acceso al panel */}
+        <button
+          data-scan-panel="true"
+          onClick={() => setShowScanPanel(p => !p)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "5px 10px",
+            borderRadius: 20,
+            border: scanActive ? "2px solid #F59E0B" : "1px solid #D0D0D0",
+            background: scanActive ? "#FEF3C7" : "#F5F5F5",
+            color: scanActive ? "#92400E" : "#666",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: scanActive
+              ? "0 0 10px rgba(245,158,11,0.45)"
+              : "0 1px 4px rgba(0,0,0,0.12)",
+            animation: scanActive ? "scan-badge-pulse 1.2s ease-in-out infinite alternate" : "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⚡</span>
+          {scanActive
+            ? `Escaneo ${(intervalMs / 1000).toFixed(intervalMs % 1000 === 0 ? 0 : 1)}s`
+            : "Escaneo"}
+        </button>
+
+        {/* Panel expandido (configuración) */}
+        {showScanPanel && (
+          <div
+            data-scan-panel="true"
+            style={{
+              background: "#FFFFFF",
+              border: "1px solid #E0E0E0",
+              borderRadius: 16,
+              padding: "14px 16px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              minWidth: 200,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#333" }}>
+              Modo Escaneo
+            </p>
+
+            {/* Intervalo */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: 11, color: "#666", fontWeight: 600 }}>
+                Intervalo: {(intervalMs / 1000).toFixed(intervalMs % 1000 === 0 ? 0 : 1)} s
+              </label>
+              <input
+                data-scan-panel="true"
+                type="range"
+                min={SCAN_INTERVAL_MIN_S}
+                max={SCAN_INTERVAL_MAX_S}
+                step={0.5}
+                value={intervalMs / 1000}
+                onChange={e => setIntervalMs(Math.round(parseFloat(e.target.value) * 1000))}
+                style={{ width: "100%", accentColor: "#F59E0B" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#999" }}>
+                <span>{SCAN_INTERVAL_MIN_S}s</span>
+                <span>{SCAN_INTERVAL_MAX_S}s</span>
+              </div>
+            </div>
+
+            {/* Botón ON/OFF */}
+            <button
+              data-scan-panel="true"
+              onClick={() => { scanActive ? scanDisable() : scanEnable(); }}
+              style={{
+                padding: "10px 0",
+                borderRadius: 10,
+                border: "none",
+                background: scanActive ? "#FEE2E2" : "#D1FAE5",
+                color: scanActive ? "#991B1B" : "#065F46",
+                fontWeight: 800,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+            >
+              {scanActive ? "■ Detener escaneo" : "▶ Iniciar escaneo"}
+            </button>
+
+            {/* Cerrar panel */}
+            <button
+              data-scan-panel="true"
+              onClick={() => setShowScanPanel(false)}
+              style={{
+                padding: "6px 0",
+                borderRadius: 8,
+                border: "1px solid #E0E0E0",
+                background: "transparent",
+                color: "#888",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Keyframes para el spinner del botón y el badge de escaneo */}
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes scan-badge-pulse {
+          from { box-shadow: 0 0  6px rgba(245,158,11,0.35); }
+          to   { box-shadow: 0 0 14px rgba(245,158,11,0.65); }
+        }
+      `}</style>
     </div>
   );
 }

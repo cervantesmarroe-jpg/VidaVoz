@@ -351,3 +351,29 @@ input[type=range].gaze-slider::-moz-range-thumb {
   85%  { width: 92%; }
   100% { width: 100%; }
 }
+
+/* ── Modo de Escaneo Secuencial: elemento actualmente resaltado ─────────────── */
+[data-gaze-target="true"].scan-focus,
+.gaze-target.scan-focus {
+  outline: 4px solid #F59E0B !important;
+  outline-offset: 3px !important;
+  box-shadow:
+    0 0 0 8px rgba(245, 158, 11, 0.30),
+    0 0 24px rgba(245, 158, 11, 0.50) !important;
+  animation: scan-pulse 0.75s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes scan-pulse {
+  from {
+    box-shadow:
+      0 0 0  6px rgba(245, 158, 11, 0.22),
+      0 0 16px rgba(245, 158, 11, 0.40);
+  }
+  to {
+    box-shadow:
+      0 0 0 11px rgba(245, 158, 11, 0.38),
+      0 0 28px rgba(245, 158, 11, 0.62);
+  }
+}
