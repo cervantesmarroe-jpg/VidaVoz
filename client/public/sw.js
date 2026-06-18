@@ -1,4 +1,4 @@
-const CACHE = "vidavoz-v3"; // bumped: manifest background_color #fff + new icons
+const CACHE = "vidavoz-v4"; // bumped: fix static file serving en Railway
 const OFFLINE_URLS = ["/", "/mensajes", "/escalas", "/teclado"];
 
 self.addEventListener("install", (e) => {
