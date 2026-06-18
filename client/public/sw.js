@@ -1,4 +1,4 @@
-const CACHE = "vidavoz-v4"; // bumped: fix static file serving en Railway
+const CACHE = "vidavoz-v5"; // bumped: invalidar caché corrupta tras despliegue
 const OFFLINE_URLS = ["/", "/mensajes", "/escalas", "/teclado"];
 
 self.addEventListener("install", (e) => {
