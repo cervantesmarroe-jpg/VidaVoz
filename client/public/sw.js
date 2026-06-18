@@ -1,4 +1,4 @@
-const CACHE = "vidavoz-v5"; // bumped: invalidar caché corrupta tras despliegue
+const CACHE = "__CACHE_VERSION__"; // sustituido por timestamp en npm run build
 const OFFLINE_URLS = ["/", "/mensajes", "/escalas", "/teclado"];
 
 self.addEventListener("install", (e) => {

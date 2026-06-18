@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, writeFile } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -37,6 +37,17 @@ async function buildAll() {
 
   console.log("building client...");
   await viteBuild();
+
+  // Inyectar timestamp de build en el service worker.
+  // Vite copia client/public/sw.js tal cual a dist/public/sw.js — aquí
+  // reemplazamos el placeholder para que cada despliegue genere un nombre
+  // de caché único y los navegadores descarten la caché anterior sin
+  // necesidad de intervención manual.
+  const swPath = "dist/public/sw.js";
+  const cacheVersion = `vidavoz-${Date.now()}`;
+  const swSrc = await readFile(swPath, "utf-8");
+  await writeFile(swPath, swSrc.replace("__CACHE_VERSION__", cacheVersion), "utf-8");
+  console.log(`service worker cache → ${cacheVersion}`);
 
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
