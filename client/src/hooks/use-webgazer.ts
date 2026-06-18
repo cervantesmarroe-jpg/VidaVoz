@@ -56,7 +56,7 @@ const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-
 // → en el borde (|n|=1) el factor es 1+EDGE_BOOST → alcance pleno
 // → la curva es suave (sin saltos), por lo que el smoothing y el dead zone
 //   anteriores siguen funcionando bien y no se introduce jitter.
-const EDGE_BOOST_X    = 0.45;  // 45% extra al alcanzar el borde horizontal — mayor cobertura lateral en ordenador
+const EDGE_BOOST_X    = 0.25;  // 25% extra al alcanzar el borde horizontal — reducido para evitar que el cursor se dispare a los extremos
 const EDGE_BOOST_Y    = 0.22;  // 22% extra al alcanzar el borde vertical (más conservador)
 
 // ── One-Euro: parámetros clínicos (máximo suavizado en reposo) ────────────────
@@ -94,7 +94,7 @@ const BETA_SCALE_EXPECTED_RANGE_X = 0.20;
 const BETA_SCALE_EXPECTED_RANGE_Y = 0.20;
 const BETA_SCALE_MIN_VARIANCE     = 0.05; // si rango < esto → no escalar
 const BETA_SCALE_MIN              = 0.5;  // recorte inferior global (anti-shrink); puede sobreescribirse por perfil
-const BETA_SCALE_MAX              = 3.0;  // recorte superior — más amplificación para pantallas grandes
+const BETA_SCALE_MAX              = 2.0;  // recorte superior — reducido para evitar sobreamplificación hacia los extremos
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
