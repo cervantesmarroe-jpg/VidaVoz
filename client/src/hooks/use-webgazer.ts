@@ -37,7 +37,7 @@ const BLINK_MIN_MS    = 200;   // parpadeo mínimo válido (ms) — ignora invol
 const BLINK_MAX_MS    = 500;   // parpadeo máximo válido (ms) — ignora sueño/mirada perdida
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
-const SNAP_RADIUS_PX  = 80;    // imán: si el cursor está a <80 px de un botón, salta al centro — ampliado para móvil
+const SNAP_RADIUS_PX  = 120;   // imán: si el cursor está a <120 px de un botón, salta al centro
 const HIT_EXPANSION_PX = 24;   // margen adicional en cada lado del botón para hitTest (captura bordes)
 const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-temblor)
 
@@ -53,7 +53,7 @@ const DEAD_ZONE_PX    = 10;    // zona muerta: ignora movimientos < 10 px (anti-
 // → en el borde (|n|=1) el factor es 1+EDGE_BOOST → alcance pleno
 // → la curva es suave (sin saltos), por lo que el smoothing y el dead zone
 //   anteriores siguen funcionando bien y no se introduce jitter.
-const EDGE_BOOST_X    = 0.28;  // 28% extra al alcanzar el borde horizontal
+const EDGE_BOOST_X    = 0.45;  // 45% extra al alcanzar el borde horizontal — mayor cobertura lateral en ordenador
 const EDGE_BOOST_Y    = 0.22;  // 22% extra al alcanzar el borde vertical (más conservador)
 
 // ── One-Euro: parámetros clínicos (máximo suavizado en reposo) ────────────────
@@ -90,8 +90,8 @@ const PHASE2_STABILIZATION_MS   = 2000;  // ignora correcciones en los 1ºs 2 s
 const BETA_SCALE_EXPECTED_RANGE_X = 0.20;
 const BETA_SCALE_EXPECTED_RANGE_Y = 0.20;
 const BETA_SCALE_MIN_VARIANCE     = 0.05; // si rango < esto → no escalar
-const BETA_SCALE_MIN              = 0.5;  // recorte inferior (anti-shrink)
-const BETA_SCALE_MAX              = 2.5;  // recorte superior (anti-blow-up)
+const BETA_SCALE_MIN              = 0.5;  // recorte inferior global (anti-shrink); puede sobreescribirse por perfil
+const BETA_SCALE_MAX              = 3.0;  // recorte superior — más amplificación para pantallas grandes
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
@@ -885,8 +885,13 @@ class GazeTracker {
 
     const rawScaleX = BETA_SCALE_EXPECTED_RANGE_X / rangeX;
     const rawScaleY = BETA_SCALE_EXPECTED_RANGE_Y / rangeY;
-    const scaleX    = Math.min(Math.max(rawScaleX, BETA_SCALE_MIN), BETA_SCALE_MAX);
-    const scaleY    = Math.min(Math.max(rawScaleY, BETA_SCALE_MIN), BETA_SCALE_MAX);
+    // El floor del perfil (betaScaleMin) evita que betaX se encoja cuando el modelo
+    // de librería fue entrenado en una pantalla pequeña y el usuario mira fijo al
+    // centro durante la bienvenida (lo que produce un rawScale < 1 y dejaría el
+    // cursor sin alcanzar los extremos laterales en un ordenador).
+    const minScale  = this.activeProfile.betaScaleMin ?? BETA_SCALE_MIN;
+    const scaleX    = Math.min(Math.max(rawScaleX, minScale), BETA_SCALE_MAX);
+    const scaleY    = Math.min(Math.max(rawScaleY, minScale), BETA_SCALE_MAX);
 
     this.regressionModel.betaX *= scaleX;
     this.regressionModel.betaY *= scaleY;

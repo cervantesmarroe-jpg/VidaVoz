@@ -10,8 +10,9 @@ const R_RING       = 52;
 const CIRCUMF      = 2 * Math.PI * R_RING;
 const ROUNDS       = 4;  // 9 posiciones × 4 vueltas = 36 muestras totales
 
-// Márgenes iguales a los de la CalibrationScreen (40 px sobre 360×764)
-const MH = 40 / 360;
+// Márgenes de la rejilla (en fracción de pantalla). MH reducido a 20/360
+// para que los puntos laterales estén cerca del borde real de la pantalla.
+const MH = 20 / 360;
 const MV = 40 / 764;
 
 // ── 9 Posiciones (fracción de pantalla) — mismo orden que CalibrationScreen ──

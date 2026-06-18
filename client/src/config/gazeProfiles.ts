@@ -36,6 +36,17 @@ export interface GazeProfile {
    * cursor aparezca más abajo de donde se mira.
    */
   verticalOffsetPx?: number;
+  /**
+   * Factor mínimo de amplificación que applyDynamicBetaScaling puede aplicar a
+   * betaX (y betaY) para este perfil. Cuando el modelo de calibración elegido
+   * fue entrenado en una pantalla pequeña (~360 px), su betaX es demasiado
+   * pequeño para cubrir un monitor de ordenador. Este floor garantiza que el
+   * cursor llegue a los extremos laterales aunque el usuario mire fijo al centro
+   * durante la pantalla de bienvenida (lo que haría que el escalado dinámico
+   * encoja betaX en lugar de ampliarlo).
+   * No se usa en el perfil móvil — en móvil el escalado dinámico es suficiente.
+   */
+  betaScaleMin?: number;
   /** ADN de fábrica: coeficientes de regresión grabados en fábrica para este dispositivo. */
   model?: {
     alphaX: number;
@@ -53,6 +64,7 @@ export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
     // Sensibilidades calculadas con tus 30 muestras
     sensitivityX: -2.4092,
     sensitivityY: 0.9633,
+    betaScaleMin: 2.5, // Los modelos de librería (~360 px) necesitan ≥2.5× para cubrir una pantalla de ordenador
     model: {
       alphaX: 1491.2707,
       betaX: -4625.5720,

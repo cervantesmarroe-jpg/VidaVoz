@@ -13,7 +13,7 @@ function useDisableBlink() {
 // ─── Secuencia de 9 puntos (fracción de pantalla) ────────────────────────────
 // Los márgenes son 40px sobre una pantalla de referencia 360×764.
 // Al multiplicar por innerWidth/Height se escalan a cualquier dispositivo.
-const MH = 40 / 360;   // margen horizontal ~ 11.1 %
+const MH = 20 / 360;   // margen horizontal ~ 5.6 % — puntos cerca del borde para entrenar el extremo lateral
 const MV = 40 / 764;   // margen vertical   ~  5.2 %
 
 const POINTS = [
