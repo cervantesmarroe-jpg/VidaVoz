@@ -216,14 +216,38 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // Toque en cualquier parte excepto la barra de navegación → confirma el
   // botón resaltado. También cubre pulsadores externos Bluetooth/WiFi que
   // simulen un toque de pantalla sin desarrollo adicional.
+  //
+  // Se capturan DOS eventos para aislar completamente el toque físico:
+  //   • pointerdown (capture): llama scanActivate() y bloquea el evento para
+  //     que no llegue al elemento tocado físicamente.
+  //   • click (capture): bloquea el click sintético que el navegador genera
+  //     tras pointerup si llegara a escapar. isTrusted distingue el click
+  //     real del usuario (bloqueado) del .click() programático de scanActivate
+  //     (isTrusted: false → se deja pasar para que el botón resaltado reaccione).
   useEffect(() => {
     if (!scanActive) return;
-    const handler = (e: PointerEvent) => {
+
+    const onPointerDown = (e: PointerEvent) => {
       if ((e.target as Element | null)?.closest('[data-scan-panel="true"]')) return;
+      e.stopPropagation();
+      e.preventDefault();
       scanActivate();
     };
-    document.addEventListener('pointerdown', handler, { capture: true });
-    return () => document.removeEventListener('pointerdown', handler, { capture: true });
+
+    const onClickCapture = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest('[data-scan-panel="true"]')) return;
+      if (e.isTrusted) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('pointerdown', onPointerDown, { capture: true });
+    document.addEventListener('click',       onClickCapture, { capture: true });
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      document.removeEventListener('click',       onClickCapture, { capture: true });
+    };
   }, [scanActive, scanActivate]);
 
   // ── Estado de activación ──────────────────────────────────────────────────
