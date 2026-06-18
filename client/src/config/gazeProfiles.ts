@@ -27,6 +27,15 @@ export interface GazeProfile {
   sensitivityX: number;
   /** Multiplicador vertical. Positivo = arriba es positivo en blendshapes. */
   sensitivityY: number;
+  /**
+   * Corrección de offset vertical en píxeles. Se aplica al rawY inmediatamente
+   * después del modelo de regresión, antes del ring-buffer.
+   * Valor negativo → desplaza el cursor hacia ARRIBA (corrige sesgo hacia abajo).
+   * Valor positivo → desplaza hacia abajo.
+   * Principalmente para cámara frontal de móvil, cuyo ángulo provoca que el
+   * cursor aparezca más abajo de donde se mira.
+   */
+  verticalOffsetPx?: number;
   /** ADN de fábrica: coeficientes de regresión grabados en fábrica para este dispositivo. */
   model?: {
     alphaX: number;
@@ -57,6 +66,7 @@ export const GAZE_PROFILES: Record<ProfileId, GazeProfile> = {
     distanceCm: 25,
     sensitivityX: -1.80, // Menos nervioso, más control
     sensitivityY: 1.50,
+    verticalOffsetPx: -80, // La cámara frontal del móvil introduce un sesgo hacia abajo; −80 px lo compensa
     model: {
       alphaX: 180.00, // Punto central equilibrado
       betaX: -750.00, // Recorrido estándar para 360px de ancho

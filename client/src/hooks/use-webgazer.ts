@@ -254,8 +254,9 @@ class GazeTracker {
   private lastMpTs:      number = 0;
 
   // ── Perfil Maestro activo (sensibilidades de fábrica para este dispositivo)
-  private profileSensX: number = SENSITIVITY_X;
-  private profileSensY: number = SENSITIVITY_Y;
+  private profileSensX:          number = SENSITIVITY_X;
+  private profileSensY:          number = SENSITIVITY_Y;
+  private profileVerticalOffsetPx: number = 0;
   private activeProfile: GazeProfile = GAZE_PROFILES[DEFAULT_PROFILE_ID];
 
   // ── Pipeline de suavizado de 3 etapas ────────────────────────────────────
@@ -378,11 +379,15 @@ class GazeTracker {
             const eyeLookDownL = find('eyeLookDownLeft');
             const headRotX     = landmarks[1].x - landmarks[4].x;
 
-            const { rawX, rawY } = updateGazePoint(
+            const { rawX, rawY: rawYModel } = updateGazePoint(
               eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL,
               headRotX, this.regressionModel,
               this.profileSensX, this.profileSensY,
             );
+            // Corregir sesgo vertical del perfil (negativo = desplaza cursor hacia arriba).
+            // Compensa el ángulo de la cámara frontal del móvil que introduce un offset
+            // sistemático hacia abajo respecto a la posición real de la mirada.
+            const rawY = rawYModel + this.profileVerticalOffsetPx;
 
             // ── Etapa 1: Ring-buffer MA(30) fijo — O(1), sin shift() ─────────
             // Primera muestra: pre-rellena todo el buffer con rawX/rawY para
@@ -564,7 +569,8 @@ class GazeTracker {
   // Si la librería estuviese vacía (situación anómala), el tracker queda en
   // espera (regressionModel = null) en lugar de caer al placeholder del UI.
   loadProfile(profile: GazeProfile) {
-    this.activeProfile  = profile;
+    this.activeProfile           = profile;
+    this.profileVerticalOffsetPx = profile.verticalOffsetPx ?? 0;
     // Limpiar siempre datos del perfil anterior (evita mezclar ADNs)
     this.trainingData   = [];
     this.continuousData = [];
@@ -963,6 +969,8 @@ class GazeTracker {
     this.continuousData  = [];
     this.isCalibrated    = false;
     this.regressionModel = null;
+    // Volvemos al modelo de librería → restauramos el offset de fábrica del perfil.
+    this.profileVerticalOffsetPx = this.activeProfile.verticalOffsetPx ?? 0;
     this.currentResults  = null;
     this.lastVideoTime   = -1;
     this.lastMpTs        = 0;
@@ -1069,6 +1077,9 @@ class GazeTracker {
     const model = calculateRegression(raw);
     this.regressionModel = model;
     this.isCalibrated    = true;
+    // La calibración propia del usuario ya absorbe el sesgo físico de la cámara:
+    // anulamos el offset de perfil para evitar doble corrección.
+    this.profileVerticalOffsetPx = 0;
     this.trainingData    = [];
     this.continuousData  = [];
     const W = window.innerWidth;
