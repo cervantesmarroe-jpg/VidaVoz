@@ -210,10 +210,12 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     activateFromProfile, deactivate,
   } = useWebGazer();
 
-  // ── Modo de Escaneo Secuencial ────────────────────────────────────────────
+  // ── Modo GUIADO (escaneo secuencial) ─────────────────────────────────────
   const { active: scanActive, enable: scanEnable, disable: scanDisable, activate: scanActivate } = useScanning();
 
-  // 1) Toque en cualquier parte → activa escaneo (excluye el propio panel)
+  // Toque en cualquier parte excepto la barra de navegación → confirma el
+  // botón resaltado. También cubre pulsadores externos Bluetooth/WiFi que
+  // simulen un toque de pantalla sin desarrollo adicional.
   useEffect(() => {
     if (!scanActive) return;
     const handler = (e: PointerEvent) => {
@@ -223,13 +225,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     document.addEventListener('pointerdown', handler, { capture: true });
     return () => document.removeEventListener('pointerdown', handler, { capture: true });
   }, [scanActive, scanActivate]);
-
-  // 2) Parpadeo sostenido >500 ms (método cámara) → activa escaneo
-  useEffect(() => {
-    if (!scanActive || !isActive) return;
-    gazeTracker.addScanBlinkListener(scanActivate);
-    return () => gazeTracker.removeScanBlinkListener(scanActivate);
-  }, [scanActive, isActive, scanActivate]);
 
   // ── Estado de activación ──────────────────────────────────────────────────
   // "loading" = cargando modelo ML y/o cámara por primera vez / tras parar
@@ -379,8 +374,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        {/* Barra navegación */}
+        {/* Barra navegación — excluida del handler de confirmación de escaneo */}
         <nav
+          data-scan-panel="true"
           style={isPortrait ? {
             width: "100%", height: "58px", flexShrink: 0,
             background: "#FFFFFF", borderTop: "1px solid #E0E0E0",
