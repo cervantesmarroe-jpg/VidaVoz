@@ -135,6 +135,71 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
   );
 }
 
+// ── Botón GUIADO en la barra de navegación ────────────────────────────────────
+interface ScanTabProps {
+  active: boolean;
+  onToggle: () => void;
+  isPortrait: boolean;
+}
+
+function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
+  const color = "#34d399"; // esmeralda — diferente a todos los tabs existentes
+  return (
+    <button
+      data-scan-panel="true"
+      onClick={onToggle}
+      aria-label={active ? "Detener guiado" : "Iniciar guiado"}
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: isPortrait ? "row" : "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: isPortrait ? "6px" : "4px",
+        flex: isPortrait ? 1 : undefined,
+        width: isPortrait ? undefined : "100%",
+        height: isPortrait ? "100%" : undefined,
+        padding: isPortrait ? "8px 4px" : "10px 4px",
+        borderRadius: isPortrait ? "8px" : "10px",
+        overflow: "hidden",
+        background: active ? `${color}18` : "transparent",
+        border: active ? `1px solid ${color}55` : "1px solid transparent",
+        cursor: "pointer",
+        transition: "background 0.2s",
+        flexShrink: 0,
+      }}
+    >
+      <span style={{
+        fontSize: isPortrait ? 20 : 22,
+        lineHeight: 1,
+        color: active ? color : "#AAAAAA",
+        position: "relative",
+        zIndex: 1,
+        filter: active ? "none" : "opacity(0.55)",
+        transition: "color 0.2s, filter 0.2s",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        {active ? "■" : "▶"}
+      </span>
+      <span style={{
+        fontSize: isPortrait ? "0.58rem" : "0.5rem",
+        fontWeight: 800,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        color: active ? color : "#AAAAAA",
+        position: "relative",
+        zIndex: 1,
+        lineHeight: 1.2,
+        textAlign: "center",
+      }}>
+        GUIADO
+      </span>
+    </button>
+  );
+}
+
 // ── Layout principal ──────────────────────────────────────────────────────────
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -340,46 +405,17 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
               isPortrait={isPortrait}
             />
           ))}
+          <ScanTab
+            active={scanActive}
+            onToggle={() => scanActive ? scanDisable() : scanEnable()}
+            isPortrait={isPortrait}
+          />
         </nav>
       </div>
 
       {/* ── Overlay Entrenamiento Maestro ─────────────────────────────── */}
       {showTraining && <MasterTrainingOverlay onClose={() => setShowTraining(false)} />}
 
-      {/* ── Botón de escaneo secuencial ───────────────────────────────── */}
-      {/* Posicionado sobre la barra de navegación en portrait, esquina inf-der */}
-      <button
-        data-scan-panel="true"
-        onClick={() => scanActive ? scanDisable() : scanEnable()}
-        aria-label={scanActive ? "Detener escaneo" : "Iniciar escaneo"}
-        style={{
-          position: "fixed",
-          bottom: isPortrait ? 68 : 12,
-          right: 12,
-          zIndex: 60,
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          border: scanActive ? "2px solid #F59E0B" : "1px solid #C0C0C0",
-          background: scanActive ? "#FEF3C7" : "#F0F0F0",
-          color: scanActive ? "#92400E" : "#888",
-          fontSize: 14,
-          lineHeight: 1,
-          cursor: "pointer",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          userSelect: "none",
-          WebkitUserSelect: "none",
-          touchAction: "manipulation",
-        }}
-      >
-        {scanActive ? "■" : "▶"}
-      </button>
-
-      {/* Keyframes para el spinner del botón */}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
