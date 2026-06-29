@@ -4,6 +4,11 @@ import {
   CALIBRATIONS_LIBRARY,
   type CalibrationLibraryEntry,
 } from "@/hooks/use-webgazer";
+import {
+  loadDeviceCalibration,
+  saveDeviceCalibration,
+  adaptCalibrationToScreen,
+} from "@/lib/deviceCalibration";
 import welcomeImageUrl from "@assets/VidaVoz-removebg-preview_1777535718332.png";
 
 interface WelcomePatientProps {
@@ -85,6 +90,14 @@ const CREAM_BG   = "#FFF8E7";
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WelcomePatient({ onDone, visible = true }: WelcomePatientProps) {
   useEffect(() => {
+    // Intentar cargar calibración guardada para este dispositivo.
+    const savedCalib = loadDeviceCalibration();
+    if (savedCalib) {
+      // Aplicar modelo guardado, adaptando los betas si el viewport cambió
+      // (p. ej. rotación de pantalla) usando sensitivityX/Y como referencia.
+      gazeTracker.applyCalibrationModel(adaptCalibrationToScreen(savedCalib));
+    }
+
     let validSamples = 0;
     let attempts     = 0;
     const start      = performance.now();
@@ -108,49 +121,59 @@ export default function WelcomePatient({ onDone, visible = true }: WelcomePatien
 
       const validRate = attempts > 0 ? validSamples / attempts : 0;
       if (validRate >= VALID_RATE_MIN) {
-        // 1) Elegir el modelo de la librería que mejor predice el centro
-        //    de pantalla con las muestras oculares actuales del paciente.
-        //    Se evalúan TODAS las entradas (mobile + tablet juntas); el
-        //    perfil del modelo ganador no importa, solo su ajuste real.
-        const samples = gazeTracker.getSilentSamples();
-        const cx      = window.innerWidth  / 2;
-        const cy      = window.innerHeight / 2;
-        const winner  = selectBestModel(
-          CALIBRATIONS_LIBRARY,
-          samples,
-          cx,
-          cy,
-        );
-        if (winner) {
-          gazeTracker.applyCalibrationModel(winner.entry.model);
-          console.log(
-            `%c[Bienvenida] Modelo elegido ✓`,
-            'color:#7DD3A8;font-weight:800',
-            `| id=${winner.entry.id}`,
-            `| profile=${winner.entry.profile}`,
-            `| score=${winner.entry.score}`,
-            `| mse=${winner.mse.toFixed(0)}px²`,
-            `| weighted=${winner.weightedError.toFixed(0)}`,
-            `| n=${samples.length}`,
-          );
+        if (!savedCalib) {
+          // Primera visita o dispositivo diferente: seleccionar el mejor
+          // modelo de la librería y aplicar escala dinámica de beta.
+          const samples = gazeTracker.getSilentSamples();
+          const cx      = window.innerWidth  / 2;
+          const cy      = window.innerHeight / 2;
+          const winner  = selectBestModel(CALIBRATIONS_LIBRARY, samples, cx, cy);
+          if (winner) {
+            gazeTracker.applyCalibrationModel(winner.entry.model);
+            console.log(
+              `%c[Bienvenida] Modelo elegido ✓`,
+              'color:#7DD3A8;font-weight:800',
+              `| id=${winner.entry.id}`,
+              `| profile=${winner.entry.profile}`,
+              `| score=${winner.entry.score}`,
+              `| mse=${winner.mse.toFixed(0)}px²`,
+              `| weighted=${winner.weightedError.toFixed(0)}`,
+              `| n=${samples.length}`,
+            );
+          } else {
+            console.log(
+              `[Bienvenida] No se eligió modelo (librería vacía o sin muestras) — se mantiene el modelo activo del tracker; el ajuste de offset siguiente se aplicará sobre él`,
+            );
+          }
+          // Escala dinámica de beta para que el rango ocular real del
+          // paciente cubra todo el viewport.
+          const scale = gazeTracker.applyDynamicBetaScaling(samples);
+          gazeTracker.applySilentCenterCalibration(scale);
         } else {
+          // Dispositivo ya calibrado: conservar los betas del modelo
+          // guardado y solo corregir el offset alpha para esta sesión.
           console.log(
-            `[Bienvenida] No se eligió modelo (librería vacía o sin muestras) — se mantiene el modelo activo del tracker; el ajuste de offset siguiente se aplicará sobre él`,
+            `%c[Bienvenida] Calibración de dispositivo cargada — solo corrección de offset`,
+            'color:#7DD3A8;font-weight:800',
           );
+          gazeTracker.applySilentCenterCalibration(null);
         }
 
-        // 2) Escala dinámica de beta. El modelo ganador acierta la
-        //    dirección pero su escala (beta) viene del ojo de otro
-        //    usuario; ajustamos beta para que el rango ocular real del
-        //    paciente cubra todo el viewport. Devuelve null si no había
-        //    varianza suficiente (paciente miró fijo al centro).
-        const scale = gazeTracker.applyDynamicBetaScaling(samples);
-
-        // 3) Encima del modelo elegido y los betas escalados, aplica la
-        //    corrección de offset alpha calculada con las mismas muestras
-        //    del centro. Loguea offset + scale en una única línea de
-        //    [Fase1] para tener trazabilidad completa del autoajuste.
-        gazeTracker.applySilentCenterCalibration(scale);
+        // Guardar el modelo resultante (con alpha ya corregido) para que
+        // la próxima sesión arranque directamente con él.
+        const currentModel = gazeTracker.getModel();
+        if (currentModel) {
+          const W = window.innerWidth;
+          const H = window.innerHeight;
+          saveDeviceCalibration({
+            alphaX:       currentModel.alphaX,
+            betaX:        currentModel.betaX,
+            alphaY:       currentModel.alphaY,
+            betaY:        currentModel.betaY,
+            sensitivityX: +(currentModel.betaX / W).toFixed(4),
+            sensitivityY: +(-currentModel.betaY / H).toFixed(4),
+          });
+        }
       } else {
         console.log(
           `[Bienvenida] Rostro inestable (${(validRate * 100).toFixed(0)}% válido) — sin corrección`,

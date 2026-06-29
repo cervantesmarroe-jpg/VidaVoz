@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { X } from "lucide-react";
+import { saveDeviceCalibration } from "@/lib/deviceCalibration";
 
 // ── Desactiva blink durante toda la calibración ───────────────────────────────
 function useDisableBlink() {
@@ -258,6 +259,7 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
       `αX=${model.alphaX.toFixed(1)} βX=${model.betaX.toFixed(1)}`,
       `αY=${model.alphaY.toFixed(1)} βY=${model.betaY.toFixed(1)}`,
     );
+    saveDeviceCalibration(model);
     setPhase("success");
   }, [phase]);
 
