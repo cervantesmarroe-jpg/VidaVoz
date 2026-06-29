@@ -4,11 +4,7 @@ import {
   CALIBRATIONS_LIBRARY,
   type CalibrationLibraryEntry,
 } from "@/hooks/use-webgazer";
-import {
-  loadDeviceCalibration,
-  saveDeviceCalibration,
-  adaptCalibrationToScreen,
-} from "@/lib/deviceCalibration";
+import { getMergedModel } from "@/lib/deviceCalibration";
 import welcomeImageUrl from "@assets/VidaVoz-removebg-preview_1777535718332.png";
 
 interface WelcomePatientProps {
@@ -90,12 +86,10 @@ const CREAM_BG   = "#FFF8E7";
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WelcomePatient({ onDone, visible = true }: WelcomePatientProps) {
   useEffect(() => {
-    // Intentar cargar calibración guardada para este dispositivo.
-    const savedCalib = loadDeviceCalibration();
-    if (savedCalib) {
-      // Aplicar modelo guardado, adaptando los betas si el viewport cambió
-      // (p. ej. rotación de pantalla) usando sensitivityX/Y como referencia.
-      gazeTracker.applyCalibrationModel(adaptCalibrationToScreen(savedCalib));
+    // Cargar modelo fusionado de todas las sesiones de calibración acumuladas.
+    const merged = getMergedModel();
+    if (merged) {
+      gazeTracker.applyCalibrationModel(merged);
     }
 
     let validSamples = 0;
@@ -121,9 +115,9 @@ export default function WelcomePatient({ onDone, visible = true }: WelcomePatien
 
       const validRate = attempts > 0 ? validSamples / attempts : 0;
       if (validRate >= VALID_RATE_MIN) {
-        if (!savedCalib) {
-          // Primera visita o dispositivo diferente: seleccionar el mejor
-          // modelo de la librería y aplicar escala dinámica de beta.
+        if (!merged) {
+          // Sin sesiones de calibración: seleccionar el mejor modelo de la
+          // librería y aplicar escala dinámica de beta como aproximación inicial.
           const samples = gazeTracker.getSilentSamples();
           const cx      = window.innerWidth  / 2;
           const cy      = window.innerHeight / 2;
@@ -131,54 +125,23 @@ export default function WelcomePatient({ onDone, visible = true }: WelcomePatien
           if (winner) {
             gazeTracker.applyCalibrationModel(winner.entry.model);
             console.log(
-              `%c[Bienvenida] Modelo elegido ✓`,
+              `%c[Bienvenida] Modelo de librería elegido ✓`,
               'color:#7DD3A8;font-weight:800',
               `| id=${winner.entry.id}`,
-              `| profile=${winner.entry.profile}`,
-              `| score=${winner.entry.score}`,
               `| mse=${winner.mse.toFixed(0)}px²`,
-              `| weighted=${winner.weightedError.toFixed(0)}`,
               `| n=${samples.length}`,
             );
-          } else {
-            console.log(
-              `[Bienvenida] No se eligió modelo (librería vacía o sin muestras) — se mantiene el modelo activo del tracker; el ajuste de offset siguiente se aplicará sobre él`,
-            );
           }
-          // Escala dinámica de beta para que el rango ocular real del
-          // paciente cubra todo el viewport.
           const scale = gazeTracker.applyDynamicBetaScaling(samples);
           gazeTracker.applySilentCenterCalibration(scale);
         } else {
-          // Dispositivo ya calibrado: conservar los betas del modelo
-          // guardado y solo corregir el offset alpha para esta sesión.
+          // Modelo fusionado cargado: solo corregir el offset alpha
+          // para adaptar la mirada a la posición del paciente en esta sesión.
+          gazeTracker.applySilentCenterCalibration(null);
           console.log(
-            `%c[Bienvenida] Calibración de dispositivo cargada — solo corrección de offset`,
+            `%c[Bienvenida] Modelo calibrado cargado — offset alpha corregido`,
             'color:#7DD3A8;font-weight:800',
           );
-          gazeTracker.applySilentCenterCalibration(null);
-        }
-
-        // Guardar el modelo resultante (con alpha ya corregido) para que
-        // la próxima sesión arranque directamente con él.
-        // Se preserva el source original: si ya era 'calibrationScreen' no
-        // se degrada a 'welcomePatient', para que FullscreenLayout siga
-        // saltando la calibración de 9 puntos en futuras sesiones.
-        const currentModel = gazeTracker.getModel();
-        if (currentModel) {
-          const W = window.innerWidth;
-          const H = window.innerHeight;
-          const preservedSource = savedCalib?.source === 'calibrationScreen'
-            ? 'calibrationScreen'
-            : 'welcomePatient';
-          saveDeviceCalibration({
-            alphaX:       currentModel.alphaX,
-            betaX:        currentModel.betaX,
-            alphaY:       currentModel.alphaY,
-            betaY:        currentModel.betaY,
-            sensitivityX: +(currentModel.betaX / W).toFixed(4),
-            sensitivityY: +(-currentModel.betaY / H).toFixed(4),
-          }, preservedSource);
         }
       } else {
         console.log(

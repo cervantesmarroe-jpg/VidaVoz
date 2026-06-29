@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { X } from "lucide-react";
-import { saveDeviceCalibration } from "@/lib/deviceCalibration";
+import { saveCalibrationSession, getMergedModel } from "@/lib/deviceCalibration";
 
 // ── Desactiva blink durante toda la calibración ───────────────────────────────
 function useDisableBlink() {
@@ -259,7 +259,11 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
       `αX=${model.alphaX.toFixed(1)} βX=${model.betaX.toFixed(1)}`,
       `αY=${model.alphaY.toFixed(1)} βY=${model.betaY.toFixed(1)}`,
     );
-    saveDeviceCalibration(model, 'calibrationScreen');
+    // Acumular la nueva sesión (no reemplaza, suma) y aplicar el modelo
+    // promedio de todas las sesiones para que el tracking mejore de inmediato.
+    saveCalibrationSession(model);
+    const merged = getMergedModel();
+    if (merged) gazeTracker.applyCalibrationModel(merged);
     setPhase("success");
   }, [phase]);
 

@@ -1,29 +1,29 @@
-// Identificador de dispositivo: dimensiones físicas + pixel ratio.
-// screen.width/height son constantes del panel (no cambian con la orientación
-// en la mayoría de navegadores). devicePixelRatio distingue pantallas Retina
-// de las mismas dimensiones CSS.
+// ── Identificador de dispositivo ─────────────────────────────────────────────
+// Usa dimensiones físicas del panel + pixel ratio, independiente de orientación.
 export function deviceKey(): string {
   return `${screen.width}x${screen.height}@${devicePixelRatio}`;
 }
 
-const STORAGE_KEY = 'vozuci-calibration-v1';
+const SESSIONS_KEY = 'vozuci-calibration-sessions-v1';
 
-export interface DeviceCalibration {
-  deviceKey:    string;
-  screenW:      number;  // window.innerWidth en el momento de calibrar
-  screenH:      number;  // window.innerHeight en el momento de calibrar
-  alphaX:       number;
-  betaX:        number;
-  alphaY:       number;
-  betaY:        number;
-  sensitivityX: number;  // betaX / screenW (valor negativo)
-  sensitivityY: number;  // -betaY / screenH (valor positivo)
-  savedAt:      string;  // ISO 8601
-  /** 'calibrationScreen' = calibración de 9 puntos completada por el cuidador.
-   *  'welcomePatient'    = selección automática de librería (menos precisa).
-   *  undefined           = datos legacy sin campo source.
-   *  Solo 'calibrationScreen' es suficiente para omitir la calibración inicial. */
-  source?: 'calibrationScreen' | 'welcomePatient';
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+
+// Parámetros normalizados de una sesión de calibración (independientes del
+// tamaño del viewport en el momento de calibrar).
+interface CalibrationSession {
+  sensitivityX: number;   // betaX / screenW  (negativo)
+  sensitivityY: number;   // -betaY / screenH (positivo)
+  alphaNormX:   number;   // alphaX / screenW  (fracción del ancho)
+  alphaNormY:   number;   // alphaY / screenH  (fracción del alto)
+  screenW:      number;
+  screenH:      number;
+  trainedAt:    string;   // ISO 8601
+}
+
+interface AccumulatedCalibration {
+  deviceKey: string;
+  sessions:  CalibrationSession[];
+  updatedAt: string;
 }
 
 export interface CalibrationModel {
@@ -35,93 +35,99 @@ export interface CalibrationModel {
   sensitivityY: number;
 }
 
-export function saveDeviceCalibration(
-  model: CalibrationModel,
-  source: 'calibrationScreen' | 'welcomePatient' = 'welcomePatient',
-): void {
+// ── Lectura interna ───────────────────────────────────────────────────────────
+function loadRaw(): AccumulatedCalibration | null {
   try {
-    const entry: DeviceCalibration = {
-      ...model,
-      deviceKey: deviceKey(),
-      screenW:   window.innerWidth,
-      screenH:   window.innerHeight,
-      savedAt:   new Date().toISOString(),
-      source,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entry));
-    console.log(
-      `%c[Calibración] Guardada en dispositivo ✓`,
-      'color:#7DD3A8;font-weight:800',
-      `| clave=${entry.deviceKey}`,
-      `| βX=${model.betaX.toFixed(1)} βY=${model.betaY.toFixed(1)}`,
-      `| sX=${model.sensitivityX.toFixed(4)} sY=${model.sensitivityY.toFixed(4)}`,
-    );
-  } catch {
-    // Modo privado o cuota de almacenamiento agotada — ignorar
-  }
-}
-
-export function loadDeviceCalibration(): DeviceCalibration | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(SESSIONS_KEY);
     if (!raw) return null;
-    const entry = JSON.parse(raw) as DeviceCalibration;
-    if (entry.deviceKey !== deviceKey()) {
+    const data = JSON.parse(raw) as AccumulatedCalibration;
+    if (data.deviceKey !== deviceKey()) {
       console.log(
-        `[Calibración] Dispositivo diferente — calibración ignorada`,
-        `| guardada=${entry.deviceKey}  actual=${deviceKey()}`,
+        '[Calibración] Dispositivo diferente — sesiones ignoradas',
+        `| guardado=${data.deviceKey}  actual=${deviceKey()}`,
       );
       return null;
     }
-    console.log(
-      `%c[Calibración] Cargada desde dispositivo ✓`,
-      'color:#7DD3A8;font-weight:800',
-      `| guardada=${entry.savedAt}`,
-      `| βX=${entry.betaX.toFixed(1)} βY=${entry.betaY.toFixed(1)}`,
-    );
-    return entry;
+    return data;
   } catch {
     return null;
   }
 }
 
-export function clearDeviceCalibration(): void {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+// ── API pública ───────────────────────────────────────────────────────────────
+
+/** Número de calibraciones de 9 puntos completadas en este dispositivo. */
+export function getSessionCount(): number {
+  return loadRaw()?.sessions.length ?? 0;
 }
 
-// Devuelve true SOLO si la calibración de 9 puntos se completó en este
-// dispositivo. Datos legacy (sin campo source) o guardados por WelcomePatient
-// devuelven false → CalibrationScreen debe mostrarse igualmente.
+/** true si hay al menos una calibración de 9 puntos completa en este dispositivo. */
 export function hasRealCalibration(): boolean {
-  return loadDeviceCalibration()?.source === 'calibrationScreen';
+  return getSessionCount() > 0;
 }
 
-// Adapta la calibración guardada a la pantalla actual.
-// Si las dimensiones del viewport coinciden, aplica el modelo tal cual.
-// Si difieren (p. ej. cambio de orientación), recalcula los betas a partir
-// de sensitivityX/Y que son independientes del tamaño de pantalla.
-export function adaptCalibrationToScreen(saved: DeviceCalibration): CalibrationModel {
+/**
+ * Añade la nueva sesión de calibración a la lista acumulada.
+ * No reemplaza — agrega. Cuantas más sesiones, más estable el modelo promedio.
+ */
+export function saveCalibrationSession(model: CalibrationModel): void {
   const W = window.innerWidth;
   const H = window.innerHeight;
 
-  if (W === saved.screenW && H === saved.screenH) {
-    return {
-      alphaX:       saved.alphaX,
-      betaX:        saved.betaX,
-      alphaY:       saved.alphaY,
-      betaY:        saved.betaY,
-      sensitivityX: saved.sensitivityX,
-      sensitivityY: saved.sensitivityY,
-    };
-  }
+  const session: CalibrationSession = {
+    sensitivityX: +(model.betaX / W).toFixed(5),
+    sensitivityY: +(-model.betaY / H).toFixed(5),
+    alphaNormX:   +(model.alphaX / W).toFixed(5),
+    alphaNormY:   +(model.alphaY / H).toFixed(5),
+    screenW: W,
+    screenH: H,
+    trainedAt: new Date().toISOString(),
+  };
 
-  // Reconstruir betas desde la sensibilidad (independiente del viewport)
+  const existing = loadRaw();
+  const sessions = existing ? [...existing.sessions, session] : [session];
+
+  try {
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify({
+      deviceKey: deviceKey(),
+      sessions,
+      updatedAt: new Date().toISOString(),
+    } satisfies AccumulatedCalibration));
+    console.log(
+      `%c[Calibración] Sesión ${sessions.length} guardada ✓`,
+      'color:#7DD3A8;font-weight:800',
+      `| sX=${session.sensitivityX.toFixed(4)}  sY=${session.sensitivityY.toFixed(4)}`,
+      `| aNX=${session.alphaNormX.toFixed(3)}  aNY=${session.alphaNormY.toFixed(3)}`,
+    );
+  } catch {
+    // Modo privado o cuota agotada
+  }
+}
+
+/**
+ * Devuelve el modelo de regresión resultante de promediar todas las sesiones
+ * acumuladas, adaptado al viewport actual.
+ * Devuelve null si no hay sesiones.
+ */
+export function getMergedModel(): CalibrationModel | null {
+  const data = loadRaw();
+  if (!data || data.sessions.length === 0) return null;
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const n = data.sessions.length;
+
+  const avgSensX  = data.sessions.reduce((s, r) => s + r.sensitivityX, 0) / n;
+  const avgSensY  = data.sessions.reduce((s, r) => s + r.sensitivityY, 0) / n;
+  const avgNormX  = data.sessions.reduce((s, r) => s + r.alphaNormX,   0) / n;
+  const avgNormY  = data.sessions.reduce((s, r) => s + r.alphaNormY,   0) / n;
+
   return {
-    alphaX:       W / 2,
-    betaX:        saved.sensitivityX * W,
-    alphaY:       H / 2,
-    betaY:        -saved.sensitivityY * H,
-    sensitivityX: saved.sensitivityX,
-    sensitivityY: saved.sensitivityY,
+    alphaX:       avgNormX * W,
+    betaX:        avgSensX * W,
+    alphaY:       avgNormY * H,
+    betaY:        -avgSensY * H,
+    sensitivityX: avgSensX,
+    sensitivityY: avgSensY,
   };
 }
