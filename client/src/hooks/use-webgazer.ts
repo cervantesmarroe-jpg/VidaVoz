@@ -997,6 +997,14 @@ class GazeTracker {
     this.regressionModel.alphaY += errorY * PHASE2_LEARNING_RATE;
   }
 
+  // Borra los puntos de entrenamiento acumulados sin tocar el modelo activo.
+  // Llamar antes de iniciar una nueva ronda de calibración de esquinas para
+  // que finalizeTraining() trabaje solo con los datos recién recogidos.
+  resetTrainingData() {
+    this.trainingData   = [];
+    this.continuousData = [];
+  }
+
   // Métodos legacy (UsaCalibrationOverlay los llama)
   computeCalibration() {
     if (this.trainingData.length >= 4) {

@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Eye, EyeOff, ClipboardCopy,
+  Eye, EyeOff, ClipboardCopy, Crosshair,
 } from "lucide-react";
 import {
   SirenColor as AlertTriangle,
@@ -16,6 +16,7 @@ import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
+import CornerCalibration from "@/components/CornerCalibration";
 import { useScanning } from "@/context/ScanningContext";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
@@ -206,6 +207,54 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
   );
 }
 
+// ── Botón de calibración de 4 esquinas en la barra de navegación ─────────────
+interface CalibTabProps {
+  onCalib:   () => void;
+  isPortrait: boolean;
+}
+
+function CalibTab({ onCalib, isPortrait }: CalibTabProps) {
+  const color = "#f97316"; // naranja — diferente a todos los tabs existentes
+  return (
+    <button
+      data-scan-panel="true"
+      onClick={onCalib}
+      aria-label="Calibrar mirada (4 esquinas)"
+      title="Calibrar mirada"
+      style={{
+        display: "flex",
+        flexDirection: isPortrait ? "row" : "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: isPortrait ? "6px" : "4px",
+        flex: isPortrait ? 1 : undefined,
+        width: isPortrait ? undefined : "100%",
+        height: isPortrait ? "100%" : undefined,
+        padding: isPortrait ? "8px 4px" : "10px 4px",
+        borderRadius: isPortrait ? "8px" : "10px",
+        background: "transparent",
+        border: "1px solid transparent",
+        cursor: "pointer",
+        transition: "background 0.2s",
+        flexShrink: 0,
+      }}
+    >
+      <Crosshair style={{
+        width: isPortrait ? 20 : 22, height: isPortrait ? 20 : 22,
+        color, flexShrink: 0,
+      }} />
+      <span style={{
+        fontSize: isPortrait ? "0.58rem" : "0.5rem",
+        fontWeight: 800, letterSpacing: "0.06em",
+        textTransform: "uppercase", color,
+        lineHeight: 1.2, textAlign: "center",
+      }}>
+        CALIBRAR
+      </span>
+    </button>
+  );
+}
+
 // ── Layout principal ──────────────────────────────────────────────────────────
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -269,16 +318,40 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
+  // ── Calibración de 4 esquinas ─────────────────────────────────────────────
+  // Se muestra automáticamente la PRIMERA VEZ que se activa el eye-tracking
+  // en la sesión. El cuidador puede repetirla en cualquier momento con el
+  // botón CALIBRAR de la barra lateral.
+  //
+  // Cuando la calibración de esquinas se ejecuta, se establece también
+  // WELCOME_KEY para que WelcomePatient no se solape ni machaque el modelo
+  // recién calibrado.
+  const WELCOME_KEY      = "vozuci-welcome-shown-v1";
+  const CORNER_CALIB_KEY = "vozuci-corner-calibrated-v1";
+  const [showCornerCalib, setShowCornerCalib] = useState(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (sessionStorage.getItem(CORNER_CALIB_KEY)) return;
+    sessionStorage.setItem(CORNER_CALIB_KEY, "1");
+    sessionStorage.setItem(WELCOME_KEY, "1"); // evita solapamiento con WelcomePatient
+    gazeTracker.resetTrainingData();
+    setShowCornerCalib(true);
+  }, [isActive]);
+
+  const handleCornerCalibDone = useCallback((_success: boolean) => {
+    setShowCornerCalib(false);
+  }, []);
+
+  const handleRepeatCalib = useCallback(() => {
+    if (showCornerCalib) return;
+    gazeTracker.resetTrainingData();
+    setShowCornerCalib(true);
+  }, [showCornerCalib]);
+
   // ── Bienvenida + autoajuste silencioso de centro (4 s) ──────────────────
-  // Se ejecuta UNA SOLA VEZ por sesión (flag en sessionStorage) cuando la
-  // mirada se activa por primera vez tras aceptar el consentimiento. Esto
-  // SIEMPRE debe montarse — WelcomePatient no es solo un splash visual: en
-  // su efecto interno selecciona el mejor modelo de calibración, escala
-  // beta para cubrir toda la pantalla y corrige el offset alpha. Sin este
-  // paso el cursor queda comprimido/descentrado (ver SHOW_SPLASH abajo).
-  // SHOW_SPLASH solo controla si esos 4 s se muestran visualmente al
-  // paciente; la calibración corre igual con la pantalla oculta.
-  const WELCOME_KEY = "vozuci-welcome-shown-v1";
+  // Se ejecuta UNA SOLA VEZ por sesión cuando la mirada se activa y NO se
+  // ha lanzado ya la calibración de esquinas (WELCOME_KEY no establecido).
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => {
     if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
@@ -400,6 +473,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
       {isCalibrating && <CalibrationScreen />}
 
+      {/* Calibración de 4 esquinas — primera activación o repetición manual */}
+      {showCornerCalib && <CornerCalibration onDone={handleCornerCalibDone} />}
+
       {/* Bienvenida del paciente + autoajuste silencioso de centro (4 s) */}
       {showWelcome && <WelcomePatient visible={SHOW_SPLASH} onDone={() => setShowWelcome(false)} />}
 
@@ -457,6 +533,13 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
             onToggle={() => scanActive ? scanDisable() : scanEnable()}
             isPortrait={isPortrait}
           />
+          {/* Botón de recalibración — visible solo cuando la cámara está activa */}
+          {isActive && (
+            <CalibTab
+              onCalib={handleRepeatCalib}
+              isPortrait={isPortrait}
+            />
+          )}
         </nav>
       </div>
 
