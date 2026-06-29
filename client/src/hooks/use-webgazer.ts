@@ -217,9 +217,11 @@ class OneEuroFilter {
 
 // ─── Snap-to-button ───────────────────────────────────────────────────────────
 // Si el cursor filtrado está a menos de `radius` px del centro de algún elemento
-// con clase .gaze-target, lo atrae exactamente a ese centro.
+// con clase .gaze-target O atributo [data-gaze-target="true"], lo atrae al centro.
+const GAZE_TARGET_SELECTOR = '[data-gaze-target="true"], .gaze-target';
+
 function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y: number } {
-  const targets = document.querySelectorAll<Element>('.gaze-target');
+  const targets = document.querySelectorAll<Element>(GAZE_TARGET_SELECTOR);
   let bestDist = radius;
   let bx = x, by = y;
   targets.forEach(el => {
@@ -233,10 +235,10 @@ function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y:
 }
 
 // ─── hasGazeTarget ────────────────────────────────────────────────────────────
-// Devuelve true si hay algún elemento .gaze-target dentro de `radius` px del punto.
+// Devuelve true si hay algún elemento [data-gaze-target] dentro de `radius` px.
 // Usado para validar si un parpadeo apunta a un botón real (Confianza).
 function hasGazeTarget(x: number, y: number, radius: number): boolean {
-  return Array.from(document.querySelectorAll<Element>('.gaze-target')).some(el => {
+  return Array.from(document.querySelectorAll<Element>(GAZE_TARGET_SELECTOR)).some(el => {
     const r  = el.getBoundingClientRect();
     const cx = r.left + r.width  / 2;
     const cy = r.top  + r.height / 2;
@@ -600,12 +602,7 @@ class GazeTracker {
 
     const fallback = CALIBRATIONS_LIBRARY[0];
     if (fallback) {
-      this.regressionModel = {
-        alphaX: fallback.model.alphaX,
-        betaX:  fallback.model.betaX,
-        alphaY: fallback.model.alphaY,
-        betaY:  fallback.model.betaY,
-      };
+      this.regressionModel = this.scaledModel(fallback.model);
       // Las sensibilidades efectivas las decide la librería; si la entrada no
       // las trae, mantenemos las del perfil UI como red de seguridad.
       this.profileSensX = (typeof fallback.model.sensitivityX === 'number')
@@ -619,6 +616,7 @@ class GazeTracker {
         `%c[GazeTracker]`,
         'color:#7DD3A8;font-weight:800',
         `Modo UI: ${profile.id} | Modelo calibración: ${fallback.id} (score ${fallback.score})`,
+        `| betaX escalado a pantalla: ${this.regressionModel.betaX.toFixed(1)}`,
       );
     } else {
       // Librería vacía: no caemos al placeholder del UI por diseño.
@@ -947,6 +945,27 @@ class GazeTracker {
     return this.silentSamples.slice();
   }
 
+  // ── Normaliza betaX/Y de un modelo de librería al tamaño de pantalla actual ─
+  // Los modelos de la librería tienen betaX/Y en píxeles absolutos del dispositivo
+  // de calibración. Usamos sensitivityX = betaX / trainWidth (valor adimensional
+  // guardado junto al modelo) para reconstruir los betas correctos para el viewport
+  // actual: betaX = sensitivityX * window.innerWidth.
+  // Si el modelo no trae sensibilidades (modelo legacy), se usan los betas tal cual.
+  private scaledModel(m: {
+    alphaX: number; betaX: number;
+    alphaY: number; betaY: number;
+    sensitivityX?: number; sensitivityY?: number;
+  }): RegressionModel {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    return {
+      alphaX: m.alphaX,
+      betaX: typeof m.sensitivityX === 'number' ? m.sensitivityX * W : m.betaX,
+      alphaY: m.alphaY,
+      betaY: typeof m.sensitivityY === 'number' ? -m.sensitivityY * H : m.betaY,
+    };
+  }
+
   // Aplica un modelo de calibración al estado de SESIÓN del tracker.
   // Reemplaza regressionModel y, opcionalmente, las sensibilidades de sesión
   // (profileSensX/Y) si vienen en el modelo. Nunca toca GAZE_PROFILES ni el
@@ -957,12 +976,7 @@ class GazeTracker {
     alphaY: number; betaY: number;
     sensitivityX?: number; sensitivityY?: number;
   }): void {
-    this.regressionModel = {
-      alphaX: m.alphaX,
-      betaX:  m.betaX,
-      alphaY: m.alphaY,
-      betaY:  m.betaY,
-    };
+    this.regressionModel = this.scaledModel(m);
     if (typeof m.sensitivityX === 'number') this.profileSensX = m.sensitivityX;
     if (typeof m.sensitivityY === 'number') this.profileSensY = m.sensitivityY;
   }
@@ -1039,7 +1053,7 @@ class GazeTracker {
 
     // Flash del botón activado
     const topEl  = document.elementFromPoint(snapped.x, snapped.y);
-    const gazeEl = topEl?.closest<HTMLElement>('.gaze-target') ?? null;
+    const gazeEl = topEl?.closest<HTMLElement>('[data-gaze-target="true"], .gaze-target') ?? null;
     if (gazeEl) {
       gazeEl.classList.add('blink-activated');
       setTimeout(() => gazeEl.classList.remove('blink-activated'), 500);
