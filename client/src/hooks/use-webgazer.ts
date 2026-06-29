@@ -29,8 +29,8 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmark
 
 const DWELL_MS        = 2100;  // Fallback del tracker: 100 ms por encima del dwell de pantalla (2000 ms)
                                // para garantizar que el handler local gane la carrera y evitar doble activación.
-const SMOOTH_SAMPLES  = 30;    // tamaño fijo del ring-buffer MA
-const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
+const SMOOTH_SAMPLES  = 50;    // tamaño fijo del ring-buffer MA
+const SMOOTH_WARMUP   = 20;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
 const BLINK_THRESHOLD    = 0.85;
 const BLINK_COOLDOWN     = 1200; // periodo refractario entre blink-clicks (ms)
 const BLINK_MIN_MS       = 200;  // parpadeo mínimo válido (ms) — ignora involuntarios
@@ -395,7 +395,7 @@ class GazeTracker {
             // sistemático hacia abajo respecto a la posición real de la mirada.
             const rawY = rawYModel + this.profileVerticalOffsetPx;
 
-            // ── Etapa 1: Ring-buffer MA(30) fijo — O(1), sin shift() ─────────
+            // ── Etapa 1: Ring-buffer MA(50) fijo — O(1), sin shift() ─────────
             // Primera muestra: pre-rellena todo el buffer con rawX/rawY para
             // evitar que el cursor salte desde (0,0) mientras se llena.
             if (this.smoothFill === 0) {
@@ -960,9 +960,9 @@ class GazeTracker {
     const H = window.innerHeight;
     return {
       alphaX: m.alphaX,
-      betaX: typeof m.sensitivityX === 'number' ? m.sensitivityX * W : m.betaX,
+      betaX: typeof m.sensitivityX === 'number' ? m.sensitivityX * W * 0.5 : m.betaX,
       alphaY: m.alphaY,
-      betaY: typeof m.sensitivityY === 'number' ? -m.sensitivityY * H : m.betaY,
+      betaY: typeof m.sensitivityY === 'number' ? -m.sensitivityY * H * 0.5 : m.betaY,
     };
   }
 
