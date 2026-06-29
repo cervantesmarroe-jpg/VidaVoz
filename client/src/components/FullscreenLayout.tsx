@@ -12,7 +12,8 @@ import {
 
 import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
-import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
+import { useWebGazer, useWebGazerStore, gazeTracker } from "@/hooks/use-webgazer";
+import { loadDeviceCalibration } from "@/lib/deviceCalibration";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
@@ -215,6 +216,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     isActive, isCalibrating,
     activateFromProfile, deactivate,
   } = useWebGazer();
+  const { startCalibration } = useWebGazerStore();
 
   // ── Modo GUIADO (escaneo secuencial) ─────────────────────────────────────
   const { active: scanActive, enable: scanEnable, disable: scanDisable, activate: scanActivate, setIntervalMs: scanSetInterval } = useScanning();
@@ -269,23 +271,37 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
-  // ── Bienvenida + autoajuste silencioso de centro (4 s) ──────────────────
+  // ── Bienvenida / Calibración inicial ────────────────────────────────────
   // Se ejecuta UNA SOLA VEZ por sesión (flag en sessionStorage) cuando la
-  // mirada se activa por primera vez tras aceptar el consentimiento. Esto
-  // SIEMPRE debe montarse — WelcomePatient no es solo un splash visual: en
-  // su efecto interno selecciona el mejor modelo de calibración, escala
-  // beta para cubrir toda la pantalla y corrige el offset alpha. Sin este
-  // paso el cursor queda comprimido/descentrado (ver SHOW_SPLASH abajo).
-  // SHOW_SPLASH solo controla si esos 4 s se muestran visualmente al
-  // paciente; la calibración corre igual con la pantalla oculta.
+  // mirada se activa por primera vez.
+  //
+  //  • Sin calibración guardada → CalibrationScreen (9 puntos). Así el
+  //    primer uso en un dispositivo nuevo siempre queda bien calibrado.
+  //  • Con calibración guardada → WelcomePatient (4 s): carga el modelo
+  //    guardado y solo corrige el offset alpha para esta sesión.
+  //
+  // Si el cuidador cancela la calibración inicial, WELCOME_KEY se elimina
+  // para que el siguiente arranque de la mirada vuelva a ofrecerla.
   const WELCOME_KEY = "vozuci-welcome-shown-v1";
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => {
-    if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
-      sessionStorage.setItem(WELCOME_KEY, "1");
+    if (!isActive) return;
+    if (sessionStorage.getItem(WELCOME_KEY)) return;
+
+    sessionStorage.setItem(WELCOME_KEY, "1");
+
+    if (!loadDeviceCalibration()) {
+      // Primera visita o dispositivo diferente: pedir calibración 9 puntos.
+      // startCalibration() pone isActive:false e isCalibrating:true, lo que
+      // monta CalibrationScreen. WELCOME_KEY ya está marcado, así que cuando
+      // isActive vuelva a true tras finishCalibration() este bloque no re-entra.
+      startCalibration();
+    } else {
+      // Calibración guardada: WelcomePatient la cargará y aplicará solo la
+      // corrección de offset alpha para esta sesión.
       setShowWelcome(true);
     }
-  }, [isActive]);
+  }, [isActive, startCalibration]);
 
   // ── Estabilización al cambiar de pantalla ────────────────────────────────
   // Los buffers de suavizado (ring-buffer MA + One-Euro) acumulan muestras de
@@ -397,8 +413,17 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
 
-      {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
-      {isCalibrating && <CalibrationScreen />}
+      {/* Calibración 9 puntos */}
+      {isCalibrating && (
+        <CalibrationScreen
+          onCancel={() => {
+            // Permitir reintentar la calibración la próxima vez que se active la mirada
+            sessionStorage.removeItem(WELCOME_KEY);
+            deactivate();
+            gazeTracker.stopCamera();
+          }}
+        />
+      )}
 
       {/* Bienvenida del paciente + autoajuste silencioso de centro (4 s) */}
       {showWelcome && <WelcomePatient visible={SHOW_SPLASH} onDone={() => setShowWelcome(false)} />}
