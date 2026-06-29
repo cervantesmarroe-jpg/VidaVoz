@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { gazeTracker, useWebGazerStore } from "@/hooks/use-webgazer";
 import { X } from "lucide-react";
-import { saveCalibrationSession, getMergedModel } from "@/lib/deviceCalibration";
 
 // ── Desactiva blink durante toda la calibración ───────────────────────────────
 function useDisableBlink() {
@@ -259,11 +258,6 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
       `αX=${model.alphaX.toFixed(1)} βX=${model.betaX.toFixed(1)}`,
       `αY=${model.alphaY.toFixed(1)} βY=${model.betaY.toFixed(1)}`,
     );
-    // Acumular la nueva sesión (no reemplaza, suma) y aplicar el modelo
-    // promedio de todas las sesiones para que el tracking mejore de inmediato.
-    saveCalibrationSession(model);
-    const merged = getMergedModel();
-    if (merged) gazeTracker.applyCalibrationModel(merged);
     setPhase("success");
   }, [phase]);
 
@@ -398,24 +392,9 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
             />
           </div>
 
-          {/* Instrucción cuidador */}
-          <div style={{
-            background: "rgba(125,211,168,0.08)",
-            border: "1px solid rgba(125,211,168,0.25)",
-            borderRadius: 12, padding: "14px 20px",
-            textAlign: "center", maxWidth: 320,
-          }}>
-            <p style={{ fontSize: ".9rem", fontWeight: 800, color: "#7DD3A8", margin: "0 0 6px", letterSpacing: ".01em" }}>
-              El cuidador toca cada punto
-            </p>
-            <p style={{ fontSize: ".8rem", color: "rgba(255,255,255,0.55)", margin: 0, lineHeight: 1.5 }}>
-              mientras el paciente lo mira fijo
-            </p>
-          </div>
-
-          {/* Instrucción posición */}
-          <p style={{ fontSize: ".75rem", color: "rgba(255,255,255,0.28)", textAlign: "center", maxWidth: 280, lineHeight: 1.6, margin: 0 }}>
-            Coloca al paciente frente a la cámara con el rostro bien iluminado.
+          {/* Instrucción */}
+          <p style={{ fontSize: ".78rem", color: "rgba(255,255,255,0.3)", textAlign: "center", maxWidth: 280, lineHeight: 1.6, margin: 0 }}>
+            Colócate frente a la cámara con el rostro bien iluminado y mira directamente al centro de la pantalla.
           </p>
 
           {/* Botón Comenzar */}
@@ -447,29 +426,19 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
         <>
           {/* Instrucción superior (desaparece cuando activa el primer punto) */}
           {showInstruction && (
-            <div style={{
-              position: "absolute", top: "8%", left: 0, right: 0,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            <p style={{
+              position: "absolute", top: "10%", left: 0, right: 0,
+              textAlign: "center",
+              fontSize: "clamp(.85rem,3vw,1.1rem)",
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.65)",
+              letterSpacing: ".02em",
+              lineHeight: 1.5,
               padding: "0 24px",
               animation: "cs-slide .5s ease both",
             }}>
-              <p style={{
-                fontSize: "clamp(.95rem,3.2vw,1.2rem)",
-                fontWeight: 800,
-                color: "#7DD3A8",
-                margin: 0, letterSpacing: ".01em", textAlign: "center",
-              }}>
-                El cuidador toca el punto mientras el paciente lo mira
-              </p>
-              <p style={{
-                fontSize: "clamp(.75rem,2.5vw,.9rem)",
-                fontWeight: 500,
-                color: "rgba(255,255,255,0.4)",
-                margin: 0, textAlign: "center",
-              }}>
-                Mantén la mirada fija hasta que el punto desaparezca
-              </p>
-            </div>
+              Mira el punto blanco y mantén<br />la mirada fija hasta que desaparezca
+            </p>
           )}
 
           {/* Contador de puntos (discreto, esquina inferior) */}

@@ -12,8 +12,7 @@ import {
 
 import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
-import { useWebGazer, useWebGazerStore, gazeTracker } from "@/hooks/use-webgazer";
-import { hasRealCalibration, getSessionCount } from "@/lib/deviceCalibration";
+import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
@@ -207,88 +206,6 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
   );
 }
 
-// ── Botón CALIBRAR en la barra de navegación ──────────────────────────────────
-interface CalibTabProps {
-  onCalibrate: () => void;
-  sessionCount: number;
-  isPortrait: boolean;
-}
-
-function CalibTab({ onCalibrate, sessionCount, isPortrait }: CalibTabProps) {
-  const color = "#818cf8"; // indigo — diferente del resto de tabs
-  return (
-    <button
-      data-gaze-target="true"
-      onClick={onCalibrate}
-      aria-label="Calibrar mirada"
-      style={{
-        position: "relative",
-        display: "flex",
-        flexDirection: isPortrait ? "row" : "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: isPortrait ? "6px" : "3px",
-        flex: isPortrait ? 1 : undefined,
-        width: isPortrait ? undefined : "100%",
-        height: isPortrait ? "100%" : undefined,
-        padding: isPortrait ? "8px 4px" : "10px 4px",
-        borderRadius: isPortrait ? "8px" : "10px",
-        overflow: "hidden",
-        background: "transparent",
-        border: "1px solid transparent",
-        cursor: "pointer",
-        transition: "background 0.2s",
-        flexShrink: 0,
-      }}
-    >
-      {/* Icono de mira / calibración */}
-      <svg
-        width={isPortrait ? 20 : 22}
-        height={isPortrait ? 20 : 22}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ opacity: 0.85, flexShrink: 0 }}
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="3"  />
-        <line x1="12" y1="2"  x2="12" y2="6"  />
-        <line x1="12" y1="18" x2="12" y2="22" />
-        <line x1="2"  y1="12" x2="6"  y2="12" />
-        <line x1="18" y1="12" x2="22" y2="12" />
-      </svg>
-      <span style={{
-        fontSize: isPortrait ? "0.58rem" : "0.5rem",
-        fontWeight: 800,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        color,
-        position: "relative", zIndex: 1,
-        lineHeight: 1.2, textAlign: "center",
-      }}>
-        CALIBRAR
-      </span>
-      {/* Contador de sesiones */}
-      {sessionCount > 0 && (
-        <span style={{
-          fontSize: "0.5rem",
-          fontWeight: 700,
-          color: "rgba(129,140,248,0.7)",
-          lineHeight: 1,
-          textAlign: "center",
-          letterSpacing: "0.04em",
-        }}>
-          {sessionCount}×
-        </span>
-      )}
-    </button>
-  );
-}
-
 // ── Layout principal ──────────────────────────────────────────────────────────
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -298,7 +215,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     isActive, isCalibrating,
     activateFromProfile, deactivate,
   } = useWebGazer();
-  const { startCalibration } = useWebGazerStore();
 
   // ── Modo GUIADO (escaneo secuencial) ─────────────────────────────────────
   const { active: scanActive, enable: scanEnable, disable: scanDisable, activate: scanActivate, setIntervalMs: scanSetInterval } = useScanning();
@@ -350,55 +266,26 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // "loading" = cargando modelo ML y/o cámara por primera vez / tras parar
   const [loading, setLoading] = useState(false);
 
-  // ── Sesiones de calibración acumuladas ───────────────────────────────────
-  const [sessionCount, setSessionCount] = useState(() => getSessionCount());
-  // Actualizar el contador cuando termina una calibración (isCalibrating false→true→false)
-  useEffect(() => {
-    if (!isCalibrating) setSessionCount(getSessionCount());
-  }, [isCalibrating]);
-
-  // Botón CALIBRAR: dispara CalibrationScreen aunque la mirada esté activa
-  const wasActiveRef = useRef(false);
-  const handleCalibrate = useCallback(() => {
-    wasActiveRef.current = isActive;
-    startCalibration();
-  }, [isActive, startCalibration]);
-
   // ── Entrenamiento Maestro ─────────────────────────────────────────────────
   const [showTraining, setShowTraining] = useState(false);
 
-  // ── Bienvenida / Calibración inicial ────────────────────────────────────
+  // ── Bienvenida + autoajuste silencioso de centro (4 s) ──────────────────
   // Se ejecuta UNA SOLA VEZ por sesión (flag en sessionStorage) cuando la
-  // mirada se activa por primera vez.
-  //
-  //  • Sin calibración guardada → CalibrationScreen (9 puntos). Así el
-  //    primer uso en un dispositivo nuevo siempre queda bien calibrado.
-  //  • Con calibración guardada → WelcomePatient (4 s): carga el modelo
-  //    guardado y solo corrige el offset alpha para esta sesión.
-  //
-  // Si el cuidador cancela la calibración inicial, WELCOME_KEY se elimina
-  // para que el siguiente arranque de la mirada vuelva a ofrecerla.
+  // mirada se activa por primera vez tras aceptar el consentimiento. Esto
+  // SIEMPRE debe montarse — WelcomePatient no es solo un splash visual: en
+  // su efecto interno selecciona el mejor modelo de calibración, escala
+  // beta para cubrir toda la pantalla y corrige el offset alpha. Sin este
+  // paso el cursor queda comprimido/descentrado (ver SHOW_SPLASH abajo).
+  // SHOW_SPLASH solo controla si esos 4 s se muestran visualmente al
+  // paciente; la calibración corre igual con la pantalla oculta.
   const WELCOME_KEY = "vozuci-welcome-shown-v1";
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => {
-    if (!isActive) return;
-    if (sessionStorage.getItem(WELCOME_KEY)) return;
-
-    sessionStorage.setItem(WELCOME_KEY, "1");
-
-    if (!hasRealCalibration()) {
-      // No hay calibración de 9 puntos completada para este dispositivo
-      // (incluye datos legacy y guardados automáticamente por WelcomePatient).
-      // startCalibration() pone isActive:false e isCalibrating:true → monta
-      // CalibrationScreen. WELCOME_KEY ya está marcado, así que cuando isActive
-      // vuelva a true tras finishCalibration() este bloque no re-entra.
-      startCalibration();
-    } else {
-      // Calibración de 9 puntos completada en este dispositivo: WelcomePatient
-      // carga el modelo guardado y aplica solo corrección de offset alpha.
+    if (isActive && !sessionStorage.getItem(WELCOME_KEY)) {
+      sessionStorage.setItem(WELCOME_KEY, "1");
       setShowWelcome(true);
     }
-  }, [isActive, startCalibration]);
+  }, [isActive]);
 
   // ── Estabilización al cambiar de pantalla ────────────────────────────────
   // Los buffers de suavizado (ring-buffer MA + One-Euro) acumulan muestras de
@@ -510,27 +397,8 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
 
-      {/* Calibración 9 puntos */}
-      {isCalibrating && (
-        <CalibrationScreen
-          onCancel={() => {
-            if (wasActiveRef.current) {
-              // Recalibración desde barra lateral: volver al estado activo sin
-              // reiniciar la sesión. El modelo fusionado cargado al inicio de
-              // WelcomePatient sigue activo (clearCalibration lo limpió, pero
-              // activateFromProfile reactiva la detección con el perfil base;
-              // WelcomePatient ya no se volverá a mostrar esta sesión).
-              activateFromProfile();
-            } else {
-              // Calibración inicial cancelada: eliminar flag para que la próxima
-              // activación vuelva a ofrecer calibración.
-              sessionStorage.removeItem(WELCOME_KEY);
-              deactivate();
-              gazeTracker.stopCamera();
-            }
-          }}
-        />
-      )}
+      {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
+      {isCalibrating && <CalibrationScreen />}
 
       {/* Bienvenida del paciente + autoajuste silencioso de centro (4 s) */}
       {showWelcome && <WelcomePatient visible={SHOW_SPLASH} onDone={() => setShowWelcome(false)} />}
@@ -587,11 +455,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           <ScanTab
             active={scanActive}
             onToggle={() => scanActive ? scanDisable() : scanEnable()}
-            isPortrait={isPortrait}
-          />
-          <CalibTab
-            onCalibrate={handleCalibrate}
-            sessionCount={sessionCount}
             isPortrait={isPortrait}
           />
         </nav>
