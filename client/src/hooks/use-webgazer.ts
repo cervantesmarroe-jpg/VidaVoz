@@ -29,8 +29,8 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmark
 
 const DWELL_MS        = 2100;  // Fallback del tracker: 100 ms por encima del dwell de pantalla (2000 ms)
                                // para garantizar que el handler local gane la carrera y evitar doble activación.
-const SMOOTH_SAMPLES  = 50;    // tamaño fijo del ring-buffer MA
-const SMOOTH_WARMUP   = 20;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
+const SMOOTH_SAMPLES  = 30;    // tamaño fijo del ring-buffer MA
+const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (sin saltos al arranque)
 const BLINK_THRESHOLD    = 0.85;
 const BLINK_COOLDOWN     = 1200; // periodo refractario entre blink-clicks (ms)
 const BLINK_MIN_MS       = 200;  // parpadeo mínimo válido (ms) — ignora involuntarios
@@ -217,11 +217,9 @@ class OneEuroFilter {
 
 // ─── Snap-to-button ───────────────────────────────────────────────────────────
 // Si el cursor filtrado está a menos de `radius` px del centro de algún elemento
-// con clase .gaze-target O atributo [data-gaze-target="true"], lo atrae al centro.
-const GAZE_TARGET_SELECTOR = '[data-gaze-target="true"], .gaze-target';
-
+// con clase .gaze-target, lo atrae exactamente a ese centro.
 function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y: number } {
-  const targets = document.querySelectorAll<Element>(GAZE_TARGET_SELECTOR);
+  const targets = document.querySelectorAll<Element>('.gaze-target');
   let bestDist = radius;
   let bx = x, by = y;
   targets.forEach(el => {
@@ -235,10 +233,10 @@ function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y:
 }
 
 // ─── hasGazeTarget ────────────────────────────────────────────────────────────
-// Devuelve true si hay algún elemento [data-gaze-target] dentro de `radius` px.
+// Devuelve true si hay algún elemento .gaze-target dentro de `radius` px del punto.
 // Usado para validar si un parpadeo apunta a un botón real (Confianza).
 function hasGazeTarget(x: number, y: number, radius: number): boolean {
-  return Array.from(document.querySelectorAll<Element>(GAZE_TARGET_SELECTOR)).some(el => {
+  return Array.from(document.querySelectorAll<Element>('.gaze-target')).some(el => {
     const r  = el.getBoundingClientRect();
     const cx = r.left + r.width  / 2;
     const cy = r.top  + r.height / 2;
@@ -395,7 +393,7 @@ class GazeTracker {
             // sistemático hacia abajo respecto a la posición real de la mirada.
             const rawY = rawYModel + this.profileVerticalOffsetPx;
 
-            // ── Etapa 1: Ring-buffer MA(50) fijo — O(1), sin shift() ─────────
+            // ── Etapa 1: Ring-buffer MA(30) fijo — O(1), sin shift() ─────────
             // Primera muestra: pre-rellena todo el buffer con rawX/rawY para
             // evitar que el cursor salte desde (0,0) mientras se llena.
             if (this.smoothFill === 0) {
@@ -602,7 +600,12 @@ class GazeTracker {
 
     const fallback = CALIBRATIONS_LIBRARY[0];
     if (fallback) {
-      this.regressionModel = this.scaledModel(fallback.model);
+      this.regressionModel = {
+        alphaX: fallback.model.alphaX,
+        betaX:  fallback.model.betaX,
+        alphaY: fallback.model.alphaY,
+        betaY:  fallback.model.betaY,
+      };
       // Las sensibilidades efectivas las decide la librería; si la entrada no
       // las trae, mantenemos las del perfil UI como red de seguridad.
       this.profileSensX = (typeof fallback.model.sensitivityX === 'number')
@@ -616,7 +619,6 @@ class GazeTracker {
         `%c[GazeTracker]`,
         'color:#7DD3A8;font-weight:800',
         `Modo UI: ${profile.id} | Modelo calibración: ${fallback.id} (score ${fallback.score})`,
-        `| betaX escalado a pantalla: ${this.regressionModel.betaX.toFixed(1)}`,
       );
     } else {
       // Librería vacía: no caemos al placeholder del UI por diseño.
@@ -945,27 +947,6 @@ class GazeTracker {
     return this.silentSamples.slice();
   }
 
-  // ── Normaliza betaX/Y de un modelo de librería al tamaño de pantalla actual ─
-  // Los modelos de la librería tienen betaX/Y en píxeles absolutos del dispositivo
-  // de calibración. Usamos sensitivityX = betaX / trainWidth (valor adimensional
-  // guardado junto al modelo) para reconstruir los betas correctos para el viewport
-  // actual: betaX = sensitivityX * window.innerWidth.
-  // Si el modelo no trae sensibilidades (modelo legacy), se usan los betas tal cual.
-  private scaledModel(m: {
-    alphaX: number; betaX: number;
-    alphaY: number; betaY: number;
-    sensitivityX?: number; sensitivityY?: number;
-  }): RegressionModel {
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    return {
-      alphaX: m.alphaX,
-      betaX: typeof m.sensitivityX === 'number' ? m.sensitivityX * W * 0.5 : m.betaX,
-      alphaY: m.alphaY,
-      betaY: typeof m.sensitivityY === 'number' ? -m.sensitivityY * H * 0.5 : m.betaY,
-    };
-  }
-
   // Aplica un modelo de calibración al estado de SESIÓN del tracker.
   // Reemplaza regressionModel y, opcionalmente, las sensibilidades de sesión
   // (profileSensX/Y) si vienen en el modelo. Nunca toca GAZE_PROFILES ni el
@@ -976,7 +957,12 @@ class GazeTracker {
     alphaY: number; betaY: number;
     sensitivityX?: number; sensitivityY?: number;
   }): void {
-    this.regressionModel = this.scaledModel(m);
+    this.regressionModel = {
+      alphaX: m.alphaX,
+      betaX:  m.betaX,
+      alphaY: m.alphaY,
+      betaY:  m.betaY,
+    };
     if (typeof m.sensitivityX === 'number') this.profileSensX = m.sensitivityX;
     if (typeof m.sensitivityY === 'number') this.profileSensY = m.sensitivityY;
   }
@@ -995,14 +981,6 @@ class GazeTracker {
 
     this.regressionModel.alphaX += errorX * PHASE2_LEARNING_RATE;
     this.regressionModel.alphaY += errorY * PHASE2_LEARNING_RATE;
-  }
-
-  // Borra los puntos de entrenamiento acumulados sin tocar el modelo activo.
-  // Llamar antes de iniciar una nueva ronda de calibración de esquinas para
-  // que finalizeTraining() trabaje solo con los datos recién recogidos.
-  resetTrainingData() {
-    this.trainingData   = [];
-    this.continuousData = [];
   }
 
   // Métodos legacy (UsaCalibrationOverlay los llama)
@@ -1061,7 +1039,7 @@ class GazeTracker {
 
     // Flash del botón activado
     const topEl  = document.elementFromPoint(snapped.x, snapped.y);
-    const gazeEl = topEl?.closest<HTMLElement>('[data-gaze-target="true"], .gaze-target') ?? null;
+    const gazeEl = topEl?.closest<HTMLElement>('.gaze-target') ?? null;
     if (gazeEl) {
       gazeEl.classList.add('blink-activated');
       setTimeout(() => gazeEl.classList.remove('blink-activated'), 500);

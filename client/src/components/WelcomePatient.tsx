@@ -20,12 +20,9 @@ const SAMPLING_HZ      = 10;
 const VALID_RATE_MIN   = 0.5;
 
 // ── Selector del mejor modelo ──────────────────────────────────────────────
-// Recorre TODAS las entradas de la librería sin filtrar por profile.
-// Para cada modelo normaliza el alpha al centro del viewport actual (igual
-// que hará applySilentCenterCalibration después) y evalúa la dispersión
-// de las predicciones alrededor del centro. Así la selección mide la
-// calidad de betaX/Y (pendiente de la curva ojo→pantalla) en lugar de
-// la casualidad del offset alpha del dispositivo de entrenamiento.
+// Recorre TODAS las entradas de la librería sin filtrar por profile. Para
+// cada modelo predice (alpha + beta * eye) la posición de pantalla que
+// produciría cada muestra ocular y compara con el centro real del viewport.
 // El error final por modelo es MSE / score: a igual MSE gana el modelo con
 // mayor score (más respaldado). Devuelve null si no hay muestras o librería.
 function selectBestModel(
@@ -36,29 +33,18 @@ function selectBestModel(
 ): { entry: CalibrationLibraryEntry; mse: number; weightedError: number } | null {
   if (library.length === 0 || samples.length === 0) return null;
 
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-
-  // Media ocular del paciente mientras mira al centro (≈ su gaze neutro)
-  const meanEyeX = samples.reduce((s, d) => s + d.eyeX, 0) / samples.length;
-  const meanEyeY = samples.reduce((s, d) => s + d.eyeY, 0) / samples.length;
-
   let bestEntry:    CalibrationLibraryEntry | null = null;
   let bestWeighted = Infinity;
   let bestMse      = Infinity;
 
   for (const entry of library) {
     const m = entry.model;
-    // Beta escalado al viewport actual (mismo cálculo que scaledModel en GazeTracker)
-    const betaX = typeof m.sensitivityX === 'number' ? m.sensitivityX * W : m.betaX;
-    const betaY = typeof m.sensitivityY === 'number' ? -m.sensitivityY * H : m.betaY;
-    // Alpha normalizado: el modelo predice exactamente cx/cy para el gaze neutro
-    const normAlphaX = centerX - betaX * meanEyeX;
-    const normAlphaY = centerY - betaY * meanEyeY;
     let sumSq = 0;
     for (const s of samples) {
-      const dx = normAlphaX + betaX * s.eyeX - centerX;
-      const dy = normAlphaY + betaY * s.eyeY - centerY;
+      const px = m.alphaX + m.betaX * s.eyeX;
+      const py = m.alphaY + m.betaY * s.eyeY;
+      const dx = px - centerX;
+      const dy = py - centerY;
       sumSq += dx * dx + dy * dy;
     }
     const mse      = sumSq / samples.length;
