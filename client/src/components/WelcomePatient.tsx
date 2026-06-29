@@ -161,10 +161,16 @@ export default function WelcomePatient({ onDone, visible = true }: WelcomePatien
 
         // Guardar el modelo resultante (con alpha ya corregido) para que
         // la próxima sesión arranque directamente con él.
+        // Se preserva el source original: si ya era 'calibrationScreen' no
+        // se degrada a 'welcomePatient', para que FullscreenLayout siga
+        // saltando la calibración de 9 puntos en futuras sesiones.
         const currentModel = gazeTracker.getModel();
         if (currentModel) {
           const W = window.innerWidth;
           const H = window.innerHeight;
+          const preservedSource = savedCalib?.source === 'calibrationScreen'
+            ? 'calibrationScreen'
+            : 'welcomePatient';
           saveDeviceCalibration({
             alphaX:       currentModel.alphaX,
             betaX:        currentModel.betaX,
@@ -172,7 +178,7 @@ export default function WelcomePatient({ onDone, visible = true }: WelcomePatien
             betaY:        currentModel.betaY,
             sensitivityX: +(currentModel.betaX / W).toFixed(4),
             sensitivityY: +(-currentModel.betaY / H).toFixed(4),
-          });
+          }, preservedSource);
         }
       } else {
         console.log(

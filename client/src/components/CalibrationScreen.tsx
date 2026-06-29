@@ -259,7 +259,7 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
       `αX=${model.alphaX.toFixed(1)} βX=${model.betaX.toFixed(1)}`,
       `αY=${model.alphaY.toFixed(1)} βY=${model.betaY.toFixed(1)}`,
     );
-    saveDeviceCalibration(model);
+    saveDeviceCalibration(model, 'calibrationScreen');
     setPhase("success");
   }, [phase]);
 

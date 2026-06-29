@@ -19,6 +19,11 @@ export interface DeviceCalibration {
   sensitivityX: number;  // betaX / screenW (valor negativo)
   sensitivityY: number;  // -betaY / screenH (valor positivo)
   savedAt:      string;  // ISO 8601
+  /** 'calibrationScreen' = calibración de 9 puntos completada por el cuidador.
+   *  'welcomePatient'    = selección automática de librería (menos precisa).
+   *  undefined           = datos legacy sin campo source.
+   *  Solo 'calibrationScreen' es suficiente para omitir la calibración inicial. */
+  source?: 'calibrationScreen' | 'welcomePatient';
 }
 
 export interface CalibrationModel {
@@ -30,7 +35,10 @@ export interface CalibrationModel {
   sensitivityY: number;
 }
 
-export function saveDeviceCalibration(model: CalibrationModel): void {
+export function saveDeviceCalibration(
+  model: CalibrationModel,
+  source: 'calibrationScreen' | 'welcomePatient' = 'welcomePatient',
+): void {
   try {
     const entry: DeviceCalibration = {
       ...model,
@@ -38,6 +46,7 @@ export function saveDeviceCalibration(model: CalibrationModel): void {
       screenW:   window.innerWidth,
       screenH:   window.innerHeight,
       savedAt:   new Date().toISOString(),
+      source,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entry));
     console.log(
@@ -78,6 +87,13 @@ export function loadDeviceCalibration(): DeviceCalibration | null {
 
 export function clearDeviceCalibration(): void {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+}
+
+// Devuelve true SOLO si la calibración de 9 puntos se completó en este
+// dispositivo. Datos legacy (sin campo source) o guardados por WelcomePatient
+// devuelven false → CalibrationScreen debe mostrarse igualmente.
+export function hasRealCalibration(): boolean {
+  return loadDeviceCalibration()?.source === 'calibrationScreen';
 }
 
 // Adapta la calibración guardada a la pantalla actual.

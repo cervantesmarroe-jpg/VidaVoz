@@ -13,7 +13,7 @@ import {
 import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useWebGazer, useWebGazerStore, gazeTracker } from "@/hooks/use-webgazer";
-import { loadDeviceCalibration } from "@/lib/deviceCalibration";
+import { loadDeviceCalibration, hasRealCalibration } from "@/lib/deviceCalibration";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
@@ -290,15 +290,16 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
     sessionStorage.setItem(WELCOME_KEY, "1");
 
-    if (!loadDeviceCalibration()) {
-      // Primera visita o dispositivo diferente: pedir calibración 9 puntos.
-      // startCalibration() pone isActive:false e isCalibrating:true, lo que
-      // monta CalibrationScreen. WELCOME_KEY ya está marcado, así que cuando
-      // isActive vuelva a true tras finishCalibration() este bloque no re-entra.
+    if (!hasRealCalibration()) {
+      // No hay calibración de 9 puntos completada para este dispositivo
+      // (incluye datos legacy y guardados automáticamente por WelcomePatient).
+      // startCalibration() pone isActive:false e isCalibrating:true → monta
+      // CalibrationScreen. WELCOME_KEY ya está marcado, así que cuando isActive
+      // vuelva a true tras finishCalibration() este bloque no re-entra.
       startCalibration();
     } else {
-      // Calibración guardada: WelcomePatient la cargará y aplicará solo la
-      // corrección de offset alpha para esta sesión.
+      // Calibración de 9 puntos completada en este dispositivo: WelcomePatient
+      // carga el modelo guardado y aplica solo corrección de offset alpha.
       setShowWelcome(true);
     }
   }, [isActive, startCalibration]);
