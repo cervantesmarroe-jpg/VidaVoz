@@ -140,6 +140,7 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
   return (
     <button
       ref={btnRef}
+      className="gaze-target"
       data-gaze-target="true"
       data-testid={`button-msg-${id}`}
       onClick={() => { cancelDwell(); fire(); }}
@@ -259,6 +260,7 @@ function NavArrowButton({ page, totalPages, onNext }: {
   return (
     <button
       ref={btnRef}
+      className="gaze-target"
       data-gaze-target="true"
       onClick={() => { cancelDwell(); onNext(); }}
       onPointerEnter={startDwell}
