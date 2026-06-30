@@ -1,4 +1,4 @@
-import { useRef, useCallback, ElementType } from "react";
+import { useRef, useCallback, useState, ElementType } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
@@ -85,6 +85,8 @@ const MSGS: {
     bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
   },
 ];
+
+const PAGE_SIZE = 6;
 
 // ── Botón rectangular pastel ──────────────────────────────────────────────────
 interface MsgBtnProps {
@@ -218,21 +220,152 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
   );
 }
 
+// ── Botón de navegación de página ─────────────────────────────────────────────
+function NavArrowButton({ page, totalPages, onNext }: {
+  page: number; totalPages: number; onNext: () => void;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barRef   = useRef<HTMLDivElement>(null);
+  const btnRef   = useRef<HTMLButtonElement>(null);
+
+  const startDwell = useCallback(() => {
+    if (timerRef.current) return;
+    if (btnRef.current) {
+      btnRef.current.style.background = "#BAE6FD";
+      btnRef.current.style.boxShadow  = "0 0 0 2.5px #fbbf24, 0 4px 14px rgba(251,191,36,0.22)";
+    }
+    const bar = barRef.current;
+    if (bar) {
+      bar.style.transition = "none"; bar.style.width = "0%";
+      void bar.getBoundingClientRect();
+      bar.style.transition = `width ${MSG_DWELL_MS}ms linear`;
+      bar.style.width = "100%";
+    }
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null; cancelDwell();
+    }, MSG_DWELL_MS);
+  }, []);
+
+  const cancelDwell = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (btnRef.current) {
+      btnRef.current.style.background = "#E0F2FE";
+      btnRef.current.style.boxShadow  = "";
+    }
+    const bar = barRef.current;
+    if (bar) { bar.style.transition = "none"; bar.style.width = "0%"; }
+  }, []);
+
+  return (
+    <button
+      ref={btnRef}
+      data-gaze-target="true"
+      onClick={() => { cancelDwell(); onNext(); }}
+      onPointerEnter={startDwell}
+      onPointerLeave={cancelDwell}
+      aria-label={`Página ${page + 1} de ${totalPages}. Ir a la siguiente`}
+      style={{
+        position: "relative",
+        width: "68px",
+        flexShrink: 0,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "12px",
+        background: "#E0F2FE",
+        border: "1.5px solid #BAE6FD",
+        borderLeft: "5px solid #0EA5E9",
+        borderRadius: "14px",
+        cursor: "pointer",
+        userSelect: "none",
+        touchAction: "manipulation",
+        overflow: "hidden",
+        padding: "12px 4px",
+        transition: "background 0.18s",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+      }}
+    >
+      {/* Indicador de página: puntos */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+        {Array.from({ length: totalPages }, (_, i) => (
+          <div key={i} style={{
+            width: "9px", height: "9px", borderRadius: "50%",
+            background: i === page ? "#0369A1" : "#BAE6FD",
+            transition: "background 0.2s",
+          }} />
+        ))}
+      </div>
+
+      {/* Chevron derecho */}
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+        stroke="#0369A1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        aria-hidden="true">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+
+      {/* Etiqueta vertical */}
+      <span style={{
+        fontFamily: "'Lexend', sans-serif",
+        fontSize: "0.62rem",
+        fontWeight: 800,
+        color: "#0369A1",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        writingMode: "vertical-rl",
+        textOrientation: "mixed",
+        transform: "rotate(180deg)",
+      }}>
+        MÁS
+      </span>
+
+      {/* Barra dwell dorada */}
+      <div ref={barRef} style={{
+        position: "absolute", bottom: 0, left: 0,
+        height: "3.5px", width: "0%",
+        background: "#fbbf24",
+        borderRadius: "0 0 14px 14px",
+      }} />
+    </button>
+  );
+}
+
 // ── Página ───────────────────────────────────────────────────────────────────
 export default function Messages() {
+  const [page, setPage] = useState(0);
+  const totalPages  = Math.ceil(MSGS.length / PAGE_SIZE);
+  const visibleMsgs = MSGS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const nextPage = useCallback(() => {
+    setPage(p => (p + 1) % totalPages);
+  }, [totalPages]);
+
   return (
     <FullscreenLayout>
-      <div className="msg-grid-container" style={{
+      <div style={{
+        display: "flex",
         gap: "8px",
         padding: "10px",
         height: "100%",
         boxSizing: "border-box",
         background: "#FAFAFA",
-        overflowY: "auto",
       }}>
-        {MSGS.map((m) => (
-          <MessageButton key={m.id} {...m} />
-        ))}
+        {/* Cuadrícula 3×2 — 6 mensajes visibles */}
+        <div className="msg-grid-container" style={{
+          flex: 1,
+          gap: "8px",
+          height: "100%",
+        }}>
+          {visibleMsgs.map((m) => (
+            <MessageButton key={m.id} {...m} />
+          ))}
+        </div>
+
+        {/* Flecha de navegación (solo si hay más de una página) */}
+        {totalPages > 1 && (
+          <NavArrowButton page={page} totalPages={totalPages} onNext={nextPage} />
+        )}
       </div>
     </FullscreenLayout>
   );

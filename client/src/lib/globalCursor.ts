@@ -17,7 +17,7 @@
 //   isTouchLocked()           – true durante los 500 ms post-toque (para que gaze ceda)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const CURSOR_SIZE    = 32;   // px — diámetro del círculo
+const CURSOR_SIZE    = 42;   // px — diámetro del círculo
 const HALF           = CURSOR_SIZE / 2;
 const TOUCH_LOCK_MS  = 500;  // ms — cuánto tiempo el gaze cede al toque
 

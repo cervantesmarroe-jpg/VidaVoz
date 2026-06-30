@@ -317,7 +317,7 @@ input[type=range].gaze-slider::-moz-range-thumb {
 .msg-grid-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(5, 1fr);
+  grid-template-rows: repeat(3, 1fr);
 }
 
 /* Portrait — botones altos: blancos fáciles para eye-tracking */
@@ -335,7 +335,7 @@ input[type=range].gaze-slider::-moz-range-thumb {
     grid-template-rows: 1fr;
   }
   .msg-grid-container {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     grid-template-rows: 1fr 1fr;
   }
   .quad-grid-container > *,
