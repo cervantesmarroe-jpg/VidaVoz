@@ -96,16 +96,13 @@ const BETA_SCALE_MIN_VARIANCE     = 0.05; // si rango < esto → no escalar
 const BETA_SCALE_MIN              = 0.5;  // recorte inferior global (anti-shrink); puede sobreescribirse por perfil
 const BETA_SCALE_MAX              = 2.0;  // recorte superior — reducido para evitar sobreamplificación hacia los extremos
 
-// ── Modo experimental: fusión iris + blendshapes (?modo=iris) ─────────────────
-// Activar añadiendo ?modo=iris a la URL. No afecta a usuarios sin ese parámetro.
+// ── Fusión iris + blendshapes (activa siempre) ────────────────────────────────
 // IRIS_WEIGHT: fracción de señal iris en la fusión (0 = solo blendshapes, 1 = solo iris).
-// IRIS_SCALE_{X,Y}: escalan la posición normalizada del iris al rango típico de eyeX/eyeY
-// (~0.5 unidades). Ajustar si el cursor reacciona demasiado poco o demasiado al iris.
-const IRIS_WEIGHT  = 0.35;  // 35% iris + 65% blendshapes (conservador para primer experimento)
+// IRIS_SCALE_{X,Y}: escalan la posición normalizada del iris al rango típico de eyeX/eyeY.
+const IRIS_WEIGHT  = 0.35;  // 35% iris + 65% blendshapes
 const IRIS_SCALE_X = 0.60;  // escala horizontal iris → espacio eyeX
 const IRIS_SCALE_Y = 0.60;  // escala vertical iris → espacio eyeY
-const IRIS_MODE_ENABLED = (typeof window !== 'undefined')
-  && new URLSearchParams(window.location.search).get('modo') === 'iris';
+const IRIS_MODE_ENABLED = true;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
@@ -395,12 +392,10 @@ class GazeTracker {
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: false,
       });
-      if (IRIS_MODE_ENABLED) {
-        console.log(
-          '%c[GazeTracker] MODO IRIS EXPERIMENTAL ACTIVO — fusión blendshapes (65%) + iris (35%)',
-          'color:#F59E0B;font-weight:800',
-        );
-      }
+      console.log(
+        '%c[GazeTracker] Fusión iris+blendshapes activa — iris 35% / blendshapes 65%',
+        'color:#7DD3A8;font-weight:800',
+      );
     } catch (err) { console.warn('GazeTracker: init failed', err); }
   }
 
@@ -496,10 +491,10 @@ class GazeTracker {
             // Diagnóstico: muestra el tamaño real del buffer en consola cada 3 s
             const nowDebug = performance.now();
             if (nowDebug - this.debugLogAt > 3000) {
-              const modeTag = IRIS_MODE_ENABLED
-                ? `[IRIS+BS iris=${irisSignal ? `eyeX:${irisSignal.irisEyeX.toFixed(2)},eyeY:${irisSignal.irisEyeY.toFixed(2)}` : 'null'}]`
-                : '[BS]';
-              console.log(`[VozUCI] ${modeTag} Buffer MA:`, this.smoothFill, '/ 30 muestras | One-Euro minCutoff:', OEF_MIN_CUTOFF, 'Hz');
+              const irisTag = irisSignal
+                ? `eyeX:${irisSignal.irisEyeX.toFixed(2)},eyeY:${irisSignal.irisEyeY.toFixed(2)}`
+                : 'sin iris';
+              console.log(`[VozUCI] [IRIS+BS ${irisTag}] Buffer MA:`, this.smoothFill, '/ 30 muestras | One-Euro minCutoff:', OEF_MIN_CUTOFF, 'Hz');
               this.debugLogAt = nowDebug;
             }
 
