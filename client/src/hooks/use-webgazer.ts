@@ -96,6 +96,17 @@ const BETA_SCALE_MIN_VARIANCE     = 0.05; // si rango < esto → no escalar
 const BETA_SCALE_MIN              = 0.5;  // recorte inferior global (anti-shrink); puede sobreescribirse por perfil
 const BETA_SCALE_MAX              = 2.0;  // recorte superior — reducido para evitar sobreamplificación hacia los extremos
 
+// ── Modo experimental: fusión iris + blendshapes (?modo=iris) ─────────────────
+// Activar añadiendo ?modo=iris a la URL. No afecta a usuarios sin ese parámetro.
+// IRIS_WEIGHT: fracción de señal iris en la fusión (0 = solo blendshapes, 1 = solo iris).
+// IRIS_SCALE_{X,Y}: escalan la posición normalizada del iris al rango típico de eyeX/eyeY
+// (~0.5 unidades). Ajustar si el cursor reacciona demasiado poco o demasiado al iris.
+const IRIS_WEIGHT  = 0.35;  // 35% iris + 65% blendshapes (conservador para primer experimento)
+const IRIS_SCALE_X = 0.60;  // escala horizontal iris → espacio eyeX
+const IRIS_SCALE_Y = 0.60;  // escala vertical iris → espacio eyeY
+const IRIS_MODE_ENABLED = (typeof window !== 'undefined')
+  && new URLSearchParams(window.location.search).get('modo') === 'iris';
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
 type NormalizedLandmark  = { x: number; y: number; z: number };
@@ -165,10 +176,18 @@ function updateGazePoint(
   model:       RegressionModel | null,
   sensX:       number,
   sensY:       number,
+  irisSignal?: { irisEyeX: number; irisEyeY: number } | null,
 ): { rawX: number; rawY: number } {
   if (model) {
-    const eyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
-    const eyeY = (eyeLookUpL  - eyeLookDownL);
+    const bsEyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
+    const bsEyeY = (eyeLookUpL  - eyeLookDownL);
+    // Modo iris: fusión ponderada blendshape + posición iris (experimental)
+    const eyeX = irisSignal
+      ? (1 - IRIS_WEIGHT) * bsEyeX + IRIS_WEIGHT * irisSignal.irisEyeX
+      : bsEyeX;
+    const eyeY = irisSignal
+      ? (1 - IRIS_WEIGHT) * bsEyeY + IRIS_WEIGHT * irisSignal.irisEyeY
+      : bsEyeY;
     return {
       rawX: model.alphaX + model.betaX * eyeX,
       rawY: model.alphaY + model.betaY * eyeY,
@@ -242,6 +261,64 @@ function hasGazeTarget(x: number, y: number, radius: number): boolean {
     const cy = r.top  + r.height / 2;
     return Math.hypot(x - cx, y - cy) <= radius;
   });
+}
+
+// ─── computeIrisSignal ────────────────────────────────────────────────────────
+// Extrae la posición del centro del iris de cada ojo respecto a las esquinas y
+// párpados, y la convierte a señales eyeX/eyeY en el mismo espacio de signo que
+// los blendshapes (positivo = mirar izquierda/arriba).
+//
+// Índices canónicos del FaceLandmarker (478 puntos):
+//   Ojo izquierdo en imagen (= ojo derecho del paciente, frontal):
+//     33=esquina exterior  133=esquina interior  159=párpado superior  145=párpado inferior
+//     468=centro iris
+//   Ojo derecho en imagen (= ojo izquierdo del paciente):
+//     362=esquina exterior  263=esquina interior  386=párpado superior  374=párpado inferior
+//     473=centro iris
+//
+// Convención de signo alineada con blendshapes: eyeX>0 → mirar izquierda,
+// eyeX<0 → mirar derecha; eyeY>0 → mirar arriba, eyeY<0 → mirar abajo.
+function computeIrisSignal(
+  landmarks: NormalizedLandmark[],
+): { irisEyeX: number; irisEyeY: number } | null {
+  const lIris = landmarks[468];
+  const rIris = landmarks[473];
+  if (!lIris || !rIris) return null;
+
+  // Ojo izquierdo (imagen)
+  const lOuter = landmarks[33];  const lInner = landmarks[133];
+  const lTop   = landmarks[159]; const lBot   = landmarks[145];
+  // Ojo derecho (imagen)
+  const rOuter = landmarks[362]; const rInner = landmarks[263];
+  const rTop   = landmarks[386]; const rBot   = landmarks[374];
+
+  if (!lOuter || !lInner || !lTop || !lBot || !rOuter || !rInner || !rTop || !rBot) return null;
+
+  const lW = lInner.x - lOuter.x;  // diferencia x positiva (inner > outer en ojo izq)
+  const lH = lBot.y   - lTop.y;
+  const rW = rOuter.x - rInner.x;  // diferencia x positiva (outer > inner en ojo dcho)
+  const rH = rBot.y   - rTop.y;
+
+  // Geometría degenerada: ojo cerrado o fuera de frame
+  if (lW < 0.005 || lH < 0.005 || rW < 0.005 || rH < 0.005) return null;
+
+  // Posición normalizada del iris dentro de cada ojo (0=exterior, 1=interior; 0=arriba, 1=abajo)
+  const lNormX = (lIris.x - lOuter.x) / lW;  // 0=mirar izq, 1=mirar dcha
+  const lNormY = (lIris.y - lTop.y)   / lH;  // 0=mirar arriba, 1=mirar abajo
+  const rNormX = (rIris.x - rInner.x) / rW;  // 0=mirar izq, 1=mirar dcha
+  const rNormY = (rIris.y - rTop.y)   / rH;
+
+  // Convertir a señal centrada con mismo signo que blendshapes, escalada al rango eyeX/eyeY
+  const lEyeX = (0.5 - lNormX) * 2 * IRIS_SCALE_X;
+  const lEyeY = (0.5 - lNormY) * 2 * IRIS_SCALE_Y;
+  const rEyeX = (0.5 - rNormX) * 2 * IRIS_SCALE_X;
+  const rEyeY = (0.5 - rNormY) * 2 * IRIS_SCALE_Y;
+
+  // Media de ambos ojos → más robustez ante oclusión parcial o asimetría de iluminación
+  return {
+    irisEyeX: (lEyeX + rEyeX) / 2,
+    irisEyeY: (lEyeY + rEyeY) / 2,
+  };
 }
 
 // Sonido de blink-click desactivado — feedback solo visual (cursor verde)
@@ -318,6 +395,12 @@ class GazeTracker {
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: false,
       });
+      if (IRIS_MODE_ENABLED) {
+        console.log(
+          '%c[GazeTracker] MODO IRIS EXPERIMENTAL ACTIVO — fusión blendshapes (65%) + iris (35%)',
+          'color:#F59E0B;font-weight:800',
+        );
+      }
     } catch (err) { console.warn('GazeTracker: init failed', err); }
   }
 
@@ -383,10 +466,13 @@ class GazeTracker {
             const eyeLookDownL = find('eyeLookDownLeft');
             const headRotX     = landmarks[1].x - landmarks[4].x;
 
+            const irisSignal = IRIS_MODE_ENABLED ? computeIrisSignal(landmarks) : null;
+
             const { rawX, rawY: rawYModel } = updateGazePoint(
               eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL,
               headRotX, this.regressionModel,
               this.profileSensX, this.profileSensY,
+              irisSignal,
             );
             // Corregir sesgo vertical del perfil (negativo = desplaza cursor hacia arriba).
             // Compensa el ángulo de la cámara frontal del móvil que introduce un offset
@@ -410,7 +496,10 @@ class GazeTracker {
             // Diagnóstico: muestra el tamaño real del buffer en consola cada 3 s
             const nowDebug = performance.now();
             if (nowDebug - this.debugLogAt > 3000) {
-              console.log('[VozUCI] Buffer MA:', this.smoothFill, '/ 30 muestras | One-Euro minCutoff:', OEF_MIN_CUTOFF, 'Hz');
+              const modeTag = IRIS_MODE_ENABLED
+                ? `[IRIS+BS iris=${irisSignal ? `eyeX:${irisSignal.irisEyeX.toFixed(2)},eyeY:${irisSignal.irisEyeY.toFixed(2)}` : 'null'}]`
+                : '[BS]';
+              console.log(`[VozUCI] ${modeTag} Buffer MA:`, this.smoothFill, '/ 30 muestras | One-Euro minCutoff:', OEF_MIN_CUTOFF, 'Hz');
               this.debugLogAt = nowDebug;
             }
 
