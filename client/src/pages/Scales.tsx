@@ -113,6 +113,7 @@ interface ScaleBtnProps {
 function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnter, onSelect }: ScaleBtnProps) {
   return (
     <div
+      className="gaze-target"
       data-gaze-target="true"
       data-testid={testId}
       onPointerEnter={onEnter}

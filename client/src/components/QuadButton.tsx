@@ -70,6 +70,7 @@ export function QuadButton({
   return (
     <button
       ref={btnRef}
+      className="gaze-target"
       data-gaze-target="true"
       data-testid={testId}
       onClick={() => { cancelDwell(); fire(); }}
