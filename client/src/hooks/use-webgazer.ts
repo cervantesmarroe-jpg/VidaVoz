@@ -11,6 +11,7 @@ import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/ga
 //   Los placeholders model:{...} de gazeProfiles.ts no se usan ya como
 //   coeficientes — solo sirven como ADN histórico de referencia.
 import calibrationsLibraryRaw from '../../calibrations_library.json';
+import { record as recordIrisActivation } from '@/lib/irisWeightSync';
 export interface CalibrationLibraryEntry {
   id: string;
   profile: string;          // 'mobile' | 'tablet' — informativo, NO se filtra
@@ -97,12 +98,21 @@ const BETA_SCALE_MIN              = 0.5;  // recorte inferior global (anti-shrin
 const BETA_SCALE_MAX              = 2.0;  // recorte superior — reducido para evitar sobreamplificación hacia los extremos
 
 // ── Fusión iris + blendshapes (activa siempre) ────────────────────────────────
-// IRIS_WEIGHT: fracción de señal iris en la fusión (0 = solo blendshapes, 1 = solo iris).
-// IRIS_SCALE_{X,Y}: escalan la posición normalizada del iris al rango típico de eyeX/eyeY.
-const IRIS_WEIGHT  = 0.35;  // 35% iris + 65% blendshapes
-const IRIS_SCALE_X = 0.60;  // escala horizontal iris → espacio eyeX
-const IRIS_SCALE_Y = 0.60;  // escala vertical iris → espacio eyeY
+// irisWeight se inicializa en 0.35 y se actualiza desde Supabase al arrancar
+// la app (vía irisWeightSync.loadAndApply → setIrisWeight).
+// IRIS_SCALE_{X,Y}: escalan la posición normalizada del iris al rango eyeX/eyeY.
+let irisWeight     = 0.35;  // 35% iris + 65% blendshapes (sobrescrito por Supabase)
+const IRIS_SCALE_X = 0.60;
+const IRIS_SCALE_Y = 0.60;
 const IRIS_MODE_ENABLED = true;
+
+export function setIrisWeight(w: number): void {
+  irisWeight = Math.max(0, Math.min(1, w));
+  console.log(
+    `%c[GazeTracker] IRIS_WEIGHT actualizado desde Supabase → ${irisWeight.toFixed(3)}`,
+    'color:#7DD3A8;font-weight:700',
+  );
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type BlendshapeCategory  = { categoryName: string; score: number };
@@ -178,12 +188,12 @@ function updateGazePoint(
   if (model) {
     const bsEyeX = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
     const bsEyeY = (eyeLookUpL  - eyeLookDownL);
-    // Modo iris: fusión ponderada blendshape + posición iris (experimental)
+    // Fusión ponderada blendshape + iris (peso actualizable desde Supabase)
     const eyeX = irisSignal
-      ? (1 - IRIS_WEIGHT) * bsEyeX + IRIS_WEIGHT * irisSignal.irisEyeX
+      ? (1 - irisWeight) * bsEyeX + irisWeight * irisSignal.irisEyeX
       : bsEyeX;
     const eyeY = irisSignal
-      ? (1 - IRIS_WEIGHT) * bsEyeY + IRIS_WEIGHT * irisSignal.irisEyeY
+      ? (1 - irisWeight) * bsEyeY + irisWeight * irisSignal.irisEyeY
       : bsEyeY;
     return {
       rawX: model.alphaX + model.betaX * eyeX,
@@ -375,6 +385,11 @@ class GazeTracker {
   private blinkFrozenY    = -1;
   private blinkUnfreezeAt = 0;
 
+  // Últimas señales brutas del frame — para recordActivation() en la activación
+  private lastBsEyeX    = 0;
+  private lastBsEyeY    = 0;
+  private lastIrisSignal: { irisEyeX: number; irisEyeY: number } | null = null;
+
   private gazeListeners:  Set<GazeCallback>  = new Set();
   private blinkListeners:     Set<BlinkCallback> = new Set();
   private scanBlinkListeners: Set<() => void>   = new Set();
@@ -462,6 +477,11 @@ class GazeTracker {
             const headRotX     = landmarks[1].x - landmarks[4].x;
 
             const irisSignal = IRIS_MODE_ENABLED ? computeIrisSignal(landmarks) : null;
+
+            // Guardar señales brutas para recordActivation() al completar dwell
+            this.lastBsEyeX    = (eyeLookOutL - eyeLookInL) + (headRotX * 2);
+            this.lastBsEyeY    = (eyeLookUpL  - eyeLookDownL);
+            this.lastIrisSignal = irisSignal;
 
             const { rawX, rawY: rawYModel } = updateGazePoint(
               eyeLookOutL, eyeLookInL, eyeLookUpL, eyeLookDownL,
@@ -1067,6 +1087,30 @@ class GazeTracker {
     this.regressionModel.alphaY += errorY * PHASE2_LEARNING_RATE;
   }
 
+  // Registra una activación gaze en el buffer de irisWeightSync para que el
+  // servidor pueda calcular el peso iris óptimo con datos acumulados.
+  recordActivation(targetPxX: number, targetPxY: number): void {
+    const model = this.regressionModel;
+    const iris  = this.lastIrisSignal;
+    if (!model || !iris) return;
+    if (Math.abs(model.betaX) < 0.001 || Math.abs(model.betaY) < 0.001) return;
+
+    const eyeTargetX = (targetPxX - model.alphaX) / model.betaX;
+    const eyeTargetY = (targetPxY - model.alphaY) / model.betaY;
+    // Filtrar valores aberrantes (señal fuera del rango anatómico razonable)
+    if (Math.abs(eyeTargetX) > 5 || Math.abs(eyeTargetY) > 5) return;
+
+    recordIrisActivation({
+      deviceType: this.activeProfile.id,
+      bsEyeX:    this.lastBsEyeX,
+      irisEyeX:  iris.irisEyeX,
+      eyeTargetX,
+      bsEyeY:    this.lastBsEyeY,
+      irisEyeY:  iris.irisEyeY,
+      eyeTargetY,
+    });
+  }
+
   // Métodos legacy (UsaCalibrationOverlay los llama)
   computeCalibration() {
     if (this.trainingData.length >= 4) {
@@ -1390,6 +1434,7 @@ export function useWebGazer() {
       gazeTracker.recordClickCalibration(tcx, tcy);
       if (cursorX !== undefined && cursorY !== undefined) {
         gazeTracker.learnFromTarget(tcx, tcy, cursorX, cursorY);
+        gazeTracker.recordActivation(tcx, tcy);
       }
       el.click();
       resetProgress(el);

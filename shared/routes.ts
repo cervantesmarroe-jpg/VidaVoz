@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertMessageSchema, messages } from './schema';
+import { insertMessageSchema, insertIrisFeedbackSchema, messages } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -15,6 +15,23 @@ export const errorSchemas = {
 };
 
 export const api = {
+  irisFeedback: {
+    push: {
+      method: 'POST' as const,
+      path: '/api/iris-feedback' as const,
+      input: z.array(insertIrisFeedbackSchema).max(100),
+      responses: { 201: z.object({ inserted: z.number() }) },
+    },
+  },
+  irisWeight: {
+    get: {
+      method: 'GET' as const,
+      path: '/api/iris-weight' as const,
+      responses: {
+        200: z.object({ weight: z.number(), samples: z.number() }),
+      },
+    },
+  },
   messages: {
     list: {
       method: 'GET' as const,

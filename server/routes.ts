@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { insertIrisFeedbackSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -64,6 +65,25 @@ export async function registerRoutes(
     }
     await storage.deleteMessage(id);
     res.status(204).end();
+  });
+
+  // ── Iris weight feedback ─────────────────────────────────────────────────────
+  app.post(api.irisFeedback.push.path, async (req, res) => {
+    try {
+      const batch = z.array(insertIrisFeedbackSchema).max(100).parse(req.body);
+      const inserted = await storage.insertIrisFeedbackBatch(batch);
+      res.status(201).json({ inserted });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
+  app.get(api.irisWeight.get.path, async (_req, res) => {
+    const result = await storage.computeOptimalIrisWeight();
+    res.json(result);
   });
 
   return httpServer;
