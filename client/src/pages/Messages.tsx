@@ -5,6 +5,7 @@ import { useTTS } from "@/hooks/use-tts";
 import {
   TempColor, HungerColor, PositionColor, ToiletColor,
   LightColor, ClockColor, FamilyColor, FearColor, MusicColor, SuctionColor,
+  HygieneColor, CalendarColor, VisitsColor,
 } from "@/components/icons/ColorIcons";
 
 import { DWELL_MS as MSG_DWELL_MS } from "@/lib/dwell";
@@ -83,6 +84,25 @@ const MSGS: {
     phrase: "¿Qué hora es? ¿Es de día o de noche?",
     icon: ClockColor,
     bg: "#FEEFDC", bgHover: "#F9DFB8", accent: "#7A4200",
+  },
+  // Fila 6 ─────────────────────────────────────────────────────────
+  {
+    id: "aseo", label: "ME GUSTARÍA ASEARME",
+    phrase: "Me gustaría asearme. Necesito lavarme la cara o el cuerpo.",
+    icon: HygieneColor,
+    bg: "#D5F5E3", bgHover: "#B8EDD1", accent: "#145A30",
+  },
+  {
+    id: "dia", label: "¿QUÉ DÍA ES HOY?",
+    phrase: "¿Qué día es hoy? ¿En qué fecha estamos?",
+    icon: CalendarColor,
+    bg: "#FCF3CF", bgHover: "#F7E89E", accent: "#6B4C00",
+  },
+  {
+    id: "visitas", label: "¿CUÁL ES EL HORARIO DE VISITAS?",
+    phrase: "¿Cuál es el horario de visitas? ¿Cuándo puede venir mi familia?",
+    icon: VisitsColor,
+    bg: "#FDDEDE", bgHover: "#F5C8C8", accent: "#B03060",
   },
 ];
 

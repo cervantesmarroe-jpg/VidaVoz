@@ -530,6 +530,128 @@ export function BackspaceColor({ style, className, size, ...rest }: IconProps) {
   );
 }
 
+// ── 23. Higiene / ducha ─────────────────────────────────────────────────────
+export function HygieneColor({ style, className, ...rest }: IconProps) {
+  return (
+    <svg viewBox="0 0 64 64" style={baseSvg(style)} className={className} {...rest}>
+      <defs>
+        <linearGradient id="showerHeadGrd" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#C5D9E8" /><stop offset="1" stopColor="#8FAFC4" />
+        </linearGradient>
+        <linearGradient id="showerDropGrd" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#AED6F1" /><stop offset="1" stopColor="#1E88E5" />
+        </linearGradient>
+      </defs>
+      <ellipse cx="32" cy="61" rx="22" ry="2.5" fill="#000" opacity="0.1" />
+      {/* Brazo de la ducha */}
+      <path d="M10 8 Q10 22 22 22" stroke="#8FAFC4" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Cabezal de ducha */}
+      <circle cx="30" cy="22" r="13" fill="url(#showerHeadGrd)" stroke="#5C7280" strokeWidth="2" />
+      <circle cx="30" cy="22" r="9" fill="#DDE8F2" stroke="#8FA8B8" strokeWidth="1" />
+      {/* Agujeros 3×3 */}
+      <circle cx="25" cy="18" r="1.5" fill="#2E86C1" />
+      <circle cx="30" cy="18" r="1.5" fill="#2E86C1" />
+      <circle cx="35" cy="18" r="1.5" fill="#2E86C1" />
+      <circle cx="25" cy="22" r="1.5" fill="#2E86C1" />
+      <circle cx="30" cy="22" r="1.5" fill="#2E86C1" />
+      <circle cx="35" cy="22" r="1.5" fill="#2E86C1" />
+      <circle cx="25" cy="26" r="1.5" fill="#2E86C1" />
+      <circle cx="30" cy="26" r="1.5" fill="#2E86C1" />
+      <circle cx="35" cy="26" r="1.5" fill="#2E86C1" />
+      {/* Chorros de agua */}
+      <line x1="25" y1="35" x2="22" y2="43" stroke="#85C1E9" strokeWidth="2" strokeLinecap="round" />
+      <line x1="30" y1="35" x2="29" y2="45" stroke="#85C1E9" strokeWidth="2" strokeLinecap="round" />
+      <line x1="35" y1="35" x2="37" y2="43" stroke="#85C1E9" strokeWidth="2" strokeLinecap="round" />
+      {/* Gotas (teardrops) */}
+      <path d="M22 43 C22 43 19.5 49 19.5 52 C19.5 54.5 20.6 56 22 56 C23.4 56 24.5 54.5 24.5 52 C24.5 49 22 43 22 43z" fill="url(#showerDropGrd)" />
+      <path d="M29 45 C29 45 26.5 51 26.5 54 C26.5 56.5 27.6 58 29 58 C30.4 58 31.5 56.5 31.5 54 C31.5 51 29 45 29 45z" fill="url(#showerDropGrd)" />
+      <path d="M37 43 C37 43 34.5 49 34.5 52 C34.5 54.5 35.6 56 37 56 C38.4 56 39.5 54.5 39.5 52 C39.5 49 37 43 37 43z" fill="url(#showerDropGrd)" />
+      {/* Brillo */}
+      <ellipse cx="24" cy="16" rx="3.5" ry="2" fill="#FFFFFF" opacity="0.45" transform="rotate(-15 24 16)" />
+    </svg>
+  );
+}
+
+// ── 24. Calendario / día ─────────────────────────────────────────────────────
+export function CalendarColor({ style, className, ...rest }: IconProps) {
+  return (
+    <svg viewBox="0 0 64 64" style={baseSvg(style)} className={className} {...rest}>
+      <defs>
+        <linearGradient id="calHeaderGrd" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFB74D" /><stop offset="1" stopColor="#E65100" />
+        </linearGradient>
+        <linearGradient id="calBodyGrd" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" /><stop offset="1" stopColor="#FFF8EE" />
+        </linearGradient>
+      </defs>
+      <ellipse cx="32" cy="62" rx="22" ry="2" fill="#000" opacity="0.1" />
+      {/* Cuerpo */}
+      <rect x="6" y="14" width="52" height="46" rx="5" fill="url(#calBodyGrd)" stroke="#E65100" strokeWidth="2" />
+      {/* Cabecera naranja */}
+      <path d="M6 19 L6 14 Q6 14 11 14 L53 14 Q58 14 58 19 L58 26 L6 26 Z" fill="url(#calHeaderGrd)" />
+      {/* Argollas */}
+      <rect x="17" y="8" width="7" height="12" rx="3.5" fill="#CFD8DC" stroke="#607D8B" strokeWidth="1.5" />
+      <rect x="40" y="8" width="7" height="12" rx="3.5" fill="#CFD8DC" stroke="#607D8B" strokeWidth="1.5" />
+      {/* Cuadrícula de días — fila 1 */}
+      <circle cx="16" cy="37" r="3" fill="#ECEFF1" />
+      <circle cx="25" cy="37" r="3" fill="#ECEFF1" />
+      <circle cx="34" cy="37" r="5" fill="#1E88E5" stroke="#1565C0" strokeWidth="1.4" />
+      <circle cx="43" cy="37" r="3" fill="#ECEFF1" />
+      <circle cx="52" cy="37" r="3" fill="#ECEFF1" />
+      {/* Fila 2 */}
+      <circle cx="16" cy="50" r="3" fill="#ECEFF1" />
+      <circle cx="25" cy="50" r="3" fill="#ECEFF1" />
+      <circle cx="34" cy="50" r="3" fill="#ECEFF1" />
+      <circle cx="43" cy="50" r="3" fill="#ECEFF1" />
+      <circle cx="52" cy="50" r="3" fill="#ECEFF1" />
+      {/* Interrogación en el día resaltado */}
+      <text x="34" y="40" textAnchor="middle" fontSize="6" fontWeight="900" fill="#FFFFFF" fontFamily="Lexend, sans-serif">?</text>
+      {/* Brillo cabecera */}
+      <ellipse cx="22" cy="19" rx="7" ry="2.5" fill="#FFFFFF" opacity="0.25" />
+    </svg>
+  );
+}
+
+// ── 25. Horario de visitas — reloj + siluetas ────────────────────────────────
+export function VisitsColor({ style, className, ...rest }: IconProps) {
+  return (
+    <svg viewBox="0 0 64 64" style={baseSvg(style)} className={className} {...rest}>
+      <defs>
+        <radialGradient id="visitClockFace" cx="0.5" cy="0.4" r="0.6">
+          <stop offset="0" stopColor="#FFFFFF" /><stop offset="1" stopColor="#EDE7F6" />
+        </radialGradient>
+        <linearGradient id="visitBodyGrd" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#CE93D8" /><stop offset="1" stopColor="#7B1FA2" />
+        </linearGradient>
+      </defs>
+      <ellipse cx="32" cy="62" rx="22" ry="2" fill="#000" opacity="0.1" />
+      {/* Caja exterior del reloj */}
+      <circle cx="32" cy="26" r="20" fill="#7B1FA2" stroke="#4A0072" strokeWidth="2" />
+      {/* Esfera */}
+      <circle cx="32" cy="26" r="16" fill="url(#visitClockFace)" stroke="#AB47BC" strokeWidth="1.2" />
+      {/* Marcadores */}
+      <text x="32" y="14" textAnchor="middle" fontSize="6" fontWeight="700" fill="#4A148C" fontFamily="Lexend, sans-serif">12</text>
+      <text x="44" y="29" textAnchor="middle" fontSize="6" fontWeight="700" fill="#4A148C" fontFamily="Lexend, sans-serif">3</text>
+      <text x="32" y="44" textAnchor="middle" fontSize="6" fontWeight="700" fill="#4A148C" fontFamily="Lexend, sans-serif">6</text>
+      <text x="20" y="29" textAnchor="middle" fontSize="6" fontWeight="700" fill="#4A148C" fontFamily="Lexend, sans-serif">9</text>
+      {/* Manecillas: 15:00 */}
+      <line x1="32" y1="26" x2="32" y2="14" stroke="#1F0030" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="32" y1="26" x2="44" y2="26" stroke="#1F0030" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="32" cy="26" r="2" fill="#1F0030" />
+      {/* Campanitas */}
+      <circle cx="18" cy="8" r="3" fill="#CE93D8" stroke="#7B1FA2" strokeWidth="1" />
+      <circle cx="46" cy="8" r="3" fill="#CE93D8" stroke="#7B1FA2" strokeWidth="1" />
+      {/* Visitantes — dos siluetas */}
+      <circle cx="20" cy="54" r="5" fill="#FCDCB9" stroke="#A36636" strokeWidth="1.2" />
+      <path d="M10 64 C10 58 14 55 20 55 C26 55 30 58 30 64z" fill="url(#visitBodyGrd)" stroke="#4A0072" strokeWidth="1.2" />
+      <circle cx="44" cy="54" r="5" fill="#F8D2B5" stroke="#A36636" strokeWidth="1.2" />
+      <path d="M34 64 C34 58 38 55 44 55 C50 55 54 58 54 64z" fill="url(#visitBodyGrd)" stroke="#4A0072" strokeWidth="1.2" />
+      {/* Brillo */}
+      <ellipse cx="24" cy="17" rx="5" ry="2.5" fill="#FFFFFF" opacity="0.3" transform="rotate(-20 24 17)" />
+    </svg>
+  );
+}
+
 // ── 22. Acción: Espacio ─────────────────────────────────────────────────────
 export function SpaceColor({ style, className, size, ...rest }: IconProps) {
   return (
