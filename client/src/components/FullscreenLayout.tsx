@@ -250,7 +250,8 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
   // Ajusta el intervalo según la pantalla: 3 s en Mensajes, 5 s en el resto
   useEffect(() => {
     if (!scanActive) return;
-    scanSetInterval(location === '/mensajes' ? 3000 : 5000);
+    // Teclado: intervalo rápido (31 teclas); Mensajes: medio; resto: lento.
+    scanSetInterval(location === '/mensajes' ? 3000 : location === '/teclado' ? 1200 : 5000);
   }, [location, scanActive, scanSetInterval]);
 
   // Toque en cualquier parte excepto la barra de navegación → confirma el

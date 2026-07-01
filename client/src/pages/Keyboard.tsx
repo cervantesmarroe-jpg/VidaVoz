@@ -2,24 +2,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, SpaceColor as Space } from "@/components/icons/ColorIcons";
 import { useTTS } from "@/hooks/use-tts";
+import { useScanning } from "@/context/ScanningContext";
+import { setCursorVisible } from "@/lib/globalCursor";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
-// Todas las elecciones del paciente comparten 3 s de dwell. El dwell global
-// del tracker (DWELL_MS en use-webgazer.ts) está fijado a 3100 ms para
-// garantizar que el handler local gane siempre la carrera. Como red de
-// seguridad adicional, justActivatedRef bloquea cualquier doble click
-// posterior durante 600 ms — ojo: solo cubre las teclas (handleKeyClick),
-// no las acciones speak/clear.
 import { DWELL_MS } from "@/lib/dwell";
 const KEY_DWELL_MS    = DWELL_MS;
 const ACTION_DWELL_MS = DWELL_MS;
 
-// Distribución QWERTY en español (3 filas):
-//   Fila 1: 10 letras (Q-P)
-//   Fila 2: 10 letras (A-Ñ)
-//   Fila 3:  7 letras (Z-M)
-// Mismo layout para landscape y portrait — en portrait las teclas de la
-// tercera fila quedan algo más anchas (efecto natural de QWERTY móvil).
 const QWERTY_ROWS = [
   ["Q","W","E","R","T","Y","U","I","O","P"],
   ["A","S","D","F","G","H","J","K","L","Ñ"],
@@ -40,8 +30,6 @@ function useIsLandscape() {
 }
 
 // ── Hook de dwell con RAF ─────────────────────────────────────────────────────
-// Solo se usa para feedback visual (barra de progreso) en modo puntero/ratón.
-// El clic real (gaze o toque) llega siempre via onClick.
 function useDwellProgress(
   activeKey: string | null,
   dwell: number,
@@ -134,7 +122,6 @@ function KeyBtn({
         </span>
       )}
 
-      {/* Barra de progreso — siempre presente para que el tracker de gaze la encuentre */}
       <div
         className="gaze-progress-bar"
         style={{
@@ -152,7 +139,7 @@ function KeyBtn({
   );
 }
 
-// ── Botón de acción (HABLAR / BORRAR TODO) ────────────────────────────────────
+// ── Botón de acción ───────────────────────────────────────────────────────────
 interface ActionBtnProps {
   label:      string;
   icon:       React.ReactNode;
@@ -213,7 +200,6 @@ function ActionBtn({
         {label}
       </span>
 
-      {/* Barra de progreso — siempre presente para el tracker de gaze */}
       <div
         className="gaze-progress-bar"
         style={{
@@ -231,36 +217,126 @@ function ActionBtn({
   );
 }
 
+// ── Tooltip para el cuidador ──────────────────────────────────────────────────
+function ScanTooltip({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div
+      // data-scan-panel excluye este div del manejador de toque del modo GUIADO,
+      // así el cuidador puede tocar aquí sin activar la letra resaltada.
+      data-scan-panel="true"
+      onClick={onDismiss}
+      style={{
+        position: "absolute",
+        top: 0, left: 0, right: 0,
+        zIndex: 50,
+        background: "rgba(15, 23, 42, 0.93)",
+        color: "#FFFFFF",
+        padding: "14px 18px 16px",
+        borderRadius: "12px 12px 0 0",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        backdropFilter: "blur(6px)",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>▶</span>
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontWeight: 800,
+          fontSize: ".65rem",
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+          color: "#34D399",
+        }}>
+          MODO GUIADO ACTIVADO — para el cuidador
+        </span>
+      </div>
+
+      <p style={{
+        fontFamily: "'Lexend', sans-serif",
+        fontWeight: 500,
+        fontSize: "clamp(.88rem, 2.2vw, 1.05rem)",
+        lineHeight: 1.55,
+        margin: 0,
+        color: "#E2E8F0",
+      }}>
+        El escaneo va resaltando cada letra. Pulsa en <strong style={{ color: "#FFFFFF" }}>cualquier parte de la pantalla</strong> o usa el <strong style={{ color: "#FFFFFF" }}>pulsador externo</strong> para seleccionar la letra resaltada.
+      </p>
+
+      <span style={{
+        fontFamily: "'Lexend', sans-serif",
+        fontSize: ".6rem",
+        color: "#64748B",
+        textAlign: "right",
+        letterSpacing: ".04em",
+      }}>
+        Toca aquí para cerrar
+      </span>
+    </div>
+  );
+}
+
 // ── PÁGINA PRINCIPAL ──────────────────────────────────────────────────────────
 export default function Keyboard() {
   const isLandscape = useIsLandscape();
-
-  const rows        = QWERTY_ROWS;
-  // Tipos algo más pequeños en portrait porque hay 10 teclas por fila.
   const keyFontSize = isLandscape
     ? "clamp(.9rem,2vw,1.5rem)"
     : "clamp(.8rem,3vw,1.4rem)";
 
   const { speak } = useTTS();
+  const { active: scanActive, enable: scanEnable, disable: scanDisable } = useScanning();
 
   const [message, setMessage]       = useState("");
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | null>(null);
+  const [showTip, setShowTip]       = useState(false);
 
-  // Guarda temporal: bloquea el onClick durante 600 ms tras que el dwell interno
-  // ya activó una tecla, evitando doble-escritura cuando el dwell del tracker
-  // (también 3 s) llegase a disparar un click sobre la misma tecla.
   const justActivatedRef = useRef<string | null>(null);
+  // Estado de GUIADO antes de entrar al Teclado — para restaurar al salir.
+  const prevScanRef = useRef<boolean>(scanActive);
 
-  // ── Función central de escritura ────────────────────────────────────────────
+  // ── Al montar: desactivar gaze, activar GUIADO, mostrar tooltip ─────────────
+  useEffect(() => {
+    // Capturar estado previo ANTES de habilitarlo nosotros.
+    prevScanRef.current = scanActive;
+
+    // 1. Ocultar cursor de eye-tracking y deshabilitar snap + dwell.
+    setCursorVisible(false);
+    (window as any).__gazeKeyboardMode = true;
+
+    // 2. Activar GUIADO si no estaba ya activo.
+    if (!scanActive) scanEnable();
+
+    // 3. Mostrar tooltip de instrucciones al cuidador.
+    setShowTip(true);
+
+    return () => {
+      // Restaurar cursor.
+      setCursorVisible(true);
+      (window as any).__gazeKeyboardMode = false;
+
+      // Restaurar estado previo de GUIADO.
+      if (!prevScanRef.current) scanDisable();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-cerrar tooltip tras 7 s.
+  useEffect(() => {
+    if (!showTip) return;
+    const t = setTimeout(() => setShowTip(false), 7000);
+    return () => clearTimeout(t);
+  }, [showTip]);
+
+  // ── Teclas ──────────────────────────────────────────────────────────────────
   const handleKeyPress = useCallback((key: string) => {
     if (key === "ESP") setMessage((m) => m + " ");
     else if (key === "⌫") setMessage((m) => m.slice(0, -1));
     else                  setMessage((m) => m + key);
   }, []);
 
-  // ── Dwell interno (para hover de ratón/toque prolongado) ────────────────────
-  // Dispara handleKeyPress y activa la guarda de 600 ms.
   const onKeyComplete = useCallback((key: string) => {
     justActivatedRef.current = key;
     setFocusedKey(null);
@@ -270,24 +346,15 @@ export default function Keyboard() {
 
   const keyProgress = useDwellProgress(focusedKey, KEY_DWELL_MS, onKeyComplete);
 
-  // ── Clic directo en tecla (toque rápido, blink o dwell del tracker) ─────────
-  // Si el dwell interno ya activó la tecla (guarda activa) → ignorar.
   const handleKeyClick = useCallback((key: string) => {
     if (justActivatedRef.current === key) return;
     handleKeyPress(key);
   }, [handleKeyPress]);
 
-  // ── Acciones HABLAR / BORRAR ────────────────────────────────────────────────
-  // El TTS del botón HABLAR sólo se ejecuta en handleActionClick — es decir,
-  // tras un clic real (tap táctil o .click() sintético del tracker al
-  // completar su propio dwell). El dwell visual interno NO pronuncia el
-  // mensaje, evitando que la voz se adelante a la confirmación real.
-  // BORRAR sí se mantiene auto-activable por dwell visual porque es una
-  // acción reversible y no genera audio.
+  // ── Acciones ─────────────────────────────────────────────────────────────────
   const onActionComplete = useCallback((act: string) => {
     setFocusedAct(null);
     if (act === "clear") setMessage("");
-    // "speak": intencionalmente NO se dispara aquí.
   }, []);
 
   const actionProgress = useDwellProgress(focusedAct, ACTION_DWELL_MS, onActionComplete);
@@ -302,11 +369,12 @@ export default function Keyboard() {
     }
   }, [message, speak]);
 
-  // ── Handlers de hover (para dwell visual en ratón/toque) ───────────────────
+  // ── Hover: en modo GUIADO no arrancamos el dwell visual manual ───────────────
   const handleKeyEnter = useCallback((key: string) => {
+    if (scanActive) return;
     if (justActivatedRef.current === key) return;
     setFocusedKey(key);
-  }, []);
+  }, [scanActive]);
 
   const handleKeyLeave = useCallback((key: string) => {
     setFocusedKey((k) => (k === key ? null : k));
@@ -316,16 +384,12 @@ export default function Keyboard() {
     <FullscreenLayout>
       <style>{`
         @keyframes blink { 50% { opacity: 0; } }
-
-        /* Feedback visual cuando el cursor de mirada está encima de una tecla */
         button.gaze-target.gaze-hover {
           background: #FEF9C3 !important;
           border-color: #F59E0B !important;
           box-shadow: 0 0 12px rgba(245,158,11,0.3) !important;
         }
-        button.gaze-target.gaze-hover span {
-          color: #92400E !important;
-        }
+        button.gaze-target.gaze-hover span { color: #92400E !important; }
         button.gaze-target.blink-activated {
           background: #D1FAE5 !important;
           border-color: #34D399 !important;
@@ -333,6 +397,7 @@ export default function Keyboard() {
       `}</style>
 
       <div style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         height: "100%",
@@ -342,7 +407,10 @@ export default function Keyboard() {
         background: "#FAFAFA",
       }}>
 
-        {/* ── Visor de mensaje — readOnly: no abre el teclado nativo del móvil ── */}
+        {/* Tooltip para el cuidador — aparece al entrar, se cierra en 7 s */}
+        {showTip && <ScanTooltip onDismiss={() => setShowTip(false)} />}
+
+        {/* Visor de mensaje */}
         <div
           data-testid="text-message-display"
           style={{
@@ -383,7 +451,7 @@ export default function Keyboard() {
           )}
         </div>
 
-        {/* ── Teclado ──────────────────────────────────────────────────────── */}
+        {/* Teclado */}
         <div style={{
           flex: 1,
           minHeight: 0,
@@ -391,7 +459,7 @@ export default function Keyboard() {
           flexDirection: "column",
           gap: isLandscape ? 5 : 7,
         }}>
-          {rows.map((row, ri) => (
+          {QWERTY_ROWS.map((row, ri) => (
             <div key={ri} style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
               {row.map((letter) => (
                 <KeyBtn
@@ -434,7 +502,7 @@ export default function Keyboard() {
           </div>
         </div>
 
-        {/* ── Botones de acción ─────────────────────────────────────────────── */}
+        {/* Botones de acción */}
         <div style={{
           flexShrink: 0,
           height: isLandscape ? 60 : 72,
@@ -448,7 +516,7 @@ export default function Keyboard() {
             textColor="#1A5C2A"
             isFocused={focusedAct === "speak"}
             progress={focusedAct === "speak" ? actionProgress : 0}
-            onEnter={() => setFocusedAct("speak")}
+            onEnter={() => { if (!scanActive) setFocusedAct("speak"); }}
             onLeave={() => setFocusedAct((a) => (a === "speak" ? null : a))}
             onClick={() => handleActionClick("speak")}
             testId="button-speak"
@@ -460,7 +528,7 @@ export default function Keyboard() {
             textColor="#991B1B"
             isFocused={focusedAct === "clear"}
             progress={focusedAct === "clear" ? actionProgress : 0}
-            onEnter={() => setFocusedAct("clear")}
+            onEnter={() => { if (!scanActive) setFocusedAct("clear"); }}
             onLeave={() => setFocusedAct((a) => (a === "clear" ? null : a))}
             onClick={() => handleActionClick("clear")}
             testId="button-clear"

@@ -1155,6 +1155,8 @@ class GazeTracker {
   //   4. Flash del botón activado.
   //   5. Notifica blinkListeners.
   private fireBlinkClick(x: number, y: number) {
+    // En Teclado el eye-tracking está desactivado — blink no debe hacer nada.
+    if ((window as any).__gazeKeyboardMode) return;
     // ── VALIDACIÓN DE CONFIANZA ───────────────────────────────────────────────
     // Si el cursor está en el vacío (sin ningún .gaze-target en el radio de
     // atracción), el parpadeo se ignora: el paciente no estaba mirando un botón.
@@ -1499,6 +1501,8 @@ export function useWebGazer() {
 
     // ── MIRADA: gaze cede al toque durante 500 ms (isTouchLocked de globalCursor) ─
     const onGaze = (x: number, y: number) => {
+      // En Teclado el cursor de mirada está desactivado — no mover ni hacer dwell.
+      if ((window as any).__gazeKeyboardMode) return;
       if (isTouchLocked()) return;
       moveGlobalCursor(x, y);
 
