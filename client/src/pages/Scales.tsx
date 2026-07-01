@@ -3,91 +3,68 @@ import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
 import { RotateCcw } from "lucide-react";
-
 import { DWELL_MS } from "@/lib/dwell";
-const ACCORDION_DWELL = DWELL_MS;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATOS
+// DATOS — 5 niveles por escala, progresión verde → rojo
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ScaleItem = {
-  num:   number;
-  face:  string;
-  label: string;
-  bg:    string;
-  tts:   string;
+type ScaleLevel = {
+  label:  string;
+  icon:   string;
+  bg:     string;
+  accent: string;
+  tts:    string;
 };
 
-const EVA_ITEMS: ScaleItem[] = [
-  { num: 0,  face: "😊", label: "Sin dolor",       bg: "#DDF5E0", tts: "Mi dolor es 0 sobre 10. Sin dolor." },
-  { num: 1,  face: "🙂", label: "Muy leve",         bg: "#E0F1DF", tts: "Mi dolor es 1 sobre 10. Muy leve." },
-  { num: 2,  face: "😌", label: "Leve",             bg: "#E3EEDE", tts: "Mi dolor es 2 sobre 10. Leve." },
-  { num: 3,  face: "😐", label: "Leve-moderado",    bg: "#E6EADC", tts: "Mi dolor es 3 sobre 10. Leve-moderado." },
-  { num: 4,  face: "😕", label: "Moderado",         bg: "#E9E7DB", tts: "Mi dolor es 4 sobre 10. Moderado." },
-  { num: 5,  face: "😟", label: "Moderado-intenso", bg: "#ECE3D9", tts: "Mi dolor es 5 sobre 10. Moderado-intenso." },
-  { num: 6,  face: "😮", label: "Intenso",          bg: "#EFDFD8", tts: "Mi dolor es 6 sobre 10. Intenso." },
-  { num: 7,  face: "😣", label: "Muy intenso",      bg: "#F2DCD7", tts: "Mi dolor es 7 sobre 10. Muy intenso." },
-  { num: 8,  face: "😢", label: "Muy intenso",      bg: "#F4D8D5", tts: "Mi dolor es 8 sobre 10. Muy intenso." },
-  { num: 9,  face: "😭", label: "Severo",           bg: "#F5D4D2", tts: "Mi dolor es 9 sobre 10. Severo." },
-  { num: 10, face: "😱", label: "Insoportable",     bg: "#F7D0CF", tts: "Mi dolor es 10 sobre 10. Insoportable." },
+const BG     = ["#D5F5E3", "#E8F5E9", "#FFF9C4", "#FFEDD5", "#FEE2E2"];
+const ACCENT = ["#145A30", "#276934", "#856404", "#9A3412", "#991B1B"];
+
+const PAIN_LEVELS: ScaleLevel[] = [
+  { label: "Sin dolor",          icon: "😊", bg: BG[0], accent: ACCENT[0], tts: "Sin dolor. No siento ningún dolor en este momento." },
+  { label: "Poco dolor",         icon: "🙂", bg: BG[1], accent: ACCENT[1], tts: "Poco dolor. Siento un dolor leve." },
+  { label: "Dolor moderado",     icon: "😐", bg: BG[2], accent: ACCENT[2], tts: "Dolor moderado. Me duele bastante." },
+  { label: "Dolor fuerte",       icon: "😣", bg: BG[3], accent: ACCENT[3], tts: "Dolor fuerte. Tengo mucho dolor, necesito atención." },
+  { label: "Dolor insoportable", icon: "😭", bg: BG[4], accent: ACCENT[4], tts: "Dolor insoportable. El dolor es insoportable, necesito ayuda urgente." },
 ];
 
-const BORG_ITEMS: ScaleItem[] = [
-  { num: 0,  face: "😌", label: "Nada",           bg: "#DDF5E0", tts: "Mi esfuerzo respiratorio es 0. Nada." },
-  { num: 1,  face: "😊", label: "Muy leve",        bg: "#E0F1DF", tts: "Mi esfuerzo respiratorio es 1. Muy leve." },
-  { num: 2,  face: "🙂", label: "Leve",            bg: "#E3EEDE", tts: "Mi esfuerzo respiratorio es 2. Leve." },
-  { num: 3,  face: "😐", label: "Moderado",        bg: "#E6EADC", tts: "Mi esfuerzo respiratorio es 3. Moderado." },
-  { num: 4,  face: "😕", label: "Algo duro",       bg: "#E9E7DB", tts: "Mi esfuerzo respiratorio es 4. Algo duro." },
-  { num: 5,  face: "😟", label: "Duro",            bg: "#ECE3D9", tts: "Mi esfuerzo respiratorio es 5. Duro." },
-  { num: 6,  face: "😟", label: "Duro",            bg: "#EFDFD8", tts: "Mi esfuerzo respiratorio es 6. Duro." },
-  { num: 7,  face: "😰", label: "Muy duro",        bg: "#F2DCD7", tts: "Mi esfuerzo respiratorio es 7. Muy duro." },
-  { num: 8,  face: "😰", label: "Muy duro",        bg: "#F4D8D5", tts: "Mi esfuerzo respiratorio es 8. Muy duro." },
-  { num: 9,  face: "😱", label: "Extremo",         bg: "#F5D4D2", tts: "Mi esfuerzo respiratorio es 9. Extremo." },
-  { num: 10, face: "😱", label: "Máximo absoluto", bg: "#F7D0CF", tts: "Mi esfuerzo respiratorio es 10. Máximo absoluto." },
+const BREATHING_LEVELS: ScaleLevel[] = [
+  { label: "Respiro bien",      icon: "💨", bg: BG[0], accent: ACCENT[0], tts: "Respiro bien. No tengo dificultad para respirar." },
+  { label: "Algo de fatiga",    icon: "😮", bg: BG[1], accent: ACCENT[1], tts: "Algo de fatiga al respirar. Noto algo de esfuerzo." },
+  { label: "Fatiga moderada",   icon: "😤", bg: BG[2], accent: ACCENT[2], tts: "Fatiga moderada. Me cuesta respirar moderadamente." },
+  { label: "Mucha fatiga",      icon: "😰", bg: BG[3], accent: ACCENT[3], tts: "Mucha fatiga. Me cuesta mucho respirar, necesito atención." },
+  { label: "No puedo respirar", icon: "😱", bg: BG[4], accent: ACCENT[4], tts: "No puedo respirar. Necesito ayuda urgente." },
 ];
 
-const ANXIETY_ITEMS: ScaleItem[] = [
-  { num: 1, face: "😌", label: "Tranquilo",   bg: "#DDF5E0", tts: "Estoy tranquilo." },
-  { num: 2, face: "🙂", label: "Inquieto",    bg: "#E4EBDC", tts: "Me siento inquieto." },
-  { num: 3, face: "😟", label: "Ansioso",     bg: "#ECE3D9", tts: "Estoy ansioso." },
-  { num: 4, face: "😰", label: "Muy ansioso", bg: "#F2DCD7", tts: "Estoy muy ansioso." },
-  { num: 5, face: "😱", label: "Pánico",      bg: "#F7D0CF", tts: "Siento pánico." },
+const ANXIETY_LEVELS: ScaleLevel[] = [
+  { label: "Muy tranquilo", icon: "😌", bg: BG[0], accent: ACCENT[0], tts: "Estoy muy tranquilo. Me siento bien." },
+  { label: "Algo inquieto", icon: "🙂", bg: BG[1], accent: ACCENT[1], tts: "Estoy algo inquieto. Noto cierta inquietud." },
+  { label: "Nervioso",      icon: "😟", bg: BG[2], accent: ACCENT[2], tts: "Estoy nervioso. Siento bastante nerviosismo." },
+  { label: "Muy ansioso",   icon: "😰", bg: BG[3], accent: ACCENT[3], tts: "Estoy muy ansioso. La ansiedad es muy intensa." },
+  { label: "Pánico",        icon: "😱", bg: BG[4], accent: ACCENT[4], tts: "Siento pánico. Necesito ayuda, estoy en pánico." },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOOK: progreso de dwell con RAF
+// HOOK: progreso visual de dwell con RAF (no dispara — activación vía onClick)
 // ─────────────────────────────────────────────────────────────────────────────
-function useDwellProgress(
-  activeIdx: number | null,
-  dwell: number,
-  onFire: (idx: number) => void,
-): number {
+
+function useDwellProgress(activeIdx: number | null, dwell: number): number {
   const [progress, setProgress] = useState(0);
   const rafRef    = useRef<number | null>(null);
   const startRef  = useRef(0);
   const prevRef   = useRef<number | null>(null);
-  const firedRef  = useRef(false);
-  const fireRef   = useRef(onFire);
-  fireRef.current = onFire;
 
   useEffect(() => {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    if (activeIdx === null) { setProgress(0); prevRef.current = null; firedRef.current = false; return; }
+    if (activeIdx === null) { setProgress(0); prevRef.current = null; return; }
     if (activeIdx !== prevRef.current) {
-      prevRef.current = activeIdx; startRef.current = Date.now();
-      firedRef.current = false; setProgress(0);
+      prevRef.current = activeIdx; startRef.current = Date.now(); setProgress(0);
     }
-    const captured = activeIdx;
     const tick = () => {
       const pct = Math.min(1, (Date.now() - startRef.current) / dwell);
       setProgress(pct);
-      if (pct < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      } else if (!firedRef.current) {
-        firedRef.current = true; rafRef.current = null;
-        fireRef.current(captured);
-      }
+      if (pct < 1) rafRef.current = requestAnimationFrame(tick);
+      else rafRef.current = null;
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; } };
@@ -97,10 +74,11 @@ function useDwellProgress(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTÓN INDIVIDUAL — sin altura mínima fija, se adapta a la fila del grid
+// BOTÓN DE NIVEL — icono grande a la izquierda, etiqueta a la derecha
 // ─────────────────────────────────────────────────────────────────────────────
+
 interface ScaleBtnProps {
-  item:      ScaleItem;
+  level:     ScaleLevel;
   testId:    string;
   isHovered: boolean;
   isLocked:  boolean;
@@ -110,7 +88,7 @@ interface ScaleBtnProps {
   onSelect:  () => void;
 }
 
-function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnter, onSelect }: ScaleBtnProps) {
+function ScaleBtn({ level, testId, isHovered, isLocked, isDimmed, progress, onEnter, onSelect }: ScaleBtnProps) {
   return (
     <div
       className="gaze-target"
@@ -119,21 +97,22 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
       onPointerEnter={onEnter}
       onClick={onSelect}
       style={{
-        /* el grid le asigna la altura exacta — nunca desborda */
+        flex: 1,
         minHeight: 0,
-        minWidth: 0,
         display: "flex",
+        flexDirection: "row",
         alignItems: "center",
-        padding: "0 10px",
-        gap: 8,
+        gap: 14,
+        padding: "0 16px",
         boxSizing: "border-box",
-        background: isLocked ? "#F0FDF4" : item.bg,
+        background: isLocked ? "#F0FDF4" : level.bg,
         border: isLocked
           ? "2px solid #22C55E"
           : isHovered
           ? "2px solid #F59E0B"
-          : "1px solid rgba(0,0,0,0.07)",
-        borderRadius: 10,
+          : "1.5px solid rgba(0,0,0,0.07)",
+        borderLeft: `6px solid ${isLocked ? "#22C55E" : level.accent}`,
+        borderRadius: 12,
         opacity: isDimmed ? 0.32 : 1,
         position: "relative",
         overflow: "hidden",
@@ -142,14 +121,14 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
         touchAction: "manipulation",
         WebkitTapHighlightColor: "transparent",
         boxShadow: isLocked
-          ? "0 0 12px rgba(34,197,94,0.3)"
+          ? "0 0 14px rgba(34,197,94,0.3)"
           : isHovered
-          ? "0 1px 8px rgba(245,158,11,0.2)"
+          ? "0 1px 8px rgba(245,158,11,0.25)"
           : "0 1px 2px rgba(0,0,0,0.05)",
         transition: "border-color .12s, box-shadow .14s, opacity .18s, background .14s",
       }}
     >
-      {/* Barra de progreso dwell — llena el borde inferior */}
+      {/* Barra de progreso dwell */}
       {isHovered && !isLocked && (
         <div style={{
           position: "absolute",
@@ -162,132 +141,93 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
         }} />
       )}
 
-      {/* Checkmark cuando bloqueado */}
-      {isLocked && (
-        <div style={{
-          position: "absolute",
-          top: 4, right: 6,
-          fontSize: ".58rem",
-          fontWeight: 900,
-          color: "#16A34A",
-          fontFamily: "'Lexend',sans-serif",
-          lineHeight: 1,
-          pointerEvents: "none",
-        }}>✓</div>
-      )}
-
-      {/* Número — grande y en negrita a la izquierda */}
+      {/* Emoji grande */}
       <span style={{
-        fontFamily: "'Lexend',sans-serif",
-        fontWeight: 900,
-        /* fuente adaptativa: si el botón es bajo, el número se achica */
-        fontSize: "clamp(.85rem,3.5cqh,1.5rem)",
-        color: isLocked ? "#16A34A" : "#1A1A1A",
-        lineHeight: 1,
-        minWidth: "1.8ch",
-        textAlign: "center",
-        flexShrink: 0,
-        pointerEvents: "none",
-      }}>
-        {item.num}
-      </span>
-
-      {/* Emoji — al centro */}
-      <span style={{
-        fontSize: "clamp(.9rem,3.8cqh,1.6rem)",
+        fontSize: "clamp(1.9rem, 3.8vw, 2.8rem)",
         lineHeight: 1,
         flexShrink: 0,
         pointerEvents: "none",
-        filter: isHovered && !isLocked ? "drop-shadow(0 0 3px rgba(245,158,11,.5))" : "none",
+        filter: isHovered && !isLocked ? "drop-shadow(0 0 5px rgba(245,158,11,.55))" : "none",
         transition: "filter .14s",
       }}>
-        {item.face}
+        {level.icon}
       </span>
 
-      {/* Etiqueta — alineada a la derecha */}
+      {/* Etiqueta descriptiva */}
       <span style={{
         fontFamily: "'Lexend',sans-serif",
-        fontWeight: 700,
-        fontSize: "clamp(.66rem,2.5cqh,.88rem)",
-        color: isLocked ? "#14532D" : "#2A2A2A",
+        fontWeight: 800,
+        fontSize: "clamp(0.95rem, 2.3vw, 1.3rem)",
+        color: isLocked ? "#16A34A" : level.accent,
         flex: 1,
-        textAlign: "right",
-        lineHeight: 1.15,
-        overflow: "hidden",
-        display: "-webkit-box",
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: "vertical",
+        lineHeight: 1.2,
         pointerEvents: "none",
       }}>
-        {item.label}
+        {level.label}
       </span>
+
+      {/* Checkmark al seleccionar */}
+      {isLocked && (
+        <span style={{
+          color: "#16A34A",
+          fontSize: "1.35rem",
+          fontWeight: 900,
+          flexShrink: 0,
+          pointerEvents: "none",
+        }}>✓</span>
+      )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GRID DE ESCALA — sin scroll, altura 100 %, distribución exacta
-// • 11 ítems → 2 columnas × 6 filas  (la última celda queda vacía)
-// •  5 ítems → 1 columna  × 5 filas
+// LISTA DE NIVELES — columna vertical de 5 botones que reparten el espacio
 // ─────────────────────────────────────────────────────────────────────────────
+
 interface ScaleGridProps {
-  items:    ScaleItem[];
+  levels:   ScaleLevel[];
   prefix:   string;
-  onLocked: (val: number | null) => void;
+  onLocked: (label: string | null) => void;
 }
 
-function ScaleGrid({ items, prefix, onLocked }: ScaleGridProps) {
+function ScaleGrid({ levels, prefix, onLocked }: ScaleGridProps) {
   const { speak }  = useTTS();
   const [hover,  setHover]  = useState<number | null>(null);
   const [locked, setLocked] = useState<number | null>(null);
 
   const fire = useCallback((idx: number) => {
     setLocked(idx);
-    onLocked(items[idx].num);
+    onLocked(levels[idx].label);
     playBell();
-    speak(items[idx].tts);
-  }, [items, onLocked, speak]);
+    speak(levels[idx].tts);
+  }, [levels, onLocked, speak]);
 
-  // El temporizador interno (useDwellProgress) sólo pinta el progreso
-  // visual de la barra inferior. No dispara fire() — la activación y
-  // el TTS sólo ocurren en onClick (tap real o .click() sintético del
-  // tracker de mirada al completar su propio dwell). Así la voz no se
-  // adelanta a la confirmación real de la selección.
-  const progress  = useDwellProgress(hover, DWELL_MS, () => {});
-  const isLocked  = locked !== null && hover === null;
+  // El progreso sólo es visual. La activación (TTS + lock) ocurre en onClick,
+  // que el tracker de mirada dispara con .click() al completar su dwell propio.
+  const progress  = useDwellProgress(hover, DWELL_MS);
+  const isLocked  = locked !== null;
 
   const handleSelect = useCallback((idx: number) => {
     if (isLocked && locked === idx) return;
     fire(idx);
   }, [isLocked, locked, fire]);
 
-  /* Distribución en rejilla: >6 ítems → 2 columnas */
-  const cols = items.length > 6 ? 2 : 1;
-  const rows = Math.ceil(items.length / cols);
-
   return (
     <div
-      /* contenedor sin contenido gaze-target propio */
       onPointerLeave={() => setHover(null)}
       style={{
-        /* ocupa todo el espacio que el acordeón le deja */
         flex: 1,
         minHeight: 0,
-        /* contenedor de consulta para clamp(…cqh…) */
-        containerType: "size",
-        display: "grid",
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
-        gridTemplateRows: `repeat(${rows}, 1fr)`,
-        /* flow en fila: 0,1 | 2,3 | 4,5 … legible de izq a der */
-        gridAutoFlow: "row",
-        gap: 4,
+        display: "flex",
+        flexDirection: "column",
+        gap: 5,
         overflow: "hidden",
       }}
     >
-      {items.map((item, idx) => (
+      {levels.map((level, idx) => (
         <ScaleBtn
           key={idx}
-          item={item}
+          level={level}
           testId={`${prefix}-btn-${idx}`}
           isHovered={hover === idx}
           isLocked={isLocked && locked === idx}
@@ -302,9 +242,10 @@ function ScaleGrid({ items, prefix, onLocked }: ScaleGridProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACORDEÓN — transición suave, overflow oculto para no generar scroll
+// ACORDEÓN
 // ─────────────────────────────────────────────────────────────────────────────
-const HEADER_H = 50; // px — cabecera reducida
+
+const HEADER_H = 52;
 
 function AccordionPanel({
   title, isOpen, lockedBadge, onToggle, children,
@@ -330,7 +271,7 @@ function AccordionPanel({
     if (rafRef.current !== null) return;
     startRef.current = Date.now();
     const tick = () => {
-      const pct = Math.min(1, (Date.now() - startRef.current) / ACCORDION_DWELL);
+      const pct = Math.min(1, (Date.now() - startRef.current) / DWELL_MS);
       setDwellPct(pct);
       if (pct < 1) {
         rafRef.current = requestAnimationFrame(tick);
@@ -352,17 +293,14 @@ function AccordionPanel({
       display: "flex",
       flexDirection: "column",
       borderRadius: 12,
-      /* overflow hidden es clave: impide que el contenido genere scroll */
       overflow: "hidden",
       border: isOpen ? "2px solid #D4CAB8" : "1.5px solid #E0D8CB",
       background: "#FFFFFF",
-      boxShadow: isOpen
-        ? "0 2px 10px rgba(0,0,0,0.08)"
-        : "0 1px 3px rgba(0,0,0,0.05)",
+      boxShadow: isOpen ? "0 2px 10px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.05)",
       transition: "flex .22s ease, border-color .18s, box-shadow .18s",
     }}>
 
-      {/* ── Cabecera (siempre visible, es el dwell target) ────────────────── */}
+      {/* Cabecera */}
       <div
         className="gaze-target"
         data-gaze-target="true"
@@ -389,7 +327,7 @@ function AccordionPanel({
         <span style={{
           fontFamily: "'Lexend',sans-serif",
           fontWeight: 900,
-          fontSize: "clamp(.86rem, 2.2vw, 1rem)",
+          fontSize: "clamp(.88rem, 2.2vw, 1.05rem)",
           color: "#333333",
           letterSpacing: ".11em",
           textTransform: "uppercase",
@@ -402,12 +340,15 @@ function AccordionPanel({
           <span style={{
             background: "rgba(34,197,94,.18)",
             color: "#14532D",
-            fontSize: ".65rem",
+            fontSize: "clamp(.58rem, 1.4vw, .68rem)",
             fontWeight: 800,
             padding: "2px 8px",
             borderRadius: 20,
             fontFamily: "'Lexend',sans-serif",
             whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            maxWidth: "50%",
           }}>
             ✓ {lockedBadge}
           </span>
@@ -435,7 +376,7 @@ function AccordionPanel({
         )}
       </div>
 
-      {/* ── Contenido: ocupa el resto del panel, overflow hidden ──────────── */}
+      {/* Contenido */}
       <div style={{
         flex: 1,
         minHeight: 0,
@@ -451,23 +392,23 @@ function AccordionPanel({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RESUMEN DE PUNTUACIONES
+// RESUMEN
 // ─────────────────────────────────────────────────────────────────────────────
+
 function ScoreSummary({
-  evaLocked, borgLocked, anxietyLocked,
+  painLabel, breathingLabel, anxietyLabel,
 }: {
-  evaLocked: number | null;
-  borgLocked: number | null;
-  anxietyLocked: number | null;
+  painLabel:      string | null;
+  breathingLabel: string | null;
+  anxietyLabel:   string | null;
 }) {
-  const anxietyLabel = anxietyLocked !== null
-    ? ANXIETY_ITEMS[anxietyLocked - 1]?.label ?? null
-    : null;
+  const findLevel = (levels: ScaleLevel[], label: string | null) =>
+    label ? levels.find((l) => l.label === label) ?? null : null;
 
   const items = [
-    { key: "eva",      label: "Dolor",    value: evaLocked  !== null ? `${evaLocked}/10`  : null },
-    { key: "borg",     label: "Esfuerzo", value: borgLocked !== null ? `${borgLocked}/10` : null },
-    { key: "ansiedad", label: "Ansiedad", value: anxietyLabel },
+    { key: "dolor",    title: "Dolor",     level: findLevel(PAIN_LEVELS,      painLabel),      raw: painLabel      },
+    { key: "resp",     title: "Resp.",      level: findLevel(BREATHING_LEVELS, breathingLabel), raw: breathingLabel },
+    { key: "ansiedad", title: "Ansiedad",  level: findLevel(ANXIETY_LEVELS,   anxietyLabel),   raw: anxietyLabel   },
   ];
 
   return (
@@ -496,24 +437,46 @@ function ScoreSummary({
             justifyContent: "center",
             padding: "6px 4px",
             borderRight: idx < items.length - 1 ? "1px solid #E8E0D4" : "none",
-            gap: 2,
+            gap: 3,
+            overflow: "hidden",
           }}
         >
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.62rem, 1.4vw, .72rem)",
+            fontSize: "clamp(.58rem, 1.4vw, .68rem)",
             fontWeight: 700,
-            letterSpacing: ".1em",
+            letterSpacing: ".08em",
             textTransform: "uppercase",
             color: "#AAAAAA",
-          }}>{item.label}</span>
-          <span style={{
-            fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.82rem, 2vw, 1rem)",
-            fontWeight: 900,
-            color: item.value !== null ? "#16A34A" : "#CCCCCC",
-            textAlign: "center",
-          }}>{item.value ?? "—"}</span>
+            whiteSpace: "nowrap",
+          }}>{item.title}</span>
+
+          {item.level ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 3, overflow: "hidden", maxWidth: "100%" }}>
+              <span style={{ fontSize: "clamp(.9rem, 2vw, 1.1rem)", lineHeight: 1, flexShrink: 0 }}>
+                {item.level.icon}
+              </span>
+              <span style={{
+                fontFamily: "'Lexend',sans-serif",
+                fontSize: "clamp(.58rem, 1.4vw, .68rem)",
+                fontWeight: 800,
+                color: item.level.accent,
+                lineHeight: 1.2,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>
+                {item.raw}
+              </span>
+            </div>
+          ) : (
+            <span style={{
+              fontFamily: "'Lexend',sans-serif",
+              fontSize: "clamp(.82rem, 2vw, 1rem)",
+              fontWeight: 900,
+              color: "#CCCCCC",
+            }}>—</span>
+          )}
         </div>
       ))}
     </div>
@@ -523,36 +486,32 @@ function ScoreSummary({
 // ─────────────────────────────────────────────────────────────────────────────
 // PÁGINA
 // ─────────────────────────────────────────────────────────────────────────────
-type ScaleKey = "eva" | "borg" | "anxiety";
+
+type ScaleKey = "pain" | "breathing" | "anxiety";
 
 export default function Scales() {
-  const [resetKey,      setResetKey]      = useState(0);
-  const [openScale,     setOpenScale]     = useState<ScaleKey | null>(null);
-  const [evaLocked,     setEvaLocked]     = useState<number | null>(null);
-  const [borgLocked,    setBorgLocked]    = useState<number | null>(null);
-  const [anxietyLocked, setAnxietyLocked] = useState<number | null>(null);
+  const [resetKey,       setResetKey]       = useState(0);
+  const [openScale,      setOpenScale]      = useState<ScaleKey | null>(null);
+  const [painLabel,      setPainLabel]      = useState<string | null>(null);
+  const [breathingLabel, setBreathingLabel] = useState<string | null>(null);
+  const [anxietyLabel,   setAnxietyLabel]   = useState<string | null>(null);
 
   const handleReset = useCallback(() => {
     setResetKey((k) => k + 1);
-    setEvaLocked(null);
-    setBorgLocked(null);
-    setAnxietyLocked(null);
+    setPainLabel(null);
+    setBreathingLabel(null);
+    setAnxietyLabel(null);
     setOpenScale(null);
   }, []);
 
   const toggle = useCallback((key: ScaleKey) =>
     setOpenScale((prev) => (prev === key ? null : key)), []);
 
-  const evaBadge     = evaLocked     !== null ? `${evaLocked}/10`                       : null;
-  const borgBadge    = borgLocked    !== null ? `${borgLocked}/10`                      : null;
-  const anxietyBadge = anxietyLocked !== null ? ANXIETY_ITEMS[anxietyLocked - 1]?.label : null;
-
   return (
     <FullscreenLayout>
       <div style={{
         display: "flex",
         flexDirection: "column",
-        /* altura total sin scroll: el acordeón absorbe el espacio disponible */
         height: "100%",
         overflow: "hidden",
         padding: "6px 8px 8px",
@@ -561,7 +520,7 @@ export default function Scales() {
         background: "#FDF2E2",
       }}>
 
-        {/* ── Botón reiniciar ─────────────────────────────────────────────── */}
+        {/* Botón reiniciar */}
         <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
           <button
             className="gaze-target"
@@ -593,56 +552,56 @@ export default function Scales() {
           </button>
         </div>
 
-        {/* ── Acordeón DOLOR (EVA) ──────────────────────────────────────── */}
+        {/* Acordeón DOLOR */}
         <AccordionPanel
-          title="Dolor (EVA)"
-          isOpen={openScale === "eva"}
-          lockedBadge={evaBadge}
-          onToggle={() => toggle("eva")}
+          title="Dolor"
+          isOpen={openScale === "pain"}
+          lockedBadge={painLabel}
+          onToggle={() => toggle("pain")}
         >
           <ScaleGrid
-            key={`eva-${resetKey}`}
-            items={EVA_ITEMS}
-            prefix="eva"
-            onLocked={setEvaLocked}
+            key={`pain-${resetKey}`}
+            levels={PAIN_LEVELS}
+            prefix="pain"
+            onLocked={setPainLabel}
           />
         </AccordionPanel>
 
-        {/* ── Acordeón RESPIRACIÓN (BORG) ──────────────────────────────── */}
+        {/* Acordeón RESPIRACIÓN */}
         <AccordionPanel
-          title="Respiración (BORG)"
-          isOpen={openScale === "borg"}
-          lockedBadge={borgBadge}
-          onToggle={() => toggle("borg")}
+          title="Respiración"
+          isOpen={openScale === "breathing"}
+          lockedBadge={breathingLabel}
+          onToggle={() => toggle("breathing")}
         >
           <ScaleGrid
-            key={`borg-${resetKey}`}
-            items={BORG_ITEMS}
-            prefix="borg"
-            onLocked={setBorgLocked}
+            key={`breathing-${resetKey}`}
+            levels={BREATHING_LEVELS}
+            prefix="breathing"
+            onLocked={setBreathingLabel}
           />
         </AccordionPanel>
 
-        {/* ── Acordeón ANSIEDAD ────────────────────────────────────────── */}
+        {/* Acordeón ANSIEDAD */}
         <AccordionPanel
           title="Ansiedad"
           isOpen={openScale === "anxiety"}
-          lockedBadge={anxietyBadge}
+          lockedBadge={anxietyLabel}
           onToggle={() => toggle("anxiety")}
         >
           <ScaleGrid
-            key={`ansiedad-${resetKey}`}
-            items={ANXIETY_ITEMS}
+            key={`anxiety-${resetKey}`}
+            levels={ANXIETY_LEVELS}
             prefix="anxiety"
-            onLocked={setAnxietyLocked}
+            onLocked={setAnxietyLabel}
           />
         </AccordionPanel>
 
-        {/* ── Resumen de puntuaciones ───────────────────────────────────── */}
+        {/* Resumen */}
         <ScoreSummary
-          evaLocked={evaLocked}
-          borgLocked={borgLocked}
-          anxietyLocked={anxietyLocked}
+          painLabel={painLabel}
+          breathingLabel={breathingLabel}
+          anxietyLabel={anxietyLabel}
         />
       </div>
     </FullscreenLayout>
