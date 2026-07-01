@@ -344,25 +344,25 @@ input[type=range].gaze-slider::-moz-range-thumb {
   }
 }
 
-/* ── Móvil (<480px): ajustes para pantallas pequeñas ────────────────────── */
-@media (max-width: 480px) and (orientation: portrait) {
+/* ── Móvil (<768px) portrait: min-height reducido ───────────────────────── */
+@media (max-width: 767px) and (orientation: portrait) {
   .quad-grid-container > *,
   .msg-grid-container  > * {
     min-height: 100px;
   }
 }
 
-/* Fuentes de botones en móvil: tamaño reducido para evitar recorte */
-@media (max-width: 480px) {
+/* Fuentes de botones en móvil (<768px): tamaño reducido para evitar recorte */
+@media (max-width: 767px) {
   .msg-btn-label {
-    font-size: clamp(0.78rem, 3.8vw, 1.05rem) !important;
+    font-size: clamp(0.78rem, 2.8vw, 1.05rem) !important;
     line-height: 1.25 !important;
   }
   .quad-btn-label {
-    font-size: clamp(0.9rem, 3.5vw, 1.4rem) !important;
+    font-size: clamp(0.9rem, 2.5vw, 1.4rem) !important;
   }
   .quad-btn-sublabel {
-    font-size: clamp(1.1rem, 5.5vw, 2rem) !important;
+    font-size: clamp(1.1rem, 4vw, 2rem) !important;
   }
 }
 

@@ -30,13 +30,13 @@ function useIsPortrait() {
   );
 }
 
-// ── Hook: ancho < 480 px (móvil) ─────────────────────────────────────────────
+// ── Hook: ancho < 768 px (móvil + tablet pequeña) ────────────────────────────
 function useIsMobile() {
   const [mobile, setMobile] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 480,
+    () => typeof window !== "undefined" && window.innerWidth < 768,
   );
   useEffect(() => {
-    const update = () => setMobile(window.innerWidth < 480);
+    const update = () => setMobile(window.innerWidth < 768);
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);

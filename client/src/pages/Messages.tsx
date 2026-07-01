@@ -370,10 +370,10 @@ function useIsLandscape() {
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 480,
+    () => typeof window !== "undefined" && window.innerWidth < 768,
   );
   useEffect(() => {
-    const update = () => setMobile(window.innerWidth < 480);
+    const update = () => setMobile(window.innerWidth < 768);
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
