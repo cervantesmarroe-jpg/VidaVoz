@@ -35,8 +35,8 @@ const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (
 const BLINK_THRESHOLD    = 0.85;
 const BLINK_COOLDOWN     = 1200; // periodo refractario entre blink-clicks (ms)
 const BLINK_MIN_MS       = 200;  // parpadeo mínimo válido (ms) — ignora involuntarios
-const BLINK_MAX_MS       = 500;  // parpadeo corto (200-500 ms): blink-click rápido
-// Parpadeo sostenido intencional: >500 ms y ≤1500 ms → activa botón sin esperar dwell.
+const BLINK_MAX_MS       = 300;  // parpadeo corto (200-300 ms): blink-click rápido
+// Parpadeo sostenido intencional: >300 ms y ≤1500 ms → activa botón sin esperar dwell.
 const INTENTIONAL_BLINK_MAX_MS = 1500;
 // Parpadeo de escaneo secuencial: >1500 ms y ≤3 s.
 const SCAN_BLINK_MAX_MS  = 3000;
