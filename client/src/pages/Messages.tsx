@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, ElementType } from "react";
+import { useRef, useCallback, useState, useEffect, ElementType } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
@@ -333,15 +333,107 @@ function NavArrowButton({ page, totalPages, onNext }: {
   );
 }
 
+// ── Detección de orientación ──────────────────────────────────────────────────
+function useIsLandscape() {
+  const [landscape, setLandscape] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(orientation: landscape)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: landscape)");
+    const handler = (e: MediaQueryListEvent) => setLandscape(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return landscape;
+}
+
+// ── Celda fantasma: rellena huecos vacíos del grid y permite navegar ──────────
+function GhostNavCell({ onNext }: { onNext: () => void }) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barRef   = useRef<HTMLDivElement>(null);
+  const btnRef   = useRef<HTMLButtonElement>(null);
+
+  const startDwell = useCallback(() => {
+    if (timerRef.current) return;
+    if (btnRef.current) {
+      btnRef.current.style.background = "#BAE6FD";
+      btnRef.current.style.boxShadow  = "0 0 0 2.5px #fbbf24, 0 4px 14px rgba(251,191,36,0.22)";
+    }
+    const bar = barRef.current;
+    if (bar) {
+      bar.style.transition = "none"; bar.style.width = "0%";
+      void bar.getBoundingClientRect();
+      bar.style.transition = `width ${MSG_DWELL_MS}ms linear`;
+      bar.style.width = "100%";
+    }
+    timerRef.current = setTimeout(() => { timerRef.current = null; cancelDwell(); }, MSG_DWELL_MS);
+  }, []);
+
+  const cancelDwell = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (btnRef.current) { btnRef.current.style.background = "#F0F9FF"; btnRef.current.style.boxShadow = ""; }
+    const bar = barRef.current;
+    if (bar) { bar.style.transition = "none"; bar.style.width = "0%"; }
+  }, []);
+
+  return (
+    <button
+      ref={btnRef}
+      className="gaze-target"
+      data-gaze-target="true"
+      onClick={() => { cancelDwell(); onNext(); }}
+      onPointerEnter={startDwell}
+      onPointerLeave={cancelDwell}
+      aria-label="Siguiente página"
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#F0F9FF",
+        border: "1.5px dashed #BAE6FD",
+        borderRadius: "14px",
+        cursor: "pointer",
+        userSelect: "none",
+        touchAction: "manipulation",
+        overflow: "hidden",
+        width: "100%",
+        height: "100%",
+        transition: "background 0.18s",
+        opacity: 0.7,
+      }}
+    >
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+        stroke="#7DD3FC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        aria-hidden="true">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+      <div ref={barRef} style={{
+        position: "absolute", bottom: 0, left: 0,
+        height: "3.5px", width: "0%",
+        background: "#fbbf24",
+        borderRadius: "0 0 14px 14px",
+      }} />
+    </button>
+  );
+}
+
 // ── Página ───────────────────────────────────────────────────────────────────
 export default function Messages() {
   const [page, setPage] = useState(0);
   const totalPages  = Math.ceil(MSGS.length / PAGE_SIZE);
   const visibleMsgs = MSGS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const isLandscape = useIsLandscape();
 
   const nextPage = useCallback(() => {
     setPage(p => (p + 1) % totalPages);
   }, [totalPages]);
+
+  // Celdas vacías al final del grid cuando la página no está completa.
+  // En portrait (2 cols): ceil(n/2)×2 − n. En landscape (3 cols): ceil(n/3)×3 − n.
+  const cols       = isLandscape ? 3 : 2;
+  const totalSlots = Math.ceil(visibleMsgs.length / cols) * cols;
+  const ghostCount = totalSlots - visibleMsgs.length;
 
   return (
     <FullscreenLayout>
@@ -353,7 +445,7 @@ export default function Messages() {
         boxSizing: "border-box",
         background: "#FAFAFA",
       }}>
-        {/* Cuadrícula 3×2 — 6 mensajes visibles */}
+        {/* Cuadrícula — 6 mensajes visibles + celdas fantasma en huecos */}
         <div className="msg-grid-container" style={{
           flex: 1,
           gap: "8px",
@@ -361,6 +453,9 @@ export default function Messages() {
         }}>
           {visibleMsgs.map((m) => (
             <MessageButton key={m.id} {...m} />
+          ))}
+          {Array.from({ length: ghostCount }, (_, i) => (
+            <GhostNavCell key={`ghost-${i}`} onNext={nextPage} />
           ))}
         </div>
 
