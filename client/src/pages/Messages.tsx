@@ -380,77 +380,6 @@ function useIsMobile() {
   return mobile;
 }
 
-// ── Celda fantasma: rellena huecos vacíos del grid y permite navegar ──────────
-function GhostNavCell({ onNext }: { onNext: () => void }) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const barRef   = useRef<HTMLDivElement>(null);
-  const btnRef   = useRef<HTMLButtonElement>(null);
-
-  const startDwell = useCallback(() => {
-    if (timerRef.current) return;
-    if (btnRef.current) {
-      btnRef.current.style.background = "#BAE6FD";
-      btnRef.current.style.boxShadow  = "0 0 0 2.5px #fbbf24, 0 4px 14px rgba(251,191,36,0.22)";
-    }
-    const bar = barRef.current;
-    if (bar) {
-      bar.style.transition = "none"; bar.style.width = "0%";
-      void bar.getBoundingClientRect();
-      bar.style.transition = `width ${MSG_DWELL_MS}ms linear`;
-      bar.style.width = "100%";
-    }
-    timerRef.current = setTimeout(() => { timerRef.current = null; cancelDwell(); }, MSG_DWELL_MS);
-  }, []);
-
-  const cancelDwell = useCallback(() => {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    if (btnRef.current) { btnRef.current.style.background = "#F0F9FF"; btnRef.current.style.boxShadow = ""; }
-    const bar = barRef.current;
-    if (bar) { bar.style.transition = "none"; bar.style.width = "0%"; }
-  }, []);
-
-  return (
-    <button
-      ref={btnRef}
-      className="gaze-target"
-      data-gaze-target="true"
-      onClick={() => { cancelDwell(); onNext(); }}
-      onPointerEnter={startDwell}
-      onPointerLeave={cancelDwell}
-      aria-label="Siguiente página"
-      style={{
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#F0F9FF",
-        border: "1.5px dashed #BAE6FD",
-        borderRadius: "14px",
-        cursor: "pointer",
-        userSelect: "none",
-        touchAction: "manipulation",
-        overflow: "hidden",
-        width: "100%",
-        height: "100%",
-        transition: "background 0.18s",
-        opacity: 0.7,
-      }}
-    >
-      <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
-        stroke="#7DD3FC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        aria-hidden="true">
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      <div ref={barRef} style={{
-        position: "absolute", bottom: 0, left: 0,
-        height: "3.5px", width: "0%",
-        background: "#fbbf24",
-        borderRadius: "0 0 14px 14px",
-      }} />
-    </button>
-  );
-}
-
 // ── Botón de paginación inferior (solo móvil) ─────────────────────────────────
 function MobilePageButton({ page, totalPages, onNext }: {
   page: number; totalPages: number; onNext: () => void;
@@ -571,11 +500,11 @@ export default function Messages() {
     setPage(p => (p + 1) % totalPages);
   }, [totalPages]);
 
-  // Celdas vacías al final del grid cuando la página no está completa.
-  // Móvil siempre 2 cols; landscape 3 cols; portrait 2 cols.
-  const cols       = isMobile ? 2 : (isLandscape ? 3 : 2);
-  const totalSlots = Math.ceil(visibleMsgs.length / cols) * cols;
-  const ghostCount = totalSlots - visibleMsgs.length;
+  // El grid mantiene siempre la misma estructura (cols × rows = PAGE_SIZE),
+  // independientemente de cuántos mensajes haya en la página actual.
+  // Las celdas vacías quedan en blanco — sin celdas fantasma.
+  const cols = isLandscape ? 3 : 2;                    // coincide con el CSS
+  const rows = Math.ceil(PAGE_SIZE / cols);             // portrait → 3, landscape → 2
 
   return (
     <FullscreenLayout>
@@ -588,17 +517,15 @@ export default function Messages() {
         boxSizing: "border-box",
         background: "#FAFAFA",
       }}>
-        {/* Cuadrícula — mensajes visibles + celdas fantasma en huecos */}
+        {/* Cuadrícula — filas/columnas fijas, celdas vacías quedan en blanco */}
         <div className="msg-grid-container" style={{
           flex: 1,
           minHeight: 0,
           gap: "8px",
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
         }}>
           {visibleMsgs.map((m) => (
             <MessageButton key={m.id} {...m} />
-          ))}
-          {Array.from({ length: ghostCount }, (_, i) => (
-            <GhostNavCell key={`ghost-${i}`} onNext={nextPage} />
           ))}
         </div>
 
