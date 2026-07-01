@@ -208,7 +208,7 @@ function ScaleBtn({ item, testId, isHovered, isLocked, isDimmed, progress, onEnt
       <span style={{
         fontFamily: "'Lexend',sans-serif",
         fontWeight: 700,
-        fontSize: "clamp(.55rem,2.5cqh,.88rem)",
+        fontSize: "clamp(.66rem,2.5cqh,.88rem)",
         color: isLocked ? "#14532D" : "#2A2A2A",
         flex: 1,
         textAlign: "right",
@@ -389,7 +389,7 @@ function AccordionPanel({
         <span style={{
           fontFamily: "'Lexend',sans-serif",
           fontWeight: 900,
-          fontSize: "clamp(.76rem,2vw,.98rem)",
+          fontSize: "clamp(.86rem, 2.2vw, 1rem)",
           color: "#333333",
           letterSpacing: ".11em",
           textTransform: "uppercase",
@@ -501,7 +501,7 @@ function ScoreSummary({
         >
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.42rem,1.1vw,.58rem)",
+            fontSize: "clamp(.62rem, 1.4vw, .72rem)",
             fontWeight: 700,
             letterSpacing: ".1em",
             textTransform: "uppercase",
@@ -509,7 +509,7 @@ function ScoreSummary({
           }}>{item.label}</span>
           <span style={{
             fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.66rem,1.7vw,.88rem)",
+            fontSize: "clamp(.82rem, 2vw, 1rem)",
             fontWeight: 900,
             color: item.value !== null ? "#16A34A" : "#CCCCCC",
             textAlign: "center",

@@ -344,6 +344,14 @@ input[type=range].gaze-slider::-moz-range-thumb {
   }
 }
 
+/* ── Móvil (<480px): ajustes para pantallas pequeñas ────────────────────── */
+@media (max-width: 480px) and (orientation: portrait) {
+  .quad-grid-container > *,
+  .msg-grid-container  > * {
+    min-height: 100px;
+  }
+}
+
 /* ── Splash Screen: barra de progreso ─────────────────────────────────────── */
 @keyframes splash-progress {
   0%   { width: 0%; }

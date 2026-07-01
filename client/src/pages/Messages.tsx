@@ -242,8 +242,8 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
 }
 
 // ── Botón de navegación de página ─────────────────────────────────────────────
-function NavArrowButton({ page, totalPages, onNext }: {
-  page: number; totalPages: number; onNext: () => void;
+function NavArrowButton({ page, totalPages, onNext, width = 108 }: {
+  page: number; totalPages: number; onNext: () => void; width?: number;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const barRef   = useRef<HTMLDivElement>(null);
@@ -288,7 +288,7 @@ function NavArrowButton({ page, totalPages, onNext }: {
       aria-label={`Página ${page + 1} de ${totalPages}. Ir a la siguiente`}
       style={{
         position: "relative",
-        width: "108px",
+        width: `${width}px`,
         flexShrink: 0,
         height: "100%",
         display: "flex",
@@ -353,7 +353,7 @@ function NavArrowButton({ page, totalPages, onNext }: {
   );
 }
 
-// ── Detección de orientación ──────────────────────────────────────────────────
+// ── Detección de orientación y tamaño ────────────────────────────────────────
 function useIsLandscape() {
   const [landscape, setLandscape] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(orientation: landscape)").matches
@@ -365,6 +365,18 @@ function useIsLandscape() {
     return () => mq.removeEventListener("change", handler);
   }, []);
   return landscape;
+}
+
+function useIsMobile() {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 480,
+  );
+  useEffect(() => {
+    const update = () => setMobile(window.innerWidth < 480);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return mobile;
 }
 
 // ── Celda fantasma: rellena huecos vacíos del grid y permite navegar ──────────
@@ -444,6 +456,7 @@ export default function Messages() {
   const totalPages  = Math.ceil(MSGS.length / PAGE_SIZE);
   const visibleMsgs = MSGS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const isLandscape = useIsLandscape();
+  const isMobile    = useIsMobile();
 
   const nextPage = useCallback(() => {
     setPage(p => (p + 1) % totalPages);
@@ -481,7 +494,7 @@ export default function Messages() {
 
         {/* Flecha de navegación (solo si hay más de una página) */}
         {totalPages > 1 && (
-          <NavArrowButton page={page} totalPages={totalPages} onNext={nextPage} />
+          <NavArrowButton page={page} totalPages={totalPages} onNext={nextPage} width={isMobile ? 76 : 108} />
         )}
       </div>
     </FullscreenLayout>

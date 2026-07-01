@@ -30,6 +30,19 @@ function useIsPortrait() {
   );
 }
 
+// ── Hook: ancho < 480 px (móvil) ─────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 480,
+  );
+  useEffect(() => {
+    const update = () => setMobile(window.innerWidth < 480);
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return mobile;
+}
+
 import { DWELL_MS as TAB_DWELL_MS } from "@/lib/dwell";
 
 // Controla SOLO la visibilidad del overlay "Bienvenido a VidaVoz" al activar
@@ -47,25 +60,30 @@ const TABS = [
 
 // ── Pestaña de navegación ─────────────────────────────────────────────────────
 interface SideTabProps {
-  path:      string;
-  Icon:      React.ElementType;
-  label:     string;
-  color:     string;
-  active:    boolean;
+  path:       string;
+  Icon:       React.ElementType;
+  label:      string;
+  color:      string;
+  active:     boolean;
   isPortrait: boolean;
+  isMobile:   boolean;
 }
 
-function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps) {
+function SideTab({ path, Icon, label, color, active, isPortrait, isMobile }: SideTabProps) {
   const [, navigate] = useLocation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fillRef  = useRef<HTMLDivElement>(null);
+
+  // En portrait + escritorio: layout horizontal (icon y texto en fila).
+  // En portrait + móvil o en landscape: layout vertical (icon encima del texto).
+  const useRow = isPortrait && !isMobile;
 
   const startDwell = useCallback(() => {
     if (timerRef.current || active) return;
     const fill = fillRef.current;
     if (fill) {
       fill.style.transition = "none";
-      if (isPortrait) {
+      if (useRow) {
         fill.style.width = "0%"; fill.style.height = "100%";
         void fill.getBoundingClientRect();
         fill.style.transition = `width ${TAB_DWELL_MS}ms linear`;
@@ -78,7 +96,7 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
       }
     }
     timerRef.current = setTimeout(() => { timerRef.current = null; navigate(path); }, TAB_DWELL_MS);
-  }, [active, path, navigate, isPortrait]);
+  }, [active, path, navigate, useRow]);
 
   const cancelDwell = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -97,15 +115,15 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
       style={{
         position: "relative",
         display: "flex",
-        flexDirection: isPortrait ? "row" : "column",
+        flexDirection: useRow ? "row" : "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: isPortrait ? "6px" : "4px",
+        gap: useRow ? "6px" : "4px",
         flex: isPortrait ? 1 : undefined,
         width: isPortrait ? undefined : "100%",
         height: isPortrait ? "100%" : undefined,
-        padding: isPortrait ? "8px 4px" : "10px 4px",
-        borderRadius: isPortrait ? "8px" : "10px",
+        padding: useRow ? "8px 4px" : "10px 4px",
+        borderRadius: useRow ? "8px" : "10px",
         overflow: "hidden",
         background: active ? `${color}18` : "transparent",
         border: active ? `1px solid ${color}55` : "1px solid transparent",
@@ -119,20 +137,20 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
         ref={fillRef}
         style={{
           position: "absolute",
-          ...(isPortrait
+          ...(useRow
             ? { top: 0, bottom: 0, left: 0, width: "0%", height: "100%" }
             : { bottom: 0, left: 0, right: 0, height: "0%", width: "100%" }),
           background: `${color}33`, pointerEvents: "none",
         }}
       />
       <Icon style={{
-        width: isPortrait ? 20 : 22, height: isPortrait ? 20 : 22,
+        width: useRow ? 20 : 22, height: useRow ? 20 : 22,
         color: active ? color : "#AAAAAA", position: "relative", zIndex: 1, flexShrink: 0,
         filter: active ? "none" : "grayscale(0.7) opacity(0.55)",
         transition: "filter 0.2s",
       }} />
       <span style={{
-        fontSize: isPortrait ? "0.58rem" : "0.5rem",
+        fontSize: useRow ? "0.58rem" : "0.5rem",
         fontWeight: 800, letterSpacing: "0.06em",
         textTransform: "uppercase", color: active ? color : "#AAAAAA",
         position: "relative", zIndex: 1, lineHeight: 1.2, textAlign: "center",
@@ -145,13 +163,15 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
 
 // ── Botón GUIADO en la barra de navegación ────────────────────────────────────
 interface ScanTabProps {
-  active: boolean;
-  onToggle: () => void;
+  active:     boolean;
+  onToggle:   () => void;
   isPortrait: boolean;
+  isMobile:   boolean;
 }
 
-function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
-  const color = "#34d399"; // esmeralda — diferente a todos los tabs existentes
+function ScanTab({ active, onToggle, isPortrait, isMobile }: ScanTabProps) {
+  const color = "#34d399";
+  const useRow = isPortrait && !isMobile;
   return (
     <button
       className="gaze-target"
@@ -162,15 +182,15 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
       style={{
         position: "relative",
         display: "flex",
-        flexDirection: isPortrait ? "row" : "column",
+        flexDirection: useRow ? "row" : "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: isPortrait ? "6px" : "4px",
+        gap: useRow ? "6px" : "4px",
         flex: isPortrait ? 1 : undefined,
         width: isPortrait ? undefined : "100%",
         height: isPortrait ? "100%" : undefined,
-        padding: isPortrait ? "8px 4px" : "10px 4px",
-        borderRadius: isPortrait ? "8px" : "10px",
+        padding: useRow ? "8px 4px" : "10px 4px",
+        borderRadius: useRow ? "8px" : "10px",
         overflow: "hidden",
         background: active ? `${color}18` : "transparent",
         border: active ? `1px solid ${color}55` : "1px solid transparent",
@@ -180,7 +200,7 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
       }}
     >
       <span style={{
-        fontSize: isPortrait ? 20 : 22,
+        fontSize: useRow ? 20 : 22,
         lineHeight: 1,
         color: active ? color : "#AAAAAA",
         position: "relative",
@@ -194,7 +214,7 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
         {active ? "■" : "▶"}
       </span>
       <span style={{
-        fontSize: isPortrait ? "0.58rem" : "0.5rem",
+        fontSize: useRow ? "0.58rem" : "0.5rem",
         fontWeight: 800,
         letterSpacing: "0.06em",
         textTransform: "uppercase",
@@ -214,6 +234,7 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
 export function FullscreenLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const isPortrait = useIsPortrait();
+  const isMobile   = useIsMobile();
   const { accepted, mode, accept, decline } = useConsent();
   const {
     isActive, isCalibrating,
@@ -433,10 +454,15 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
         <nav
           data-scan-panel="true"
           style={isPortrait ? {
-            width: "100%", height: "58px", flexShrink: 0,
+            width: "100%",
+            height: isMobile ? "68px" : "58px",
+            flexShrink: 0,
             background: "#FFFFFF", borderTop: "1px solid #E0E0E0",
             display: "flex", flexDirection: "row", alignItems: "stretch",
-            gap: 4, padding: "4px 6px",
+            gap: 4,
+            padding: isMobile
+              ? "4px 4px calc(4px + env(safe-area-inset-bottom, 0px))"
+              : "4px 6px",
           } : {
             width: "64px", flexShrink: 0,
             background: "#FFFFFF", borderRight: "1px solid #E0E0E0",
@@ -454,12 +480,14 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
               color={tab.color}
               active={location === tab.path}
               isPortrait={isPortrait}
+              isMobile={isMobile}
             />
           ))}
           <ScanTab
             active={scanActive}
             onToggle={() => scanActive ? scanDisable() : scanEnable()}
             isPortrait={isPortrait}
+            isMobile={isMobile}
           />
         </nav>
       </div>
