@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, ReactNode } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { playBell } from "@/lib/audio";
 import { useTTS } from "@/hooks/use-tts";
@@ -9,13 +9,7 @@ import { DWELL_MS } from "@/lib/dwell";
 // DATOS — 5 niveles por escala, progresión verde → rojo
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ScaleLevel = {
-  label:  string;
-  icon:   string;
-  bg:     string;
-  accent: string;
-  tts:    string;
-};
+type ScaleLevel = { label: string; icon: string; bg: string; accent: string; tts: string; };
 
 const BG     = ["#D5F5E3", "#E8F5E9", "#FFF9C4", "#FFEDD5", "#FEE2E2"];
 const ACCENT = ["#145A30", "#276934", "#856404", "#9A3412", "#991B1B"];
@@ -44,15 +38,23 @@ const ANXIETY_LEVELS: ScaleLevel[] = [
   { label: "Pánico",        icon: "😱", bg: BG[4], accent: ACCENT[4], tts: "Siento pánico. Necesito ayuda, estoy en pánico." },
 ];
 
+type ScaleKey = "pain" | "breathing" | "anxiety";
+
+const SCALE_META: { key: ScaleKey; title: string; levels: ScaleLevel[] }[] = [
+  { key: "pain",      title: "Dolor",       levels: PAIN_LEVELS      },
+  { key: "breathing", title: "Respiración", levels: BREATHING_LEVELS },
+  { key: "anxiety",   title: "Ansiedad",    levels: ANXIETY_LEVELS   },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
-// HOOK: progreso visual de dwell con RAF (no dispara — activación vía onClick)
+// HOOK: progreso visual de dwell (no dispara — activación vía onClick)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function useDwellProgress(activeIdx: number | null, dwell: number): number {
   const [progress, setProgress] = useState(0);
-  const rafRef    = useRef<number | null>(null);
-  const startRef  = useRef(0);
-  const prevRef   = useRef<number | null>(null);
+  const rafRef   = useRef<number | null>(null);
+  const startRef = useRef(0);
+  const prevRef  = useRef<number | null>(null);
 
   useEffect(() => {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
@@ -74,7 +76,7 @@ function useDwellProgress(activeIdx: number | null, dwell: number): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTÓN DE NIVEL — icono grande a la izquierda, etiqueta a la derecha
+// BOTÓN DE NIVEL — mitad izquierda: emoji ≥80px | mitad derecha: texto grande
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ScaleBtnProps {
@@ -98,22 +100,20 @@ function ScaleBtn({ level, testId, isHovered, isLocked, isDimmed, progress, onEn
       onClick={onSelect}
       style={{
         flex: 1,
-        minHeight: 0,
+        /* mínimo absoluto: el eye-tracking necesita área amplia */
+        minHeight: 100,
         display: "flex",
         flexDirection: "row",
-        alignItems: "center",
-        gap: 14,
-        padding: "0 16px",
         boxSizing: "border-box",
         background: isLocked ? "#F0FDF4" : level.bg,
         border: isLocked
-          ? "2px solid #22C55E"
+          ? "2.5px solid #22C55E"
           : isHovered
-          ? "2px solid #F59E0B"
+          ? "2.5px solid #F59E0B"
           : "1.5px solid rgba(0,0,0,0.07)",
-        borderLeft: `6px solid ${isLocked ? "#22C55E" : level.accent}`,
-        borderRadius: 12,
-        opacity: isDimmed ? 0.32 : 1,
+        borderLeft: `8px solid ${isLocked ? "#22C55E" : level.accent}`,
+        borderRadius: 16,
+        opacity: isDimmed ? 0.27 : 1,
         position: "relative",
         overflow: "hidden",
         cursor: "pointer",
@@ -121,67 +121,79 @@ function ScaleBtn({ level, testId, isHovered, isLocked, isDimmed, progress, onEn
         touchAction: "manipulation",
         WebkitTapHighlightColor: "transparent",
         boxShadow: isLocked
-          ? "0 0 14px rgba(34,197,94,0.3)"
+          ? "0 0 18px rgba(34,197,94,0.32)"
           : isHovered
-          ? "0 1px 8px rgba(245,158,11,0.25)"
-          : "0 1px 2px rgba(0,0,0,0.05)",
+          ? "0 2px 14px rgba(245,158,11,0.32)"
+          : "0 1px 3px rgba(0,0,0,0.06)",
         transition: "border-color .12s, box-shadow .14s, opacity .18s, background .14s",
       }}
     >
-      {/* Barra de progreso dwell */}
+      {/* Barra dwell en borde inferior */}
       {isHovered && !isLocked && (
         <div style={{
-          position: "absolute",
-          bottom: 0, left: 0,
-          height: 3,
+          position: "absolute", bottom: 0, left: 0,
+          height: 4,
           width: `${progress * 100}%`,
           background: "#F59E0B",
-          borderRadius: "0 2px 0 0",
+          borderRadius: "0 3px 0 0",
           pointerEvents: "none",
         }} />
       )}
 
-      {/* Emoji grande */}
-      <span style={{
-        fontSize: "clamp(1.9rem, 3.8vw, 2.8rem)",
-        lineHeight: 1,
+      {/* Mitad izquierda — emoji centrado, mínimo 80 px */}
+      <div style={{
+        width: "50%",
         flexShrink: 0,
-        pointerEvents: "none",
-        filter: isHovered && !isLocked ? "drop-shadow(0 0 5px rgba(245,158,11,.55))" : "none",
-        transition: "filter .14s",
-      }}>
-        {level.icon}
-      </span>
-
-      {/* Etiqueta descriptiva */}
-      <span style={{
-        fontFamily: "'Lexend',sans-serif",
-        fontWeight: 800,
-        fontSize: "clamp(0.95rem, 2.3vw, 1.3rem)",
-        color: isLocked ? "#16A34A" : level.accent,
-        flex: 1,
-        lineHeight: 1.2,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRight: `1px solid ${isLocked ? "rgba(34,197,94,0.2)" : "rgba(0,0,0,0.06)"}`,
         pointerEvents: "none",
       }}>
-        {level.label}
-      </span>
-
-      {/* Checkmark al seleccionar */}
-      {isLocked && (
         <span style={{
-          color: "#16A34A",
-          fontSize: "1.35rem",
-          fontWeight: 900,
-          flexShrink: 0,
+          /* clamp garantiza ≥ 4rem (64px) y escala con la altura de pantalla */
+          fontSize: "clamp(4rem, 12vh, 6rem)",
+          lineHeight: 1,
           pointerEvents: "none",
-        }}>✓</span>
-      )}
+          filter: isHovered && !isLocked ? "drop-shadow(0 0 7px rgba(245,158,11,.65))" : "none",
+          transition: "filter .14s",
+        }}>
+          {level.icon}
+        </span>
+      </div>
+
+      {/* Mitad derecha — etiqueta con fuente grande */}
+      <div style={{
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        padding: "0 16px 0 18px",
+        gap: 10,
+        pointerEvents: "none",
+      }}>
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontWeight: 800,
+          fontSize: "clamp(1.1rem, 2.8vw, 1.75rem)",
+          color: isLocked ? "#16A34A" : level.accent,
+          lineHeight: 1.2,
+          flex: 1,
+        }}>
+          {level.label}
+        </span>
+        {isLocked && (
+          <span style={{
+            color: "#16A34A", fontSize: "1.6rem",
+            fontWeight: 900, flexShrink: 0,
+          }}>✓</span>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LISTA DE NIVELES — columna vertical de 5 botones que reparten el espacio
+// LISTA DE NIVELES — columna de 5 botones, scroll si la pantalla es muy pequeña
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ScaleGridProps {
@@ -202,15 +214,13 @@ function ScaleGrid({ levels, prefix, onLocked }: ScaleGridProps) {
     speak(levels[idx].tts);
   }, [levels, onLocked, speak]);
 
-  // El progreso sólo es visual. La activación (TTS + lock) ocurre en onClick,
-  // que el tracker de mirada dispara con .click() al completar su dwell propio.
-  const progress  = useDwellProgress(hover, DWELL_MS);
-  const isLocked  = locked !== null;
+  const progress = useDwellProgress(hover, DWELL_MS);
+  const hasLock  = locked !== null;
 
   const handleSelect = useCallback((idx: number) => {
-    if (isLocked && locked === idx) return;
+    if (hasLock && locked === idx) return;
     fire(idx);
-  }, [isLocked, locked, fire]);
+  }, [hasLock, locked, fire]);
 
   return (
     <div
@@ -220,8 +230,9 @@ function ScaleGrid({ levels, prefix, onLocked }: ScaleGridProps) {
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        gap: 5,
-        overflow: "hidden",
+        gap: 6,
+        /* scroll solo si no caben los 5 botones a 100px */
+        overflowY: "auto",
       }}
     >
       {levels.map((level, idx) => (
@@ -230,8 +241,8 @@ function ScaleGrid({ levels, prefix, onLocked }: ScaleGridProps) {
           level={level}
           testId={`${prefix}-btn-${idx}`}
           isHovered={hover === idx}
-          isLocked={isLocked && locked === idx}
-          isDimmed={isLocked && locked !== idx}
+          isLocked={hasLock && locked === idx}
+          isDimmed={hasLock && locked !== idx}
           progress={progress}
           onEnter={() => setHover(idx)}
           onSelect={() => handleSelect(idx)}
@@ -242,25 +253,20 @@ function ScaleGrid({ levels, prefix, onLocked }: ScaleGridProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACORDEÓN
+// PESTAÑA — gaze-target con dwell para cambiar de escala
 // ─────────────────────────────────────────────────────────────────────────────
 
-const HEADER_H = 52;
-
-function AccordionPanel({
-  title, isOpen, lockedBadge, onToggle, children,
-}: {
+function TabButton({ title, isActive, lockedLabel, onSelect }: {
   title:       string;
-  isOpen:      boolean;
-  lockedBadge: string | null;
-  onToggle:    () => void;
-  children:    ReactNode;
+  isActive:    boolean;
+  lockedLabel: string | null;
+  onSelect:    () => void;
 }) {
   const rafRef      = useRef<number | null>(null);
   const startRef    = useRef(0);
   const [dwellPct, setDwellPct] = useState(0);
-  const onToggleRef = useRef(onToggle);
-  onToggleRef.current = onToggle;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   const cancelDwell = useCallback(() => {
     if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
@@ -268,7 +274,7 @@ function AccordionPanel({
   }, []);
 
   const startDwell = useCallback(() => {
-    if (rafRef.current !== null) return;
+    if (rafRef.current !== null || isActive) return;
     startRef.current = Date.now();
     const tick = () => {
       const pct = Math.min(1, (Date.now() - startRef.current) / DWELL_MS);
@@ -278,207 +284,202 @@ function AccordionPanel({
       } else {
         rafRef.current = null;
         setDwellPct(0);
-        onToggleRef.current();
+        onSelectRef.current();
       }
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, []);
+  }, [isActive]);
 
   useEffect(() => () => cancelDwell(), [cancelDwell]);
 
   return (
-    <div style={{
-      flex: isOpen ? "1 1 0" : `0 0 ${HEADER_H}px`,
-      minHeight: HEADER_H,
-      display: "flex",
-      flexDirection: "column",
-      borderRadius: 12,
-      overflow: "hidden",
-      border: isOpen ? "2px solid #D4CAB8" : "1.5px solid #E0D8CB",
-      background: "#FFFFFF",
-      boxShadow: isOpen ? "0 2px 10px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.05)",
-      transition: "flex .22s ease, border-color .18s, box-shadow .18s",
-    }}>
-
-      {/* Cabecera */}
-      <div
-        className="gaze-target"
-        data-gaze-target="true"
-        onPointerEnter={startDwell}
-        onPointerLeave={cancelDwell}
-        onClick={() => onToggleRef.current()}
-        style={{
-          height: HEADER_H,
-          flexShrink: 0,
-          padding: "0 14px",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: isOpen ? "#FDF2E2" : "#FFFFFF",
-          cursor: "pointer",
-          position: "relative",
-          overflow: "hidden",
-          userSelect: "none",
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-          transition: "background .18s",
-        }}
-      >
-        <span style={{
-          fontFamily: "'Lexend',sans-serif",
-          fontWeight: 900,
-          fontSize: "clamp(.88rem, 2.2vw, 1.05rem)",
-          color: "#333333",
-          letterSpacing: ".11em",
-          textTransform: "uppercase",
-          flexShrink: 0,
-        }}>
-          {title}
-        </span>
-
-        {lockedBadge && (
-          <span style={{
-            background: "rgba(34,197,94,.18)",
-            color: "#14532D",
-            fontSize: "clamp(.58rem, 1.4vw, .68rem)",
-            fontWeight: 800,
-            padding: "2px 8px",
-            borderRadius: 20,
-            fontFamily: "'Lexend',sans-serif",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            maxWidth: "50%",
-          }}>
-            ✓ {lockedBadge}
-          </span>
-        )}
-
-        <span style={{
-          fontSize: "1rem",
-          color: "#AAAAAA",
-          marginLeft: "auto",
-          flexShrink: 0,
-          lineHeight: 1,
-          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-          transition: "transform .22s",
-        }}>▾</span>
-
-        {dwellPct > 0 && (
-          <div style={{
-            position: "absolute", bottom: 0, left: 0,
-            height: 3,
-            width: `${dwellPct * 100}%`,
-            background: "#fbbf24",
-            borderRadius: "0 2px 0 0",
-            pointerEvents: "none",
-          }} />
-        )}
-      </div>
-
-      {/* Contenido */}
-      <div style={{
+    <div
+      className="gaze-target"
+      data-gaze-target="true"
+      onPointerEnter={startDwell}
+      onPointerLeave={cancelDwell}
+      onClick={() => onSelectRef.current()}
+      style={{
         flex: 1,
-        minHeight: 0,
-        padding: isOpen ? "5px 6px 6px" : 0,
-        display: isOpen ? "flex" : "none",
+        display: "flex",
         flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 3,
+        padding: "8px 4px",
+        position: "relative",
         overflow: "hidden",
+        background: isActive ? "#FDF2E2" : "#FFFFFF",
+        borderBottom: isActive ? "4px solid #D97706" : "4px solid transparent",
+        cursor: "pointer",
+        userSelect: "none",
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+        transition: "background .18s, border-color .18s",
+      }}
+    >
+      <span style={{
+        fontFamily: "'Lexend', sans-serif",
+        fontWeight: isActive ? 900 : 700,
+        fontSize: "clamp(.8rem, 2.1vw, 1rem)",
+        color: isActive ? "#92400E" : "#777777",
+        letterSpacing: ".07em",
+        textTransform: "uppercase",
+        lineHeight: 1,
+        whiteSpace: "nowrap",
       }}>
-        {children}
-      </div>
+        {title}
+      </span>
+
+      {lockedLabel && (
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontSize: "clamp(.52rem, 1.3vw, .62rem)",
+          fontWeight: 800,
+          color: "#16A34A",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          maxWidth: "95%",
+          textAlign: "center",
+        }}>
+          ✓ {lockedLabel}
+        </span>
+      )}
+
+      {dwellPct > 0 && (
+        <div style={{
+          position: "absolute", bottom: 0, left: 0,
+          height: 4,
+          width: `${dwellPct * 100}%`,
+          background: "#fbbf24",
+          pointerEvents: "none",
+        }} />
+      )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RESUMEN
+// RESUMEN + REINICIAR (barra inferior combinada)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ScoreSummary({
-  painLabel, breathingLabel, anxietyLabel,
+function BottomBar({
+  painLabel, breathingLabel, anxietyLabel, onReset,
 }: {
   painLabel:      string | null;
   breathingLabel: string | null;
   anxietyLabel:   string | null;
+  onReset:        () => void;
 }) {
   const findLevel = (levels: ScaleLevel[], label: string | null) =>
     label ? levels.find((l) => l.label === label) ?? null : null;
 
-  const items = [
-    { key: "dolor",    title: "Dolor",     level: findLevel(PAIN_LEVELS,      painLabel),      raw: painLabel      },
-    { key: "resp",     title: "Resp.",      level: findLevel(BREATHING_LEVELS, breathingLabel), raw: breathingLabel },
-    { key: "ansiedad", title: "Ansiedad",  level: findLevel(ANXIETY_LEVELS,   anxietyLabel),   raw: anxietyLabel   },
+  const chips = [
+    { key: "dolor",    title: "Dolor",    lv: findLevel(PAIN_LEVELS,      painLabel),      raw: painLabel      },
+    { key: "resp",     title: "Resp.",    lv: findLevel(BREATHING_LEVELS, breathingLabel), raw: breathingLabel },
+    { key: "ansiedad", title: "Ansiedad", lv: findLevel(ANXIETY_LEVELS,   anxietyLabel),   raw: anxietyLabel   },
   ];
 
   return (
-    <div
-      data-testid="score-summary"
-      style={{
-        flexShrink: 0,
-        borderRadius: 12,
-        background: "#FFFFFF",
-        border: "1.5px solid #E0D8CB",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        display: "flex",
-        alignItems: "stretch",
-        overflow: "hidden",
-      }}
-    >
-      {items.map((item, idx) => (
+    <div style={{
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "stretch",
+      background: "#FFFFFF",
+      border: "1.5px solid #E0D8CB",
+      borderRadius: 12,
+      overflow: "hidden",
+      boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+    }}>
+      {chips.map((chip, idx) => (
         <div
-          key={item.key}
-          data-testid={`score-chip-${item.key}`}
+          key={chip.key}
+          data-testid={`score-chip-${chip.key}`}
           style={{
             flex: 1,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            padding: "6px 4px",
-            borderRight: idx < items.length - 1 ? "1px solid #E8E0D4" : "none",
-            gap: 3,
+            padding: "5px 4px",
+            borderRight: "1px solid #E8E0D4",
+            gap: 2,
             overflow: "hidden",
           }}
         >
           <span style={{
-            fontFamily: "'Lexend',sans-serif",
-            fontSize: "clamp(.58rem, 1.4vw, .68rem)",
+            fontFamily: "'Lexend', sans-serif",
+            fontSize: "clamp(.56rem, 1.3vw, .66rem)",
             fontWeight: 700,
-            letterSpacing: ".08em",
+            letterSpacing: ".07em",
             textTransform: "uppercase",
             color: "#AAAAAA",
             whiteSpace: "nowrap",
-          }}>{item.title}</span>
+          }}>{chip.title}</span>
 
-          {item.level ? (
+          {chip.lv ? (
             <div style={{ display: "flex", alignItems: "center", gap: 3, overflow: "hidden", maxWidth: "100%" }}>
-              <span style={{ fontSize: "clamp(.9rem, 2vw, 1.1rem)", lineHeight: 1, flexShrink: 0 }}>
-                {item.level.icon}
+              <span style={{ fontSize: "clamp(.85rem, 2vw, 1rem)", lineHeight: 1, flexShrink: 0 }}>
+                {chip.lv.icon}
               </span>
               <span style={{
-                fontFamily: "'Lexend',sans-serif",
-                fontSize: "clamp(.58rem, 1.4vw, .68rem)",
+                fontFamily: "'Lexend', sans-serif",
+                fontSize: "clamp(.54rem, 1.3vw, .64rem)",
                 fontWeight: 800,
-                color: item.level.accent,
+                color: chip.lv.accent,
                 lineHeight: 1.2,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}>
-                {item.raw}
+                {chip.raw}
               </span>
             </div>
           ) : (
             <span style={{
-              fontFamily: "'Lexend',sans-serif",
-              fontSize: "clamp(.82rem, 2vw, 1rem)",
+              fontFamily: "'Lexend', sans-serif",
+              fontSize: "clamp(.8rem, 1.8vw, .95rem)",
               fontWeight: 900,
               color: "#CCCCCC",
             }}>—</span>
           )}
         </div>
       ))}
+
+      {/* Botón reiniciar integrado en la barra */}
+      <button
+        className="gaze-target"
+        data-gaze-target="true"
+        data-testid="button-scale-reset"
+        onClick={onReset}
+        style={{
+          flexShrink: 0,
+          width: 52,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 3,
+          background: "#FAFAFA",
+          border: "none",
+          borderLeft: "1px solid #E8E0D4",
+          cursor: "pointer",
+          padding: 0,
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <RotateCcw style={{ width: 16, height: 16, color: "#888888" }} />
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontSize: ".52rem",
+          fontWeight: 700,
+          color: "#AAAAAA",
+          letterSpacing: ".05em",
+          textTransform: "uppercase",
+        }}>Reset</span>
+      </button>
     </div>
   );
 }
@@ -487,11 +488,9 @@ function ScoreSummary({
 // PÁGINA
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ScaleKey = "pain" | "breathing" | "anxiety";
-
 export default function Scales() {
   const [resetKey,       setResetKey]       = useState(0);
-  const [openScale,      setOpenScale]      = useState<ScaleKey | null>(null);
+  const [activeScale,    setActiveScale]    = useState<ScaleKey>("pain");
   const [painLabel,      setPainLabel]      = useState<string | null>(null);
   const [breathingLabel, setBreathingLabel] = useState<string | null>(null);
   const [anxietyLabel,   setAnxietyLabel]   = useState<string | null>(null);
@@ -501,11 +500,22 @@ export default function Scales() {
     setPainLabel(null);
     setBreathingLabel(null);
     setAnxietyLabel(null);
-    setOpenScale(null);
+    setActiveScale("pain");
   }, []);
 
-  const toggle = useCallback((key: ScaleKey) =>
-    setOpenScale((prev) => (prev === key ? null : key)), []);
+  const labelMap: Record<ScaleKey, string | null> = {
+    pain:      painLabel,
+    breathing: breathingLabel,
+    anxiety:   anxietyLabel,
+  };
+
+  const setLabelMap: Record<ScaleKey, (v: string | null) => void> = {
+    pain:      setPainLabel,
+    breathing: setBreathingLabel,
+    anxiety:   setAnxietyLabel,
+  };
+
+  const activeMeta = SCALE_META.find((s) => s.key === activeScale)!;
 
   return (
     <FullscreenLayout>
@@ -520,88 +530,57 @@ export default function Scales() {
         background: "#FDF2E2",
       }}>
 
-        {/* Botón reiniciar */}
-        <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
-          <button
-            className="gaze-target"
-            data-gaze-target="true"
-            data-testid="button-scale-reset"
-            onClick={handleReset}
-            style={{
-              background: "#FFF",
-              border: "1.5px solid #E0D8CB",
-              borderRadius: 9,
-              color: "#555555",
-              padding: "5px 12px",
-              cursor: "pointer",
-              fontFamily: "'Lexend',sans-serif",
-              fontWeight: 700,
-              fontSize: ".68rem",
-              letterSpacing: ".07em",
-              textTransform: "uppercase",
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent",
-            }}
-          >
-            <RotateCcw style={{ width: 11, height: 11 }} />
-            Reiniciar
-          </button>
+        {/* ── Barra de pestañas ─────────────────────────────────────────── */}
+        <div style={{
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "row",
+          height: 60,
+          background: "#FFFFFF",
+          borderRadius: 12,
+          border: "1.5px solid #E0D8CB",
+          overflow: "hidden",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        }}>
+          {SCALE_META.map((s) => (
+            <TabButton
+              key={s.key}
+              title={s.title}
+              isActive={activeScale === s.key}
+              lockedLabel={labelMap[s.key]}
+              onSelect={() => setActiveScale(s.key)}
+            />
+          ))}
         </div>
 
-        {/* Acordeón DOLOR */}
-        <AccordionPanel
-          title="Dolor"
-          isOpen={openScale === "pain"}
-          lockedBadge={painLabel}
-          onToggle={() => toggle("pain")}
-        >
+        {/* ── Área de la escala activa ───────────────────────────────────── */}
+        <div style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          background: "#FFFFFF",
+          borderRadius: 12,
+          border: "1.5px solid #E0D8CB",
+          padding: "8px",
+          boxSizing: "border-box",
+          boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+          overflow: "hidden",
+        }}>
           <ScaleGrid
-            key={`pain-${resetKey}`}
-            levels={PAIN_LEVELS}
-            prefix="pain"
-            onLocked={setPainLabel}
+            key={`${activeScale}-${resetKey}`}
+            levels={activeMeta.levels}
+            prefix={activeScale}
+            onLocked={setLabelMap[activeScale]}
           />
-        </AccordionPanel>
+        </div>
 
-        {/* Acordeón RESPIRACIÓN */}
-        <AccordionPanel
-          title="Respiración"
-          isOpen={openScale === "breathing"}
-          lockedBadge={breathingLabel}
-          onToggle={() => toggle("breathing")}
-        >
-          <ScaleGrid
-            key={`breathing-${resetKey}`}
-            levels={BREATHING_LEVELS}
-            prefix="breathing"
-            onLocked={setBreathingLabel}
-          />
-        </AccordionPanel>
-
-        {/* Acordeón ANSIEDAD */}
-        <AccordionPanel
-          title="Ansiedad"
-          isOpen={openScale === "anxiety"}
-          lockedBadge={anxietyLabel}
-          onToggle={() => toggle("anxiety")}
-        >
-          <ScaleGrid
-            key={`anxiety-${resetKey}`}
-            levels={ANXIETY_LEVELS}
-            prefix="anxiety"
-            onLocked={setAnxietyLabel}
-          />
-        </AccordionPanel>
-
-        {/* Resumen */}
-        <ScoreSummary
+        {/* ── Resumen + Reiniciar ────────────────────────────────────────── */}
+        <BottomBar
           painLabel={painLabel}
           breathingLabel={breathingLabel}
           anxietyLabel={anxietyLabel}
+          onReset={handleReset}
         />
       </div>
     </FullscreenLayout>
