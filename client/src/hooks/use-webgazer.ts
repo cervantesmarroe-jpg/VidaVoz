@@ -35,9 +35,10 @@ const SMOOTH_WARMUP   = 15;    // no emite hasta tener al menos estas muestras (
 const BLINK_THRESHOLD    = 0.85;
 const BLINK_COOLDOWN     = 1200; // periodo refractario entre blink-clicks (ms)
 const BLINK_MIN_MS       = 200;  // parpadeo mínimo válido (ms) — ignora involuntarios
-const BLINK_MAX_MS       = 500;  // parpadeo máximo válido para click de mirada (ms)
-// Parpadeo sostenido (escaneo secuencial): por encima de BLINK_MAX_MS,
-// hasta un máximo de 3 s (más allá se considera posible pérdida del ojo).
+const BLINK_MAX_MS       = 500;  // parpadeo corto (200-500 ms): blink-click rápido
+// Parpadeo sostenido intencional: >500 ms y ≤1500 ms → activa botón sin esperar dwell.
+const INTENTIONAL_BLINK_MAX_MS = 1500;
+// Parpadeo de escaneo secuencial: >1500 ms y ≤3 s.
 const SCAN_BLINK_MAX_MS  = 3000;
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
@@ -390,9 +391,10 @@ class GazeTracker {
   private lastBsEyeY    = 0;
   private lastIrisSignal: { irisEyeX: number; irisEyeY: number } | null = null;
 
-  private gazeListeners:  Set<GazeCallback>  = new Set();
-  private blinkListeners:     Set<BlinkCallback> = new Set();
-  private scanBlinkListeners: Set<() => void>   = new Set();
+  private gazeListeners:              Set<GazeCallback>  = new Set();
+  private blinkListeners:             Set<BlinkCallback> = new Set();
+  private intentionalBlinkListeners:  Set<BlinkCallback> = new Set();
+  private scanBlinkListeners:         Set<() => void>    = new Set();
 
   onCameraReady: (() => void) | null = null;
   onCameraError: (() => void) | null = null;
@@ -597,10 +599,14 @@ class GazeTracker {
                 // Disparar con coords CONGELADAS (antes del ruido de párpado)
                 this.fireBlinkClick(this.blinkFrozenX, this.blinkFrozenY);
               }
-              // Parpadeo sostenido (>500 ms, ≤3 s) → señal para escaneo secuencial.
-              // No comparte ventana de duración con el blink-click normal,
-              // por lo que ambos modos coexisten sin conflicto.
-              if (dur > BLINK_MAX_MS && dur <= SCAN_BLINK_MAX_MS && this.blinkEnabled) {
+              // Parpadeo sostenido intencional (>500 ms, ≤1500 ms) → activa botón inmediatamente
+              // sin necesitar que el dwell haya arrancado. El listener en el hook verifica
+              // que el cursor esté sobre un gaze-target antes de disparar el click.
+              if (dur > BLINK_MAX_MS && dur <= INTENTIONAL_BLINK_MAX_MS && this.blinkEnabled) {
+                this.intentionalBlinkListeners.forEach(cb => cb(this.blinkFrozenX, this.blinkFrozenY));
+              }
+              // Parpadeo muy largo (>1500 ms, ≤3 s) → señal para escaneo secuencial.
+              if (dur > INTENTIONAL_BLINK_MAX_MS && dur <= SCAN_BLINK_MAX_MS && this.blinkEnabled) {
                 this.scanBlinkListeners.forEach(cb => cb());
               }
             }
@@ -1250,8 +1256,10 @@ class GazeTracker {
 
   addGazeListener(cb: GazeCallback)     { this.gazeListeners.add(cb); }
   removeGazeListener(cb: GazeCallback)  { this.gazeListeners.delete(cb); }
-  addBlinkListener(cb: BlinkCallback)       { this.blinkListeners.add(cb); }
-  removeBlinkListener(cb: BlinkCallback)    { this.blinkListeners.delete(cb); }
+  addBlinkListener(cb: BlinkCallback)              { this.blinkListeners.add(cb); }
+  removeBlinkListener(cb: BlinkCallback)           { this.blinkListeners.delete(cb); }
+  addIntentionalBlinkListener(cb: BlinkCallback)   { this.intentionalBlinkListeners.add(cb); }
+  removeIntentionalBlinkListener(cb: BlinkCallback){ this.intentionalBlinkListeners.delete(cb); }
   addScanBlinkListener(cb: () => void)      { this.scanBlinkListeners.add(cb); }
   removeScanBlinkListener(cb: () => void)   { this.scanBlinkListeners.delete(cb); }
 
@@ -1579,10 +1587,30 @@ export function useWebGazer() {
       triggerClick(x, y);                                 // activación inmediata
     };
 
+    // ── PARPADEO SOSTENIDO (500-1500 ms) ────────────────────────────────────────
+    // Complementario al blink-click corto. No requiere que el dwell haya empezado:
+    // basta con que el cursor esté sobre un gaze-target. El paciente puede activar
+    // un botón cerrando el ojo deliberadamente durante medio segundo o más, sin
+    // esperar los 3 s de dwell. Primero que ocurra (dwell o parpadeo) gana.
+    const onIntentionalBlink = (x: number, y: number) => {
+      if (confState !== 'stable') return;   // tracking dudoso → ignorar
+      if (!targetEl) return;                // cursor no está sobre ningún botón
+      const onTarget = hitTest(x, y);
+      if (onTarget !== targetEl) return;    // coordenadas congeladas apuntan a otro botón
+      // Cancela el dwell en curso para evitar doble activación
+      resetProgress(targetEl);
+      dwellStartTime = 0;
+      dwellCooldown  = true;   // bloquea re-dwell hasta que el usuario cambie de botón
+      // Feedback verde (distingue visualmente del dwell)
+      setCursorBlinkSuccess();
+      triggerClick(x, y);
+    };
+
     // Touch lo maneja globalCursor.ts (siempre activo, passive, sin preventDefault).
     // Aquí solo registramos gaze y blink.
     gazeTracker.addGazeListener(onGaze);
     gazeTracker.addBlinkListener(onBlink);
+    gazeTracker.addIntentionalBlinkListener(onIntentionalBlink);
 
     // ── Auto-ajuste por toque: mientras la mirada está activa, cada vez que
     // el paciente toca un botón de mirada, aplicamos un nudge alpha suave. ──
@@ -1596,6 +1624,7 @@ export function useWebGazer() {
       setAimGlow(targetEl, false);
       gazeTracker.removeGazeListener(onGaze);
       gazeTracker.removeBlinkListener(onBlink);
+      gazeTracker.removeIntentionalBlinkListener(onIntentionalBlink);
       setGazeTargetTouchCallback(null);
       clearInterval(confMonitor);
       if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
