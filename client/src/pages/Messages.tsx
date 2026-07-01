@@ -268,40 +268,40 @@ function NavArrowButton({ page, totalPages, onNext }: {
       aria-label={`Página ${page + 1} de ${totalPages}. Ir a la siguiente`}
       style={{
         position: "relative",
-        width: "68px",
+        width: "108px",
         flexShrink: 0,
         height: "100%",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: "12px",
+        gap: "14px",
         background: "#E0F2FE",
         border: "1.5px solid #BAE6FD",
-        borderLeft: "5px solid #0EA5E9",
-        borderRadius: "14px",
+        borderLeft: "6px solid #0EA5E9",
+        borderRadius: "16px",
         cursor: "pointer",
         userSelect: "none",
         touchAction: "manipulation",
         overflow: "hidden",
-        padding: "12px 4px",
+        padding: "16px 6px",
         transition: "background 0.18s",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        boxShadow: "0 2px 8px rgba(14,165,233,0.12)",
       }}
     >
       {/* Indicador de página: puntos */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "7px" }}>
         {Array.from({ length: totalPages }, (_, i) => (
           <div key={i} style={{
-            width: "9px", height: "9px", borderRadius: "50%",
+            width: "11px", height: "11px", borderRadius: "50%",
             background: i === page ? "#0369A1" : "#BAE6FD",
             transition: "background 0.2s",
           }} />
         ))}
       </div>
 
-      {/* Chevron derecho */}
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+      {/* Chevron derecho — grande y visible */}
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none"
         stroke="#0369A1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
         aria-hidden="true">
         <polyline points="9 18 15 12 9 6" />
@@ -310,16 +310,16 @@ function NavArrowButton({ page, totalPages, onNext }: {
       {/* Etiqueta vertical */}
       <span style={{
         fontFamily: "'Lexend', sans-serif",
-        fontSize: "0.62rem",
+        fontSize: "0.72rem",
         fontWeight: 800,
         color: "#0369A1",
         textTransform: "uppercase",
-        letterSpacing: "0.06em",
+        letterSpacing: "0.08em",
         writingMode: "vertical-rl",
         textOrientation: "mixed",
         transform: "rotate(180deg)",
       }}>
-        MÁS
+        PÁGINA
       </span>
 
       {/* Barra dwell dorada */}
@@ -327,7 +327,7 @@ function NavArrowButton({ page, totalPages, onNext }: {
         position: "absolute", bottom: 0, left: 0,
         height: "3.5px", width: "0%",
         background: "#fbbf24",
-        borderRadius: "0 0 14px 14px",
+        borderRadius: "0 0 16px 16px",
       }} />
     </button>
   );

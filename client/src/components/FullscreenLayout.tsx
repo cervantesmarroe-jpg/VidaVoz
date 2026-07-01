@@ -89,6 +89,8 @@ function SideTab({ path, Icon, label, color, active, isPortrait }: SideTabProps)
   return (
     <Link
       href={path}
+      className="gaze-target"
+      data-gaze-target="true"
       onPointerEnter={startDwell}
       onPointerLeave={cancelDwell}
       data-testid={`sidetab-${label.toLowerCase()}`}
@@ -152,6 +154,8 @@ function ScanTab({ active, onToggle, isPortrait }: ScanTabProps) {
   const color = "#34d399"; // esmeralda — diferente a todos los tabs existentes
   return (
     <button
+      className="gaze-target"
+      data-gaze-target="true"
       data-scan-panel="true"
       onClick={onToggle}
       aria-label={active ? "Detener guiado" : "Iniciar guiado"}
