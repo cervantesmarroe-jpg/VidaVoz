@@ -144,19 +144,22 @@ function SideTab({ path, Icon, label, color, active, isPortrait, isMobile }: Sid
         }}
       />
       <Icon style={{
-        width: useRow ? 20 : 22, height: useRow ? 20 : 22,
+        width:  isMobile ? 26 : (useRow ? 20 : 22),
+        height: isMobile ? 26 : (useRow ? 20 : 22),
         color: active ? color : "#AAAAAA", position: "relative", zIndex: 1, flexShrink: 0,
         filter: active ? "none" : "grayscale(0.7) opacity(0.55)",
         transition: "filter 0.2s",
       }} />
-      <span style={{
-        fontSize: useRow ? "0.58rem" : "0.5rem",
-        fontWeight: 800, letterSpacing: "0.06em",
-        textTransform: "uppercase", color: active ? color : "#AAAAAA",
-        position: "relative", zIndex: 1, lineHeight: 1.2, textAlign: "center",
-      }}>
-        {label}
-      </span>
+      {!isMobile && (
+        <span style={{
+          fontSize: useRow ? "0.58rem" : "0.5rem",
+          fontWeight: 800, letterSpacing: "0.06em",
+          textTransform: "uppercase", color: active ? color : "#AAAAAA",
+          position: "relative", zIndex: 1, lineHeight: 1.2, textAlign: "center",
+        }}>
+          {label}
+        </span>
+      )}
     </Link>
   );
 }
@@ -200,7 +203,7 @@ function ScanTab({ active, onToggle, isPortrait, isMobile }: ScanTabProps) {
       }}
     >
       <span style={{
-        fontSize: useRow ? 20 : 22,
+        fontSize: isMobile ? 24 : (useRow ? 20 : 22),
         lineHeight: 1,
         color: active ? color : "#AAAAAA",
         position: "relative",
@@ -213,7 +216,7 @@ function ScanTab({ active, onToggle, isPortrait, isMobile }: ScanTabProps) {
       }}>
         {active ? "■" : "▶"}
       </span>
-      <span style={{
+      {!isMobile && <span style={{
         fontSize: useRow ? "0.58rem" : "0.5rem",
         fontWeight: 800,
         letterSpacing: "0.06em",
@@ -225,7 +228,7 @@ function ScanTab({ active, onToggle, isPortrait, isMobile }: ScanTabProps) {
         textAlign: "center",
       }}>
         GUIADO
-      </span>
+      </span>}
     </button>
   );
 }

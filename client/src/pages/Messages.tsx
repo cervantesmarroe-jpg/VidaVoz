@@ -212,7 +212,7 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
       </div>
 
       {/* Label */}
-      <span style={{
+      <span className="msg-btn-label" style={{
         fontFamily: "'Lexend', sans-serif",
         fontSize: "clamp(1.05rem, 2.4vw, 1.5rem)",
         fontWeight: 800,
@@ -223,6 +223,7 @@ function MessageButton({ id, label, phrase, icon: Icon, bg, bgHover, accent }: M
         color: "#1A1A1A",
         width: "100%",
         marginTop: "4px",
+        overflowWrap: "break-word",
       }}>
         {label}
       </span>
@@ -450,6 +451,114 @@ function GhostNavCell({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ── Botón de paginación inferior (solo móvil) ─────────────────────────────────
+function MobilePageButton({ page, totalPages, onNext }: {
+  page: number; totalPages: number; onNext: () => void;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barRef   = useRef<HTMLDivElement>(null);
+  const btnRef   = useRef<HTMLButtonElement>(null);
+
+  const startDwell = useCallback(() => {
+    if (timerRef.current) return;
+    if (btnRef.current) {
+      btnRef.current.style.background = "#BAE6FD";
+      btnRef.current.style.boxShadow  = "0 0 0 2.5px #fbbf24, 0 4px 14px rgba(251,191,36,0.22)";
+    }
+    const bar = barRef.current;
+    if (bar) {
+      bar.style.transition = "none"; bar.style.width = "0%";
+      void bar.getBoundingClientRect();
+      bar.style.transition = `width ${MSG_DWELL_MS}ms linear`;
+      bar.style.width = "100%";
+    }
+    timerRef.current = setTimeout(() => { timerRef.current = null; cancelDwell(); }, MSG_DWELL_MS);
+  }, []);
+
+  const cancelDwell = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (btnRef.current) {
+      btnRef.current.style.background = "#E0F2FE";
+      btnRef.current.style.boxShadow  = "0 2px 6px rgba(14,165,233,0.12)";
+    }
+    const bar = barRef.current;
+    if (bar) { bar.style.transition = "none"; bar.style.width = "0%"; }
+  }, []);
+
+  return (
+    <button
+      ref={btnRef}
+      className="gaze-target"
+      data-gaze-target="true"
+      onClick={() => { cancelDwell(); onNext(); }}
+      onPointerEnter={startDwell}
+      onPointerLeave={cancelDwell}
+      aria-label={`Página ${page + 1} de ${totalPages}. Siguiente`}
+      style={{
+        position: "relative",
+        flexShrink: 0,
+        alignSelf: "center",
+        height: "46px",
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px",
+        background: "#E0F2FE",
+        border: "1.5px solid #BAE6FD",
+        borderRadius: "23px",
+        padding: "0 20px",
+        cursor: "pointer",
+        userSelect: "none",
+        touchAction: "manipulation",
+        overflow: "hidden",
+        boxShadow: "0 2px 6px rgba(14,165,233,0.12)",
+        transition: "background 0.18s, box-shadow 0.18s",
+      }}
+    >
+      {/* Puntos de página */}
+      <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+        {Array.from({ length: totalPages }, (_, i) => (
+          <div key={i} style={{
+            width: "7px", height: "7px", borderRadius: "50%",
+            background: i === page ? "#0369A1" : "#93C5FD",
+            flexShrink: 0,
+            transition: "background 0.2s",
+          }} />
+        ))}
+      </div>
+
+      {/* Separador */}
+      <div style={{ width: "1px", height: "18px", background: "#BAE6FD", flexShrink: 0 }} />
+
+      {/* Etiqueta + chevron */}
+      <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+        <span style={{
+          fontFamily: "'Lexend', sans-serif",
+          fontSize: "0.64rem",
+          fontWeight: 800,
+          color: "#0369A1",
+          textTransform: "uppercase",
+          letterSpacing: "0.07em",
+        }}>SIGUIENTE</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+          stroke="#0369A1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          aria-hidden="true">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+
+      {/* Barra dwell */}
+      <div ref={barRef} style={{
+        position: "absolute", bottom: 0, left: 0,
+        height: "3px", width: "0%",
+        background: "#fbbf24",
+        borderRadius: "0 0 23px 23px",
+      }} />
+    </button>
+  );
+}
+
 // ── Página ───────────────────────────────────────────────────────────────────
 export default function Messages() {
   const [page, setPage] = useState(0);
@@ -463,8 +572,8 @@ export default function Messages() {
   }, [totalPages]);
 
   // Celdas vacías al final del grid cuando la página no está completa.
-  // En portrait (2 cols): ceil(n/2)×2 − n. En landscape (3 cols): ceil(n/3)×3 − n.
-  const cols       = isLandscape ? 3 : 2;
+  // Móvil siempre 2 cols; landscape 3 cols; portrait 2 cols.
+  const cols       = isMobile ? 2 : (isLandscape ? 3 : 2);
   const totalSlots = Math.ceil(visibleMsgs.length / cols) * cols;
   const ghostCount = totalSlots - visibleMsgs.length;
 
@@ -472,17 +581,18 @@ export default function Messages() {
     <FullscreenLayout>
       <div style={{
         display: "flex",
+        flexDirection: isMobile ? "column" : "row",
         gap: "8px",
         padding: "10px",
         height: "100%",
         boxSizing: "border-box",
         background: "#FAFAFA",
       }}>
-        {/* Cuadrícula — 6 mensajes visibles + celdas fantasma en huecos */}
+        {/* Cuadrícula — mensajes visibles + celdas fantasma en huecos */}
         <div className="msg-grid-container" style={{
           flex: 1,
+          minHeight: 0,
           gap: "8px",
-          height: "100%",
         }}>
           {visibleMsgs.map((m) => (
             <MessageButton key={m.id} {...m} />
@@ -492,9 +602,14 @@ export default function Messages() {
           ))}
         </div>
 
-        {/* Flecha de navegación (solo si hay más de una página) */}
-        {totalPages > 1 && (
-          <NavArrowButton page={page} totalPages={totalPages} onNext={nextPage} width={isMobile ? 76 : 108} />
+        {/* Escritorio/tablet: flecha lateral */}
+        {!isMobile && totalPages > 1 && (
+          <NavArrowButton page={page} totalPages={totalPages} onNext={nextPage} />
+        )}
+
+        {/* Móvil: botón de paginación inferior centrado */}
+        {isMobile && totalPages > 1 && (
+          <MobilePageButton page={page} totalPages={totalPages} onNext={nextPage} />
         )}
       </div>
     </FullscreenLayout>

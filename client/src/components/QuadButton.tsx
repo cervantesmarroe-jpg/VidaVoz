@@ -134,11 +134,11 @@ export function QuadButton({
 
       {/* Label */}
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.15, textAlign: "center", marginTop: "4px", paddingBottom: "2px", maxWidth: "100%" }}>
-        <span style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1.1rem,2.9vw,1.85rem)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", textShadow: "none", color: textColor, opacity: 0.95 }}>
+        <span className="quad-btn-label" style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1.1rem,2.9vw,1.85rem)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", textShadow: "none", color: textColor, opacity: 0.95, overflowWrap: "break-word", textAlign: "center" }}>
           {label}
         </span>
         {sublabel && (
-          <span style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1.5rem,4vw,3rem)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.04em", color: textColor, lineHeight: 1.05 }}>
+          <span className="quad-btn-sublabel" style={{ fontFamily: "'Lexend',sans-serif", fontSize: "clamp(1.5rem,4vw,3rem)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.04em", color: textColor, lineHeight: 1.05, overflowWrap: "break-word", textAlign: "center" }}>
             {sublabel}
           </span>
         )}

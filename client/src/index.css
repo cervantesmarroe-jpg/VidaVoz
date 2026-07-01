@@ -352,6 +352,20 @@ input[type=range].gaze-slider::-moz-range-thumb {
   }
 }
 
+/* Fuentes de botones en móvil: tamaño reducido para evitar recorte */
+@media (max-width: 480px) {
+  .msg-btn-label {
+    font-size: clamp(0.78rem, 3.8vw, 1.05rem) !important;
+    line-height: 1.25 !important;
+  }
+  .quad-btn-label {
+    font-size: clamp(0.9rem, 3.5vw, 1.4rem) !important;
+  }
+  .quad-btn-sublabel {
+    font-size: clamp(1.1rem, 5.5vw, 2rem) !important;
+  }
+}
+
 /* ── Splash Screen: barra de progreso ─────────────────────────────────────── */
 @keyframes splash-progress {
   0%   { width: 0%; }
