@@ -319,6 +319,10 @@ export function CalibrationScreen({ onSuccess, onCancel }: CalibrationScreenProp
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
+      // data-scan-panel excluye esta pantalla del manejador de toque de
+      // GUIADO, por si el escaneo ya estuviera forzado activo debajo
+      // (p. ej. calibración iniciada estando en /teclado).
+      data-scan-panel="true"
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         background: "#000000",

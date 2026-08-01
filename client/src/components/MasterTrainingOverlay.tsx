@@ -284,13 +284,18 @@ export function MasterTrainingOverlay({ onClose }: Props) {
   const stepCounter = `Muestra ${step + 1} de ${TOTAL_STEPS}`;
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 10000,
-      background: "#060B10",
-      display: "flex", flexDirection: "column",
-      fontFamily: "'Lexend','Inter',sans-serif",
-      userSelect: "none", overflow: "hidden",
-    }}>
+    <div
+      // data-scan-panel: mismo motivo que en ConsentModal/CalibrationScreen —
+      // evita que el manejador de toque de GUIADO intercepte los botones de
+      // este overlay si el escaneo ya estuviera activo debajo.
+      data-scan-panel="true"
+      style={{
+        position: "fixed", inset: 0, zIndex: 10000,
+        background: "#060B10",
+        display: "flex", flexDirection: "column",
+        fontFamily: "'Lexend','Inter',sans-serif",
+        userSelect: "none", overflow: "hidden",
+      }}>
       <style>{`
         @keyframes hbMT  { 0%,100%{transform:scale(1)} 14%{transform:scale(1.22)} 28%{transform:scale(1)} 42%{transform:scale(1.12)} 70%{transform:scale(1)} }
         @keyframes popMT { 0%{transform:scale(0.4);opacity:0} 70%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
