@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, SpaceColor as Space } from "@/components/icons/ColorIcons";
-import { LayoutGrid, Keyboard as KeyboardIconLucide, ArrowLeft } from "lucide-react";
+import { Lock, ArrowLeftRight, ArrowLeft } from "lucide-react";
 import { useTTS } from "@/hooks/use-tts";
 import { useScanning } from "@/context/ScanningContext";
 import { setCursorVisible } from "@/lib/globalCursor";
@@ -322,39 +322,68 @@ function ActionBtn({
   );
 }
 
-// ── Selector de modo (discreto, solo para el cuidador) ────────────────────────
-// Sin data-gaze-target: el cursor de mirada y el escaneo GUIADO jamás lo ven.
+// ── Selector de modo (control del cuidador — visible, no accesible al escaneo) ─
+// Sin data-gaze-target: el cursor de mirada y el escaneo GUIADO jamás lo ven,
+// así el paciente no puede alcanzarlo ni por mirada ni por pulsador externo.
 // Con data-scan-panel="true": el toque físico del cuidador no se confunde con
 // una confirmación de escaneo (ver el capturador de pointerdown en
-// FullscreenLayout).
-function ModeToggleBtn({ mode, onToggle }: { mode: KeyboardMode; onToggle: () => void }) {
+// FullscreenLayout). El estilo (candado + "CONTROL DEL CUIDADOR") lo marca
+// visualmente como un control ajeno a las teclas del paciente.
+function ModeToggleBar({ mode, onToggle }: { mode: KeyboardMode; onToggle: () => void }) {
   return (
     <button
       data-scan-panel="true"
       data-testid="button-mode-toggle"
       onClick={onToggle}
-      aria-label={mode === "grupos" ? "Cambiar a teclado QWERTY (solo cuidador)" : "Cambiar a teclado por grupos (solo cuidador)"}
-      title="Solo cuidador"
+      aria-label={mode === "grupos" ? "Cambiar a teclado QWERTY (control del cuidador)" : "Cambiar a teclado por grupos (control del cuidador)"}
       style={{
-        position: "absolute",
-        top: 6, right: 6,
-        zIndex: 30,
-        width: 30, height: 30,
-        borderRadius: 8,
-        background: "rgba(255,255,255,0.55)",
-        border: "1px solid rgba(0,0,0,0.08)",
+        flexShrink: 0,
+        width: "100%",
+        height: 44,
+        borderRadius: 10,
+        background: "#F1F5F9",
+        border: "1.5px dashed #94A3B8",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        opacity: 0.45,
+        justifyContent: "space-between",
+        gap: 8,
+        padding: "0 14px",
+        boxSizing: "border-box",
         cursor: "pointer",
         touchAction: "manipulation",
         WebkitTapHighlightColor: "transparent",
       }}
     >
-      {mode === "grupos"
-        ? <KeyboardIconLucide size={16} color="#666666" />
-        : <LayoutGrid size={16} color="#666666" />}
+      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        <Lock size={14} color="#64748B" style={{ flexShrink: 0 }} />
+        <span style={{
+          fontFamily: "'Lexend',sans-serif",
+          fontWeight: 700,
+          fontSize: ".62rem",
+          letterSpacing: ".08em",
+          textTransform: "uppercase",
+          color: "#64748B",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}>
+          Control del cuidador
+        </span>
+      </span>
+
+      <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <span style={{
+          fontFamily: "'Lexend',sans-serif",
+          fontWeight: 900,
+          fontSize: "clamp(.8rem,2.4vw,1rem)",
+          letterSpacing: ".03em",
+          color: "#334155",
+          whiteSpace: "nowrap",
+        }}>
+          {mode === "grupos" ? "MODO GRUPOS" : "MODO QWERTY"}
+        </span>
+        <ArrowLeftRight size={18} color="#475569" style={{ flexShrink: 0 }} />
+      </span>
     </button>
   );
 }
@@ -607,8 +636,8 @@ export default function Keyboard() {
         background: "#FAFAFA",
       }}>
 
-        {/* Selector de modo — discreto, solo accesible tocando directamente */}
-        <ModeToggleBtn mode={mode} onToggle={handleModeToggle} />
+        {/* Selector de modo — control visible del cuidador, fuera del alcance del escaneo */}
+        <ModeToggleBar mode={mode} onToggle={handleModeToggle} />
 
         {/* Tooltip para el cuidador — aparece al entrar, se cierra en 7 s */}
         {showTip && <ScanTooltip onDismiss={() => setShowTip(false)} />}
