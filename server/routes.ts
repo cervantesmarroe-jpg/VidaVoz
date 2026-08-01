@@ -1,15 +1,15 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { insertIrisFeedbackSchema } from "@shared/schema";
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
-  
+// No recibe/crea un http.Server: las rutas no usan WebSockets ni nada que
+// requiera el servidor HTTP subyacente, así que esta función puede montarse
+// tanto en un servidor Node "de toda la vida" (Railway/local, server/index.ts)
+// como en una función serverless de Vercel (api/[...path].ts) sin cambios.
+export async function registerRoutes(app: Express): Promise<void> {
+
   // Seed initial data if empty
   app.get('/api/seed', async (req, res) => {
     try {
@@ -85,6 +85,4 @@ export async function registerRoutes(
     const result = await storage.computeOptimalIrisWeight();
     res.json(result);
   });
-
-  return httpServer;
 }

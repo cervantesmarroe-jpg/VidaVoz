@@ -49,6 +49,16 @@ async function buildAll() {
   await writeFile(swPath, swSrc.replace("__CACHE_VERSION__", cacheVersion), "utf-8");
   console.log(`service worker cache → ${cacheVersion}`);
 
+  // En Vercel el servidor no se ejecuta como proceso Node de larga duración:
+  // se despliega como función serverless (api/[...path].ts), que Vercel
+  // bundlea con su propio builder. Empaquetar aquí server/index.ts con
+  // esbuild sería trabajo perdido (y ni siquiera es el entrypoint que usa
+  // Vercel), así que lo omitimos cuando detectamos su entorno de build.
+  if (process.env.VERCEL) {
+    console.log("VERCEL detectado: omitiendo bundle esbuild del servidor (usa api/[...path].ts).");
+    return;
+  }
+
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
