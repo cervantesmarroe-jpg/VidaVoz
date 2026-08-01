@@ -4,7 +4,6 @@ import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, 
 import { Lock, ArrowLeftRight, ArrowLeft } from "lucide-react";
 import { useTTS } from "@/hooks/use-tts";
 import { useScanning } from "@/context/ScanningContext";
-import { setCursorVisible } from "@/lib/globalCursor";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
 import { DWELL_MS } from "@/lib/dwell";
@@ -457,7 +456,7 @@ export default function Keyboard() {
     : "clamp(.8rem,3vw,1.4rem)";
 
   const { speak } = useTTS();
-  const { active: scanActive, enable: scanEnable, disable: scanDisable } = useScanning();
+  const { active: scanActive, enable: scanEnable } = useScanning();
 
   const [mode, setMode]             = useState<KeyboardMode>("grupos");
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
@@ -469,34 +468,15 @@ export default function Keyboard() {
 
   const justActivatedRef     = useRef<string | null>(null);
   const justActivatedTileRef = useRef<string | null>(null);
-  // Estado de GUIADO antes de entrar al Teclado — para restaurar al salir.
-  const prevScanRef = useRef<boolean>(scanActive);
 
-  // ── Al montar: desactivar gaze, activar GUIADO, mostrar tooltip ─────────────
+  // Muestra el aviso de GUIADO al cuidador cuando el modo de acceso elegido
+  // globalmente (selector en FullscreenLayout) activa el escaneo mientras
+  // se está en esta pantalla. Teclado ya no fuerza ningún modo por su
+  // cuenta — respeta el modo de acceso elegido, igual que el resto de
+  // pantallas.
   useEffect(() => {
-    // Capturar estado previo ANTES de habilitarlo nosotros.
-    prevScanRef.current = scanActive;
-
-    // 1. Ocultar cursor de eye-tracking y deshabilitar snap + dwell.
-    setCursorVisible(false);
-    (window as any).__gazeKeyboardMode = true;
-
-    // 2. Activar GUIADO si no estaba ya activo.
-    if (!scanActive) scanEnable();
-
-    // 3. Mostrar tooltip de instrucciones al cuidador.
-    setShowTip(true);
-
-    return () => {
-      // Restaurar cursor.
-      setCursorVisible(true);
-      (window as any).__gazeKeyboardMode = false;
-
-      // Restaurar estado previo de GUIADO.
-      if (!prevScanRef.current) scanDisable();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (scanActive) setShowTip(true);
+  }, [scanActive]);
 
   // Auto-cerrar tooltip tras 7 s.
   useEffect(() => {

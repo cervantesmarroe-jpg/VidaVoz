@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess, isTouchLocked, setGazeTargetTouchCallback } from '@/lib/globalCursor';
+import { getAccessFlags } from '@/hooks/use-access-mode';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
@@ -599,10 +600,12 @@ class GazeTracker {
                 // Disparar con coords CONGELADAS (antes del ruido de párpado)
                 this.fireBlinkClick(this.blinkFrozenX, this.blinkFrozenY);
               }
-              // Parpadeo sostenido intencional (>500 ms, ≤1500 ms) → activa botón inmediatamente
+              // Parpadeo sostenido intencional (>300 ms, ≤1500 ms) → activa botón inmediatamente
               // sin necesitar que el dwell haya arrancado. El listener en el hook verifica
               // que el cursor esté sobre un gaze-target antes de disparar el click.
-              if (dur > BLINK_MAX_MS && dur <= INTENTIONAL_BLINK_MAX_MS && this.blinkEnabled) {
+              // getAccessFlags().blinkEnabled: solo cuenta si el modo de acceso elegido
+              // por el cuidador (Solo parpadeo / Combinado) tiene el parpadeo habilitado.
+              if (dur > BLINK_MAX_MS && dur <= INTENTIONAL_BLINK_MAX_MS && this.blinkEnabled && getAccessFlags().blinkEnabled) {
                 this.intentionalBlinkListeners.forEach(cb => cb(this.blinkFrozenX, this.blinkFrozenY));
               }
               // Parpadeo muy largo (>1500 ms, ≤3 s) → señal para escaneo secuencial.
@@ -1155,8 +1158,9 @@ class GazeTracker {
   //   4. Flash del botón activado.
   //   5. Notifica blinkListeners.
   private fireBlinkClick(x: number, y: number) {
-    // En Teclado el eye-tracking está desactivado — blink no debe hacer nada.
-    if ((window as any).__gazeKeyboardMode) return;
+    // Solo dispara si el modo de acceso elegido por el cuidador tiene el
+    // parpadeo habilitado (Solo parpadeo / Combinado) — ver use-access-mode.ts.
+    if (!getAccessFlags().blinkEnabled) return;
     // ── VALIDACIÓN DE CONFIANZA ───────────────────────────────────────────────
     // Si el cursor está en el vacío (sin ningún .gaze-target en el radio de
     // atracción), el parpadeo se ignora: el paciente no estaba mirando un botón.
@@ -1501,8 +1505,6 @@ export function useWebGazer() {
 
     // ── MIRADA: gaze cede al toque durante 500 ms (isTouchLocked de globalCursor) ─
     const onGaze = (x: number, y: number) => {
-      // En Teclado el cursor de mirada está desactivado — no mover ni hacer dwell.
-      if ((window as any).__gazeKeyboardMode) return;
       if (isTouchLocked()) return;
       moveGlobalCursor(x, y);
 
@@ -1540,7 +1542,17 @@ export function useWebGazer() {
           dwellCooldown  = false;
           setAimGlow(target, true); // glow suave: "te he detectado, mantén la mirada"
         } else if (!dwellCooldown) {
-          if (dwellStartTime === 0) {
+          // getAccessFlags().cursorEnabled: el dwell (mirar-y-mantener) solo
+          // cuenta en los modos "Solo mirada"/"Combinado". En "Solo parpadeo"
+          // seguimos acumulando targetEl más arriba (para que el parpadeo
+          // intencional sepa qué botón activar) pero sin disparar por dwell.
+          if (!getAccessFlags().cursorEnabled) {
+            // Si había un dwell en curso cuando el cuidador cambió de modo,
+            // lo reseteamos — evita una activación instantánea por un
+            // dwellStartTime obsoleto si el modo vuelve a habilitar el dwell
+            // más tarde sobre el mismo botón.
+            if (dwellStartTime !== 0) { resetProgress(target); dwellStartTime = 0; }
+          } else if (dwellStartTime === 0) {
             // ── Fase 1: estabilización (anti-barrido visual) ────────────────
             const dx = x - stabAnchorX;
             const dy = y - stabAnchorY;
@@ -1575,9 +1587,11 @@ export function useWebGazer() {
 
     // ── PARPADEO ─────────────────────────────────────────────────────────────
     // Filtros del tracker (ya activos en GazeTracker):
-    //   • BLINK_MIN_MS=200 / BLINK_MAX_MS=500 → ignora microparpadeos y cierres
+    //   • BLINK_MIN_MS=200 / BLINK_MAX_MS=300 → ignora microparpadeos y cierres
     //     largos por sueño/mirada perdida.
     //   • BLINK_COOLDOWN=1200 → impide doble activación.
+    //   • getAccessFlags().blinkEnabled (use-access-mode.ts) → solo dispara en
+    //     los modos "Solo parpadeo"/"Combinado" (comprobado en fireBlinkClick).
     // Filtro adicional aquí (anti-falso positivo intencional): el blink solo
     // activa si el paciente ya confirmó intención sobre un botón — es decir,
     // si superó la fase de estabilización (dwellStartTime > 0) y el blink
@@ -1591,11 +1605,13 @@ export function useWebGazer() {
       triggerClick(x, y);                                 // activación inmediata
     };
 
-    // ── PARPADEO SOSTENIDO (500-1500 ms) ────────────────────────────────────────
-    // Complementario al blink-click corto. No requiere que el dwell haya empezado:
-    // basta con que el cursor esté sobre un gaze-target. El paciente puede activar
-    // un botón cerrando el ojo deliberadamente durante medio segundo o más, sin
-    // esperar los 3 s de dwell. Primero que ocurra (dwell o parpadeo) gana.
+    // ── PARPADEO INTENCIONAL (>300-1500 ms) ─────────────────────────────────────
+    // Es la activación principal del modo "Solo parpadeo" (sin dwell) y también
+    // funciona en "Combinado". No requiere que el dwell haya empezado: basta con
+    // que el cursor esté sobre un gaze-target (targetEl, fijado en onGaze incluso
+    // cuando el dwell está desactivado). El paciente puede activar un botón
+    // cerrando el ojo deliberadamente más de 300 ms, sin esperar el dwell.
+    // Si el dwell SÍ está activo (Combinado), gana lo primero que ocurra.
     const onIntentionalBlink = (x: number, y: number) => {
       if (confState !== 'stable') return;   // tracking dudoso → ignorar
       if (!targetEl) return;                // cursor no está sobre ningún botón
