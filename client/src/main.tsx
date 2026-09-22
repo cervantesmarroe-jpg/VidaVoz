@@ -9,5 +9,8 @@ import "@/lib/headOffsetCorrector";
 // Side-effect: cursor de apoyo táctil que aparece sobre el toque cuando el
 // eye-tracking está activo. Expone window.touchSupportCursor.
 import "@/lib/touchSupportCursor";
+// Side-effect: registra el Service Worker solo en producción; en dev limpia
+// cualquier registro/caché de una sesión anterior (ver el propio módulo).
+import "@/lib/registerServiceWorker";
 
 createRoot(document.getElementById("root")!).render(<App />);

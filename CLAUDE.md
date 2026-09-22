@@ -58,9 +58,6 @@ Centered on `client/src/hooks/use-webgazer.ts` (~1400 lines, heavily commented i
 ### Global cursor (`client/src/lib/globalCursor.ts`)
 A single `#gaze-cursor` DOM element created **synchronously before React mounts** (imported as a side effect at the top of `main.tsx`, alongside `headOffsetCorrector.ts` and `touchSupportCursor.ts`). All native cursors are hidden app-wide. It arbitrates three input sources — mouse, touch (with a 500ms touch-lock to prevent gaze interference), and gaze — and renders dwell/blink visual feedback.
 
-### Scanning mode
-Non-camera accessibility fallback (`ScanningContext`): sequentially highlights every `[data-gaze-target="true"]` element on a fixed interval; activated when the user declines camera consent in `ConsentModal`.
-
 ### Other notable pieces
 - `use-tts.ts` — Web Speech API wrapper; voice-selection priority favors Google Neural/Enhanced/Premium/Natural voices, locale preference `es-ES` > `es-US` > `es-MX`
 - `use-messages.ts` — `@tanstack/react-query` hooks for `/api/messages`, typed against `shared/routes.ts`

@@ -1,8 +1,6 @@
 import { ReactNode, useRef, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Link, useLocation } from "wouter";
-import {
-  Eye, EyeOff, ClipboardCopy, Lock, ChevronDown, ChevronUp, CircleDot, Layers, Check,
-} from "lucide-react";
+import { CircleDot } from "lucide-react";
 import {
   SirenColor as AlertTriangle,
   ChatColor as MessageSquareText,
@@ -16,9 +14,6 @@ import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
-import { useScanning } from "@/context/ScanningContext";
-import { setCursorVisible } from "@/lib/globalCursor";
-import { useAccessModeStore, deriveAccessFlags, ACCESS_MODES, type AccessMode } from "@/hooks/use-access-mode";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -166,147 +161,73 @@ function SideTab({ path, Icon, label, color, active, isPortrait, isMobile }: Sid
   );
 }
 
-// ── Selector de modo de acceso (control del cuidador) ─────────────────────────
-// Determina globalmente cómo interactúa el paciente en las 4 pantallas:
-// mirada (cursor+dwell), pulsador (GUIADO), parpadeo intencional, o los tres
-// combinados. Sustituye al antiguo botón GUIADO independiente (era
-// data-gaze-target, alcanzable por el propio paciente) — ahora GUIADO es una
-// consecuencia derivada del modo elegido aquí, no un interruptor aparte.
-// Sin data-gaze-target: invisible para la mirada/escaneo del paciente. Con
-// data-scan-panel="true" en cada nivel: el toque físico del cuidador no se
-// confunde con una confirmación de escaneo.
-const ACCESS_MODE_ICONS: Record<AccessMode, React.ElementType> = {
-  mirada:    Eye,
-  pulsador:  CircleDot,
-  parpadeo:  EyeOff,
-  combinado: Layers,
-};
-
-function AccessModeBar({ mode, onSelect }: { mode: AccessMode; onSelect: (m: AccessMode) => void }) {
+// ── Botón informativo "modo pulsador" (control del cuidador, discreto) ───────
+// Marcador de espacio para una futura función de acceso por pulsador externo.
+// NO activa ningún escaneo ni modo — es puramente informativo. Fijo en una
+// esquina, pequeño y de bajo contraste. Sin data-gaze-target: invisible para
+// la mirada/dwell del paciente, así nunca puede activarse por accidente.
+function PulsadorInfoButton() {
   const [open, setOpen] = useState(false);
-  const current = ACCESS_MODES.find((m) => m.id === mode)!;
-  const CurrentIcon = ACCESS_MODE_ICONS[mode];
 
   return (
-    <div data-scan-panel="true" style={{ position: "relative", flexShrink: 0, zIndex: 210 }}>
+    <div style={{ position: "absolute", top: 8, left: 8, zIndex: 220 }}>
       <button
-        data-scan-panel="true"
-        data-testid="button-access-mode"
+        data-testid="button-pulsador-info"
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Modo de acceso actual: ${current.label}. Control del cuidador, pulsa para cambiar.`}
+        aria-label="Información sobre el modo pulsador (función futura)"
         style={{
-          width: "100%",
-          height: 42,
-          background: "#F1F5F9",
-          border: "none",
-          borderBottom: "1.5px dashed #94A3B8",
+          width: 30,
+          height: 30,
+          borderRadius: "50%",
+          background: "rgba(100,116,139,0.12)",
+          border: "1px solid rgba(100,116,139,0.25)",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-          padding: "0 14px",
-          boxSizing: "border-box",
+          justifyContent: "center",
           cursor: "pointer",
           touchAction: "manipulation",
           WebkitTapHighlightColor: "transparent",
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-          <Lock size={13} color="#64748B" style={{ flexShrink: 0 }} />
-          <span style={{
-            fontFamily: "'Lexend',sans-serif",
-            fontWeight: 700,
-            fontSize: ".58rem",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
-            color: "#64748B",
-            whiteSpace: "nowrap",
-          }}>
-            Control del cuidador
-          </span>
-        </span>
-
-        <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <CurrentIcon size={15} color="#334155" />
-          <span style={{
-            fontFamily: "'Lexend',sans-serif",
-            fontWeight: 900,
-            fontSize: ".78rem",
-            letterSpacing: ".03em",
-            color: "#334155",
-            whiteSpace: "nowrap",
-          }}>
-            {current.label.toUpperCase()}
-          </span>
-          {open ? <ChevronUp size={16} color="#475569" /> : <ChevronDown size={16} color="#475569" />}
-        </span>
+        <CircleDot size={14} color="#64748B" />
       </button>
 
       {open && (
         <div
-          data-scan-panel="true"
           style={{
             position: "absolute",
-            top: "100%", left: 0, right: 0,
+            top: "calc(100% + 6px)", left: 0,
+            width: 240,
             background: "#FFFFFF",
-            borderBottom: "1.5px solid #CBD5E1",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.15)",
-            display: "flex",
-            flexDirection: "column",
-            maxHeight: "70vh",
-            overflowY: "auto",
+            border: "1px solid #E2E8F0",
+            borderRadius: 10,
+            boxShadow: "0 8px 20px rgba(0,0,0,0.15)",
+            padding: "10px 12px",
           }}
         >
-          {ACCESS_MODES.map((m) => {
-            const MIcon = ACCESS_MODE_ICONS[m.id];
-            const selected = m.id === mode;
-            return (
-              <button
-                key={m.id}
-                data-scan-panel="true"
-                data-testid={`button-access-mode-${m.id}`}
-                onClick={() => { onSelect(m.id); setOpen(false); }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 16px",
-                  border: "none",
-                  borderBottom: "1px solid #F1F5F9",
-                  background: selected ? "#EEF2FF" : "#FFFFFF",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  touchAction: "manipulation",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                <MIcon size={20} color={selected ? "#4338CA" : "#475569"} style={{ flexShrink: 0 }} />
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{
-                    display: "block",
-                    fontFamily: "'Lexend',sans-serif",
-                    fontWeight: 800,
-                    fontSize: ".85rem",
-                    color: selected ? "#3730A3" : "#334155",
-                  }}>
-                    {m.label.toUpperCase()}
-                  </span>
-                  <span style={{
-                    display: "block",
-                    fontFamily: "'Lexend',sans-serif",
-                    fontWeight: 500,
-                    fontSize: ".68rem",
-                    color: "#64748B",
-                    lineHeight: 1.35,
-                    marginTop: 2,
-                  }}>
-                    {m.description}
-                  </span>
-                </span>
-                {selected && <Check size={16} color="#4338CA" style={{ flexShrink: 0 }} />}
-              </button>
-            );
-          })}
+          <span style={{
+            display: "block",
+            fontFamily: "'Lexend',sans-serif",
+            fontWeight: 800,
+            fontSize: ".68rem",
+            letterSpacing: ".05em",
+            textTransform: "uppercase",
+            color: "#334155",
+            marginBottom: 4,
+          }}>
+            Modo pulsador (próximamente)
+          </span>
+          <span style={{
+            display: "block",
+            fontFamily: "'Lexend',sans-serif",
+            fontWeight: 500,
+            fontSize: ".72rem",
+            color: "#64748B",
+            lineHeight: 1.4,
+          }}>
+            Permitirá confirmar botones con un pulsador externo, sin cámara.
+            Función en desarrollo — de momento use mirada o parpadeo.
+          </span>
         </div>
       )}
     </div>
@@ -323,75 +244,6 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     isActive, isCalibrating,
     activateFromProfile, deactivate,
   } = useWebGazer();
-
-  // ── Modo GUIADO (escaneo secuencial) ─────────────────────────────────────
-  const { active: scanActive, enable: scanEnable, disable: scanDisable, activate: scanActivate, setIntervalMs: scanSetInterval } = useScanning();
-
-  // ── Modo de acceso (control del cuidador) ─────────────────────────────────
-  // Fuente única de verdad para mirada/parpadeo/GUIADO en las 4 pantallas.
-  // Ver client/src/hooks/use-access-mode.ts.
-  const accessMode    = useAccessModeStore((s) => s.mode);
-  const setAccessMode = useAccessModeStore((s) => s.setMode);
-  const accessFlags   = deriveAccessFlags(accessMode);
-
-  // Ajusta el intervalo según la pantalla: 3 s en Mensajes, 5 s en el resto
-  useEffect(() => {
-    if (!scanActive) return;
-    // Teclado: intervalo rápido (31 teclas); Mensajes: medio; resto: lento.
-    scanSetInterval(location === '/mensajes' ? 3000 : location === '/teclado' ? 1200 : 5000);
-  }, [location, scanActive, scanSetInterval]);
-
-  // ── GUIADO según el modo de acceso ─────────────────────────────────────────
-  useEffect(() => {
-    if (accessFlags.guiadoEnabled && !scanActive) scanEnable();
-    else if (!accessFlags.guiadoEnabled && scanActive) scanDisable();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessFlags.guiadoEnabled]);
-
-  // ── Cursor de mirada visible según el modo de acceso ──────────────────────
-  // No detiene el tracking (eso lo decide eyeTrackingNeeded más abajo, vía
-  // isActive) — solo la visibilidad del punto en pantalla. El dwell/parpadeo
-  // en sí se gatean dentro de use-webgazer.ts (getAccessFlags()).
-  useEffect(() => {
-    setCursorVisible(accessFlags.cursorEnabled);
-  }, [accessFlags.cursorEnabled]);
-
-  // Toque en cualquier parte excepto la barra de navegación → confirma el
-  // botón resaltado. También cubre pulsadores externos Bluetooth/WiFi que
-  // simulen un toque de pantalla sin desarrollo adicional.
-  //
-  // Se capturan DOS eventos para aislar completamente el toque físico:
-  //   • pointerdown (capture): llama scanActivate() y bloquea el evento para
-  //     que no llegue al elemento tocado físicamente.
-  //   • click (capture): bloquea el click sintético que el navegador genera
-  //     tras pointerup si llegara a escapar. isTrusted distingue el click
-  //     real del usuario (bloqueado) del .click() programático de scanActivate
-  //     (isTrusted: false → se deja pasar para que el botón resaltado reaccione).
-  useEffect(() => {
-    if (!scanActive) return;
-
-    const onPointerDown = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest('[data-scan-panel="true"]')) return;
-      e.stopPropagation();
-      e.preventDefault();
-      scanActivate();
-    };
-
-    const onClickCapture = (e: MouseEvent) => {
-      if ((e.target as Element | null)?.closest('[data-scan-panel="true"]')) return;
-      if (e.isTrusted) {
-        e.stopPropagation();
-        e.preventDefault();
-      }
-    };
-
-    document.addEventListener('pointerdown', onPointerDown, { capture: true });
-    document.addEventListener('click',       onClickCapture, { capture: true });
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, { capture: true });
-      document.removeEventListener('click',       onClickCapture, { capture: true });
-    };
-  }, [scanActive, scanActivate]);
 
   // ── Estado de activación ──────────────────────────────────────────────────
   // "loading" = cargando modelo ML y/o cámara por primera vez / tras parar
@@ -482,22 +334,16 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     }
   }, [isActive, isCalibrating, deactivate, activateFromProfile]);
 
-  // ── Cámara / mirada según el modo de acceso elegido ────────────────────────
-  // isActive se mantiene sincronizado de forma continua con
-  // accessFlags.eyeTrackingNeeded (en vez de un auto-arranque de una sola
-  // vez): elegir "Solo mirada"/"Solo parpadeo"/"Combinado" enciende la
-  // cámara, elegir "Solo pulsador" la apaga — en cualquier momento de la
-  // sesión, no solo al arrancar. Si el cuidador eligió "modo táctil"
-  // (handleDecline, sin permiso de cámara), nunca se enciende.
+  // ── Cámara / mirada automáticas tras el consentimiento ────────────────────
+  // Se enciende sola en cuanto el cuidador acepta la cámara (mirada +
+  // parpadeo están siempre activos, sin depender de ningún selector de modo).
+  // Si el cuidador eligió "modo táctil" (handleDecline, sin permiso de
+  // cámara), nunca se enciende.
   useEffect(() => {
     if (!accepted) return;
     if (consentMode === "tactile") return;
-    if (accessFlags.eyeTrackingNeeded) {
-      if (!isActive && !isCalibrating && !loading) handleGazeToggle().catch(() => {});
-    } else if (isActive && !isCalibrating) {
-      deactivate();
-    }
-  }, [accessFlags.eyeTrackingNeeded, accepted, consentMode, isActive, isCalibrating, loading, handleGazeToggle, deactivate]);
+    if (!isActive && !isCalibrating && !loading) handleGazeToggle().catch(() => {});
+  }, [accepted, consentMode, isActive, isCalibrating, loading, handleGazeToggle]);
 
   // ── Estilo del botón según estado ─────────────────────────────────────────
   const btnStyle: React.CSSProperties = (() => {
@@ -518,7 +364,7 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
     : "Activar mirada";
 
   return (
-    <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA" }}>
+    <div className="flex flex-col overflow-hidden" style={{ height: "100dvh", background: "#FAFAFA", position: "relative" }}>
 
       {/* Calibración 9 puntos (solo si algo externo llama startCalibration) */}
       {isCalibrating && <CalibrationScreen />}
@@ -529,9 +375,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       {/* Consent modal */}
       {!accepted && <ConsentModal onAccept={accept} onDecline={handleDecline} />}
 
-      {/* Selector de modo de acceso — control del cuidador, visible en las 4
-          pantallas, fuera del alcance de la mirada/escaneo del paciente. */}
-      <AccessModeBar mode={accessMode} onSelect={setAccessMode} />
+      {/* Botón informativo "modo pulsador" — discreto, en una esquina, fuera
+          del alcance de la mirada del paciente. No activa ningún escaneo. */}
+      <PulsadorInfoButton />
 
       {/* ── Header eliminado ─────────────────────────────────────────────
           La cabecera blanca con logo + "Activar mirada" + "Calibrar ADN"
@@ -552,9 +398,8 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        {/* Barra navegación — excluida del handler de confirmación de escaneo */}
+        {/* Barra navegación */}
         <nav
-          data-scan-panel="true"
           style={isPortrait ? {
             width: "100%",
             height: isMobile ? "68px" : "58px",

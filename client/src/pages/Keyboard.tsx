@@ -3,7 +3,6 @@ import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, SpaceColor as Space } from "@/components/icons/ColorIcons";
 import { Lock, ArrowLeftRight, ArrowLeft } from "lucide-react";
 import { useTTS } from "@/hooks/use-tts";
-import { useScanning } from "@/context/ScanningContext";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
 import { DWELL_MS } from "@/lib/dwell";
@@ -16,7 +15,7 @@ const QWERTY_ROWS = [
   ["Z","X","C","V","B","N","M"],
 ];
 
-// ── Modo GRUPOS: rangos de letras para escaneo secuencial ────────────────────
+// ── Modo GRUPOS: rangos de letras en fichas grandes ───────────────────────────
 // Nota: el grupo "O-T" incluye la O (si no, se quedaría sin grupo — el resto
 // de rangos ya reparten las 27 letras del alfabeto español sin huecos).
 type LetterGroup = { id: string; label: string; letters: string[] };
@@ -321,17 +320,13 @@ function ActionBtn({
   );
 }
 
-// ── Selector de modo (control del cuidador — visible, no accesible al escaneo) ─
-// Sin data-gaze-target: el cursor de mirada y el escaneo GUIADO jamás lo ven,
-// así el paciente no puede alcanzarlo ni por mirada ni por pulsador externo.
-// Con data-scan-panel="true": el toque físico del cuidador no se confunde con
-// una confirmación de escaneo (ver el capturador de pointerdown en
-// FullscreenLayout). El estilo (candado + "CONTROL DEL CUIDADOR") lo marca
+// ── Selector de modo (control del cuidador, visible) ──────────────────────────
+// Sin data-gaze-target: el cursor de mirada jamás lo ve, así el paciente no
+// puede alcanzarlo. El estilo (candado + "CONTROL DEL CUIDADOR") lo marca
 // visualmente como un control ajeno a las teclas del paciente.
 function ModeToggleBar({ mode, onToggle }: { mode: KeyboardMode; onToggle: () => void }) {
   return (
     <button
-      data-scan-panel="true"
       data-testid="button-mode-toggle"
       onClick={onToggle}
       aria-label={mode === "grupos" ? "Cambiar a teclado QWERTY (control del cuidador)" : "Cambiar a teclado por grupos (control del cuidador)"}
@@ -387,67 +382,6 @@ function ModeToggleBar({ mode, onToggle }: { mode: KeyboardMode; onToggle: () =>
   );
 }
 
-// ── Tooltip para el cuidador ──────────────────────────────────────────────────
-function ScanTooltip({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div
-      // data-scan-panel excluye este div del manejador de toque del modo GUIADO,
-      // así el cuidador puede tocar aquí sin activar la letra resaltada.
-      data-scan-panel="true"
-      onClick={onDismiss}
-      style={{
-        position: "absolute",
-        top: 0, left: 0, right: 0,
-        zIndex: 50,
-        background: "rgba(15, 23, 42, 0.93)",
-        color: "#FFFFFF",
-        padding: "14px 18px 16px",
-        borderRadius: "12px 12px 0 0",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        backdropFilter: "blur(6px)",
-        cursor: "pointer",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>▶</span>
-        <span style={{
-          fontFamily: "'Lexend', sans-serif",
-          fontWeight: 800,
-          fontSize: ".65rem",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
-          color: "#34D399",
-        }}>
-          MODO GUIADO ACTIVADO — para el cuidador
-        </span>
-      </div>
-
-      <p style={{
-        fontFamily: "'Lexend', sans-serif",
-        fontWeight: 500,
-        fontSize: "clamp(.88rem, 2.2vw, 1.05rem)",
-        lineHeight: 1.55,
-        margin: 0,
-        color: "#E2E8F0",
-      }}>
-        El escaneo va resaltando cada letra. Pulsa en <strong style={{ color: "#FFFFFF" }}>cualquier parte de la pantalla</strong> o usa el <strong style={{ color: "#FFFFFF" }}>pulsador externo</strong> para seleccionar la letra resaltada.
-      </p>
-
-      <span style={{
-        fontFamily: "'Lexend', sans-serif",
-        fontSize: ".6rem",
-        color: "#64748B",
-        textAlign: "right",
-        letterSpacing: ".04em",
-      }}>
-        Toca aquí para cerrar
-      </span>
-    </div>
-  );
-}
-
 // ── PÁGINA PRINCIPAL ──────────────────────────────────────────────────────────
 export default function Keyboard() {
   const isLandscape = useIsLandscape();
@@ -456,7 +390,6 @@ export default function Keyboard() {
     : "clamp(.8rem,3vw,1.4rem)";
 
   const { speak } = useTTS();
-  const { active: scanActive, enable: scanEnable } = useScanning();
 
   const [mode, setMode]             = useState<KeyboardMode>("grupos");
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
@@ -464,36 +397,9 @@ export default function Keyboard() {
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [focusedTile, setFocusedTile] = useState<string | null>(null);
   const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | "space" | null>(null);
-  const [showTip, setShowTip]       = useState(false);
 
   const justActivatedRef     = useRef<string | null>(null);
   const justActivatedTileRef = useRef<string | null>(null);
-
-  // Muestra el aviso de GUIADO al cuidador cuando el modo de acceso elegido
-  // globalmente (selector en FullscreenLayout) activa el escaneo mientras
-  // se está en esta pantalla. Teclado ya no fuerza ningún modo por su
-  // cuenta — respeta el modo de acceso elegido, igual que el resto de
-  // pantallas.
-  useEffect(() => {
-    if (scanActive) setShowTip(true);
-  }, [scanActive]);
-
-  // Auto-cerrar tooltip tras 7 s.
-  useEffect(() => {
-    if (!showTip) return;
-    const t = setTimeout(() => setShowTip(false), 7000);
-    return () => clearTimeout(t);
-  }, [showTip]);
-
-  // Reinicia el escaneo cada vez que cambia la vista (QWERTY ↔ GRUPOS, o
-  // grupo raíz ↔ letras de un grupo) para que siempre empiece por la
-  // primera ficha visible, en lugar de conservar un índice que ya no
-  // corresponde al nuevo conjunto de fichas en pantalla.
-  useEffect(() => {
-    if (!scanActive) return;
-    scanEnable();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, activeGroup]);
 
   // ── Teclas (modo QWERTY y acciones compartidas) ──────────────────────────────
   const handleKeyPress = useCallback((key: string) => {
@@ -517,10 +423,9 @@ export default function Keyboard() {
   }, [handleKeyPress]);
 
   const handleKeyEnter = useCallback((key: string) => {
-    if (scanActive) return;
     if (justActivatedRef.current === key) return;
     setFocusedKey(key);
-  }, [scanActive]);
+  }, []);
 
   const handleKeyLeave = useCallback((key: string) => {
     setFocusedKey((k) => (k === key ? null : k));
@@ -549,10 +454,9 @@ export default function Keyboard() {
   }, [activateTile]);
 
   const handleTileEnter = useCallback((id: string) => {
-    if (scanActive) return;
     if (justActivatedTileRef.current === id) return;
     setFocusedTile(id);
-  }, [scanActive]);
+  }, []);
 
   const handleTileLeave = useCallback((id: string) => {
     setFocusedTile((t) => (t === id ? null : t));
@@ -616,11 +520,8 @@ export default function Keyboard() {
         background: "#FAFAFA",
       }}>
 
-        {/* Selector de modo — control visible del cuidador, fuera del alcance del escaneo */}
+        {/* Selector de modo — control visible del cuidador */}
         <ModeToggleBar mode={mode} onToggle={handleModeToggle} />
-
-        {/* Tooltip para el cuidador — aparece al entrar, se cierra en 7 s */}
-        {showTip && <ScanTooltip onDismiss={() => setShowTip(false)} />}
 
         {/* Visor de mensaje */}
         <div
@@ -725,7 +626,7 @@ export default function Keyboard() {
                 textColor="#1A5C2A"
                 isFocused={focusedAct === "speak"}
                 progress={focusedAct === "speak" ? actionProgress : 0}
-                onEnter={() => { if (!scanActive) setFocusedAct("speak"); }}
+                onEnter={() => setFocusedAct("speak")}
                 onLeave={() => setFocusedAct((a) => (a === "speak" ? null : a))}
                 onClick={() => handleActionClick("speak")}
                 testId="button-speak"
@@ -737,7 +638,7 @@ export default function Keyboard() {
                 textColor="#991B1B"
                 isFocused={focusedAct === "clear"}
                 progress={focusedAct === "clear" ? actionProgress : 0}
-                onEnter={() => { if (!scanActive) setFocusedAct("clear"); }}
+                onEnter={() => setFocusedAct("clear")}
                 onLeave={() => setFocusedAct((a) => (a === "clear" ? null : a))}
                 onClick={() => handleActionClick("clear")}
                 testId="button-clear"
@@ -873,7 +774,7 @@ export default function Keyboard() {
                 textColor="#3730A3"
                 isFocused={focusedAct === "space"}
                 progress={focusedAct === "space" ? actionProgress : 0}
-                onEnter={() => { if (!scanActive) setFocusedAct("space"); }}
+                onEnter={() => setFocusedAct("space")}
                 onLeave={() => setFocusedAct((a) => (a === "space" ? null : a))}
                 onClick={() => handleActionClick("space")}
                 testId="button-space"
@@ -885,7 +786,7 @@ export default function Keyboard() {
                 textColor="#1A5C2A"
                 isFocused={focusedAct === "speak"}
                 progress={focusedAct === "speak" ? actionProgress : 0}
-                onEnter={() => { if (!scanActive) setFocusedAct("speak"); }}
+                onEnter={() => setFocusedAct("speak")}
                 onLeave={() => setFocusedAct((a) => (a === "speak" ? null : a))}
                 onClick={() => handleActionClick("speak")}
                 testId="button-speak"
@@ -897,7 +798,7 @@ export default function Keyboard() {
                 textColor="#991B1B"
                 isFocused={focusedAct === "clear"}
                 progress={focusedAct === "clear" ? actionProgress : 0}
-                onEnter={() => { if (!scanActive) setFocusedAct("clear"); }}
+                onEnter={() => setFocusedAct("clear")}
                 onLeave={() => setFocusedAct((a) => (a === "clear" ? null : a))}
                 onClick={() => handleActionClick("clear")}
                 testId="button-clear"

@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { setCursorVisible } from "@/lib/globalCursor";
-import { ScanningProvider } from "@/context/ScanningContext";
 import { loadAndApply } from "@/lib/irisWeightSync";
 import { setIrisWeight } from "@/hooks/use-webgazer";
 
@@ -93,7 +92,6 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ScanningProvider>
         <TooltipProvider>
           <Toaster />
 
@@ -110,7 +108,6 @@ function App() {
           {/* 3. App principal (solo cuando perfil+sync completados) */}
           {phase === "ready" && <Router />}
         </TooltipProvider>
-        </ScanningProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

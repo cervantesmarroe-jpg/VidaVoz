@@ -29,8 +29,7 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: React (Vite, TypeScript, TSX)
 - **Routing**: `wouter` (lightweight client-side routing)
 - **State Management**:
-  - `zustand` for eye-tracker global state (`useWebGazerStore`)
-  - React Context for scanning mode (`ScanningContext`)
+  - `zustand` for eye-tracker global state (`useWebGazerStore`) and access mode (`useAccessModeStore`)
   - `@tanstack/react-query` for server data (messages)
 - **UI Library**: shadcn/ui components (Radix UI primitives + Tailwind CSS)
 - **Styling**: Tailwind CSS with CSS variables for theming; custom `Lexend` font; warm cream/pastel color palette optimized for ICU visibility
@@ -65,11 +64,6 @@ Splash (3s, silent gaze calibration)
 - Three input sources: mouse, touch (500ms touch-lock prevents gaze interference), gaze
 - Visual feedback: green flash on blink success, dwell ring animation on buttons
 
-### Scanning Mode (`ScanningContext`)
-
-- Sequential highlight cycling (2000ms interval) over all `[data-gaze-target="true"]` elements
-- Activated when user declines camera consent — provides non-camera accessibility fallback
-
 ### Text-to-Speech (`use-tts.ts`)
 
 - Web Speech API (`SpeechSynthesis`) — no external package
@@ -94,7 +88,7 @@ Splash (3s, silent gaze calibration)
 
 - `ConsentModal` gates camera access — GDPR-style consent before any camera use
 - Gaze data never leaves the device; only regression coefficients stored (no biometric data)
-- Camera fallback: scanning mode available without camera
+- If camera consent is declined, the patient uses direct touch on buttons (no camera-based input)
 
 ---
 

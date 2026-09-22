@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess, isTouchLocked, setGazeTargetTouchCallback } from '@/lib/globalCursor';
-import { getAccessFlags } from '@/hooks/use-access-mode';
 import { create } from 'zustand';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
@@ -39,8 +38,6 @@ const BLINK_MIN_MS       = 200;  // parpadeo mínimo válido (ms) — ignora inv
 const BLINK_MAX_MS       = 300;  // parpadeo corto (200-300 ms): blink-click rápido
 // Parpadeo sostenido intencional: >300 ms y ≤1500 ms → activa botón sin esperar dwell.
 const INTENTIONAL_BLINK_MAX_MS = 1500;
-// Parpadeo de escaneo secuencial: >1500 ms y ≤3 s.
-const SCAN_BLINK_MAX_MS  = 3000;
 
 // ── Suavizado agresivo ────────────────────────────────────────────────────────
 const SNAP_RADIUS_PX  = 120;   // imán: si el cursor está a <120 px de un botón, salta al centro
@@ -395,7 +392,6 @@ class GazeTracker {
   private gazeListeners:              Set<GazeCallback>  = new Set();
   private blinkListeners:             Set<BlinkCallback> = new Set();
   private intentionalBlinkListeners:  Set<BlinkCallback> = new Set();
-  private scanBlinkListeners:         Set<() => void>    = new Set();
 
   onCameraReady: (() => void) | null = null;
   onCameraError: (() => void) | null = null;
@@ -603,14 +599,8 @@ class GazeTracker {
               // Parpadeo sostenido intencional (>300 ms, ≤1500 ms) → activa botón inmediatamente
               // sin necesitar que el dwell haya arrancado. El listener en el hook verifica
               // que el cursor esté sobre un gaze-target antes de disparar el click.
-              // getAccessFlags().blinkEnabled: solo cuenta si el modo de acceso elegido
-              // por el cuidador (Solo parpadeo / Combinado) tiene el parpadeo habilitado.
-              if (dur > BLINK_MAX_MS && dur <= INTENTIONAL_BLINK_MAX_MS && this.blinkEnabled && getAccessFlags().blinkEnabled) {
+              if (dur > BLINK_MAX_MS && dur <= INTENTIONAL_BLINK_MAX_MS && this.blinkEnabled) {
                 this.intentionalBlinkListeners.forEach(cb => cb(this.blinkFrozenX, this.blinkFrozenY));
-              }
-              // Parpadeo muy largo (>1500 ms, ≤3 s) → señal para escaneo secuencial.
-              if (dur > INTENTIONAL_BLINK_MAX_MS && dur <= SCAN_BLINK_MAX_MS && this.blinkEnabled) {
-                this.scanBlinkListeners.forEach(cb => cb());
               }
             }
             this.wasBlinking = isBlink;
@@ -1158,9 +1148,6 @@ class GazeTracker {
   //   4. Flash del botón activado.
   //   5. Notifica blinkListeners.
   private fireBlinkClick(x: number, y: number) {
-    // Solo dispara si el modo de acceso elegido por el cuidador tiene el
-    // parpadeo habilitado (Solo parpadeo / Combinado) — ver use-access-mode.ts.
-    if (!getAccessFlags().blinkEnabled) return;
     // ── VALIDACIÓN DE CONFIANZA ───────────────────────────────────────────────
     // Si el cursor está en el vacío (sin ningún .gaze-target en el radio de
     // atracción), el parpadeo se ignora: el paciente no estaba mirando un botón.
@@ -1266,8 +1253,6 @@ class GazeTracker {
   removeBlinkListener(cb: BlinkCallback)           { this.blinkListeners.delete(cb); }
   addIntentionalBlinkListener(cb: BlinkCallback)   { this.intentionalBlinkListeners.add(cb); }
   removeIntentionalBlinkListener(cb: BlinkCallback){ this.intentionalBlinkListeners.delete(cb); }
-  addScanBlinkListener(cb: () => void)      { this.scanBlinkListeners.add(cb); }
-  removeScanBlinkListener(cb: () => void)   { this.scanBlinkListeners.delete(cb); }
 
   get hasFaceModel() { return this.landmarker !== null; }
   get hasCamera()    { return !!(this.video && this.video.readyState >= 2); }
@@ -1542,17 +1527,7 @@ export function useWebGazer() {
           dwellCooldown  = false;
           setAimGlow(target, true); // glow suave: "te he detectado, mantén la mirada"
         } else if (!dwellCooldown) {
-          // getAccessFlags().cursorEnabled: el dwell (mirar-y-mantener) solo
-          // cuenta en los modos "Solo mirada"/"Combinado". En "Solo parpadeo"
-          // seguimos acumulando targetEl más arriba (para que el parpadeo
-          // intencional sepa qué botón activar) pero sin disparar por dwell.
-          if (!getAccessFlags().cursorEnabled) {
-            // Si había un dwell en curso cuando el cuidador cambió de modo,
-            // lo reseteamos — evita una activación instantánea por un
-            // dwellStartTime obsoleto si el modo vuelve a habilitar el dwell
-            // más tarde sobre el mismo botón.
-            if (dwellStartTime !== 0) { resetProgress(target); dwellStartTime = 0; }
-          } else if (dwellStartTime === 0) {
+          if (dwellStartTime === 0) {
             // ── Fase 1: estabilización (anti-barrido visual) ────────────────
             const dx = x - stabAnchorX;
             const dy = y - stabAnchorY;
@@ -1590,8 +1565,6 @@ export function useWebGazer() {
     //   • BLINK_MIN_MS=200 / BLINK_MAX_MS=300 → ignora microparpadeos y cierres
     //     largos por sueño/mirada perdida.
     //   • BLINK_COOLDOWN=1200 → impide doble activación.
-    //   • getAccessFlags().blinkEnabled (use-access-mode.ts) → solo dispara en
-    //     los modos "Solo parpadeo"/"Combinado" (comprobado en fireBlinkClick).
     // Filtro adicional aquí (anti-falso positivo intencional): el blink solo
     // activa si el paciente ya confirmó intención sobre un botón — es decir,
     // si superó la fase de estabilización (dwellStartTime > 0) y el blink
@@ -1606,12 +1579,11 @@ export function useWebGazer() {
     };
 
     // ── PARPADEO INTENCIONAL (>300-1500 ms) ─────────────────────────────────────
-    // Es la activación principal del modo "Solo parpadeo" (sin dwell) y también
-    // funciona en "Combinado". No requiere que el dwell haya empezado: basta con
-    // que el cursor esté sobre un gaze-target (targetEl, fijado en onGaze incluso
-    // cuando el dwell está desactivado). El paciente puede activar un botón
-    // cerrando el ojo deliberadamente más de 300 ms, sin esperar el dwell.
-    // Si el dwell SÍ está activo (Combinado), gana lo primero que ocurra.
+    // Activación alternativa al dwell: no requiere que el dwell haya empezado,
+    // basta con que el cursor esté sobre un gaze-target (targetEl, fijado en
+    // onGaze). El paciente puede activar un botón cerrando el ojo
+    // deliberadamente más de 300 ms, sin esperar el dwell — gana lo primero
+    // que ocurra de los dos.
     const onIntentionalBlink = (x: number, y: number) => {
       if (confState !== 'stable') return;   // tracking dudoso → ignorar
       if (!targetEl) return;                // cursor no está sobre ningún botón

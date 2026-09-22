@@ -285,10 +285,6 @@ export function MasterTrainingOverlay({ onClose }: Props) {
 
   return (
     <div
-      // data-scan-panel: mismo motivo que en ConsentModal/CalibrationScreen —
-      // evita que el manejador de toque de GUIADO intercepte los botones de
-      // este overlay si el escaneo ya estuviera activo debajo.
-      data-scan-panel="true"
       style={{
         position: "fixed", inset: 0, zIndex: 10000,
         background: "#060B10",

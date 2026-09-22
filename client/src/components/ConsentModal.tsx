@@ -18,13 +18,6 @@ export function ConsentModal({ onAccept, onDecline }: ConsentModalProps) {
   if (declined) {
     return (
       <div
-        // data-scan-panel excluye este modal del manejador de toque de GUIADO:
-        // si el paciente ya estaba en /teclado (donde el escaneo se fuerza al
-        // montar la página) y la app se recarga, el consentimiento vuelve a
-        // pedirse con el escaneo ya activo — sin esto, el toque real del
-        // cuidador sobre estos botones quedaría interceptado como
-        // confirmación de escaneo en vez de pulsar el botón.
-        data-scan-panel="true"
         className="fixed inset-0 z-[9999] flex items-center justify-center bg-stone-900/80 backdrop-blur-sm p-4"
         role="dialog"
         aria-modal="true"
@@ -113,10 +106,6 @@ export function ConsentModal({ onAccept, onDecline }: ConsentModalProps) {
 
   return (
     <div
-      // Ver comentario equivalente más arriba: excluye este modal del
-      // manejador de toque de GUIADO por si el escaneo ya está activo
-      // (p. ej. recarga de página estando en /teclado).
-      data-scan-panel="true"
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-stone-900/80 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
