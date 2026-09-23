@@ -8,7 +8,6 @@ import {
   KeyboardColor as KeyboardIcon,
 } from "@/components/icons/ColorIcons";
 
-import logoPath from "@assets/VidaVoz_1775644489589.png";
 import { ConsentModal, useConsent } from "@/components/ConsentModal";
 import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";

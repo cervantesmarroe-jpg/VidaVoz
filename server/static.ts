@@ -16,7 +16,20 @@ export function serveStatic(app: Express) {
   console.log("[static] Sirviendo desde:", distPath);
   console.log("[static] Archivos:", fs.readdirSync(distPath).join(", "));
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      // Los archivos bajo /assets/ los genera Vite con hash en el nombre
+      // (p. ej. index-a1b2c3.js) — su contenido nunca cambia sin que cambie
+      // también la URL, así que pueden cachearse en el navegador de forma
+      // indefinida. El resto (index.html, sw.js, manifest.json, iconos...)
+      // no lleva hash y debe seguir revalidándose como hasta ahora, para no
+      // interferir con el versionado del Service Worker.
+      const assetsDir = path.join(distPath, "assets") + path.sep;
+      if (filePath.startsWith(assetsDir)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
 
   // Fallback SPA: solo para rutas sin extensión (páginas de la app, no assets).
   // Evita servir index.html con MIME text/html cuando el navegador pide un .js/.css

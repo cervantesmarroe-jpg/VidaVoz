@@ -1,7 +1,12 @@
 import { useEffect } from 'react';
 import { moveGlobalCursor, flashGlobalCursor, setGazePriority, setCursorBlinkSuccess, isTouchLocked, setGazeTargetTouchCallback } from '@/lib/globalCursor';
 import { create } from 'zustand';
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+// Import de solo-tipo: no genera código ni fuerza la carga del paquete —
+// el valor real se importa de forma dinámica dentro de init() (ver abajo)
+// para que Vite lo separe en su propio chunk, cargado solo cuando el
+// paciente/cuidador activa la mirada por primera vez, en vez de bloquear
+// el bundle inicial (Splash/ProfileSelect ya importan este módulo).
+import type { FaceLandmarker } from '@mediapipe/tasks-vision';
 import { GAZE_PROFILES, DEFAULT_PROFILE_ID, type GazeProfile } from '@/config/gazeProfiles';
 // Librería de coeficientes de calibración del eye-tracker.
 //   El modo UI (tablet/mobile) es independiente del modelo de calibración:
@@ -240,20 +245,63 @@ class OneEuroFilter {
   reset() { this.xPrev = null; this.dxPrev = 0; this.tPrev = null; }
 }
 
+// ─── Caché de posiciones de gaze-target ────────────────────────────────────
+// snapToGazeTarget(), hasGazeTarget() y el fallback de hitTest() (más abajo)
+// necesitan la posición de todos los botones en pantalla en CADA frame de
+// mirada (30-60 Hz). Antes cada una hacía su propio querySelectorAll +
+// getBoundingClientRect() por botón, en cada frame — getBoundingClientRect
+// fuerza un layout síncrono, así que repetirlo a 30-60 Hz por cada botón
+// visible era el mayor cuello de botella de fluidez del cursor.
+//
+// Los botones de esta app no se mueven salvo cuando cambia lo que hay
+// montado en pantalla (navegación entre pestañas) o cuando cambia el
+// layout (resize, rotación). Por eso se cachean sus centros/rects y solo
+// se recalculan cuando de verdad puede haber cambiado algo, no en cada frame.
+interface GazeTargetPoint { el: Element; cx: number; cy: number; rect: DOMRect }
+const _gazeTargetCache: Map<string, GazeTargetPoint[]> = new Map();
+let _gazeTargetCacheDirty = true;
+
+function invalidateGazeTargetCache() { _gazeTargetCacheDirty = true; }
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', invalidateGazeTargetCache);
+  window.addEventListener('orientationchange', invalidateGazeTargetCache);
+  if (typeof MutationObserver !== 'undefined' && document.body) {
+    // childList/subtree: cubre cambio de pantalla — los botones de mirada
+    // nunca cambian de posición sin que algo se monte/desmonte o el layout
+    // se recalcule.
+    new MutationObserver(invalidateGazeTargetCache)
+      .observe(document.body, { childList: true, subtree: true });
+  }
+}
+
+function getGazeTargetPoints(selector: string): GazeTargetPoint[] {
+  if (_gazeTargetCacheDirty) {
+    _gazeTargetCache.clear();
+    _gazeTargetCacheDirty = false;
+  }
+  const cached = _gazeTargetCache.get(selector);
+  if (cached) return cached;
+  const points: GazeTargetPoint[] = [];
+  document.querySelectorAll<HTMLElement>(selector).forEach(el => {
+    const r = el.getBoundingClientRect();
+    points.push({ el, cx: r.left + r.width / 2, cy: r.top + r.height / 2, rect: r });
+  });
+  _gazeTargetCache.set(selector, points);
+  return points;
+}
+
 // ─── Snap-to-button ───────────────────────────────────────────────────────────
 // Si el cursor filtrado está a menos de `radius` px del centro de algún elemento
 // con clase .gaze-target, lo atrae exactamente a ese centro.
 function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y: number } {
-  const targets = document.querySelectorAll<Element>('.gaze-target');
+  const targets = getGazeTargetPoints('.gaze-target');
   let bestDist = radius;
   let bx = x, by = y;
-  targets.forEach(el => {
-    const r  = el.getBoundingClientRect();
-    const cx = r.left + r.width  / 2;
-    const cy = r.top  + r.height / 2;
-    const d  = Math.hypot(x - cx, y - cy);
-    if (d < bestDist) { bestDist = d; bx = cx; by = cy; }
-  });
+  for (const t of targets) {
+    const d = Math.hypot(x - t.cx, y - t.cy);
+    if (d < bestDist) { bestDist = d; bx = t.cx; by = t.cy; }
+  }
   return { x: bx, y: by };
 }
 
@@ -261,12 +309,7 @@ function snapToGazeTarget(x: number, y: number, radius: number): { x: number; y:
 // Devuelve true si hay algún elemento .gaze-target dentro de `radius` px del punto.
 // Usado para validar si un parpadeo apunta a un botón real (Confianza).
 function hasGazeTarget(x: number, y: number, radius: number): boolean {
-  return Array.from(document.querySelectorAll<Element>('.gaze-target')).some(el => {
-    const r  = el.getBoundingClientRect();
-    const cx = r.left + r.width  / 2;
-    const cy = r.top  + r.height / 2;
-    return Math.hypot(x - cx, y - cy) <= radius;
-  });
+  return getGazeTargetPoints('.gaze-target').some(t => Math.hypot(x - t.cx, y - t.cy) <= radius);
 }
 
 // ─── computeIrisSignal ────────────────────────────────────────────────────────
@@ -398,6 +441,7 @@ class GazeTracker {
 
   async init() {
     try {
+      const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
       const resolver = await FilesetResolver.forVisionTasks(WASM_PATH);
       this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
         baseOptions:   { modelAssetPath: MODEL_URL, delegate: 'GPU' },
@@ -416,7 +460,12 @@ class GazeTracker {
   async startCamera() {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
+        // frameRate: 30 evita que dispositivos que por defecto entregan 60fps
+        // a esta resolución dupliquen sin necesidad las inferencias de
+        // MediaPipe por segundo — el loop de detección ya va atado al
+        // framerate del vídeo (ver startDetection), así que menos fps de
+        // cámara es menos CPU sin cambiar la respuesta percibida.
+        video: { width: 640, height: 480, frameRate: { ideal: 30, max: 30 }, facingMode: 'user' },
         audio: false,
       });
       this.video = this.getOrCreateVideo();
@@ -498,11 +547,13 @@ class GazeTracker {
             // evitar que el cursor salte desde (0,0) mientras se llena.
             if (this.smoothFill === 0) {
               for (let i = 0; i < SMOOTH_SAMPLES; i++) {
-                this.smoothBuf[i] = { x: rawX, y: rawY };
+                this.smoothBuf[i].x = rawX;
+                this.smoothBuf[i].y = rawY;
               }
               this.smoothFill = SMOOTH_SAMPLES;
             } else {
-              this.smoothBuf[this.smoothIdx] = { x: rawX, y: rawY };
+              this.smoothBuf[this.smoothIdx].x = rawX;
+              this.smoothBuf[this.smoothIdx].y = rawY;
               this.smoothIdx = (this.smoothIdx + 1) % SMOOTH_SAMPLES;
               if (this.smoothFill < SMOOTH_SAMPLES) this.smoothFill++;
             }
@@ -1455,16 +1506,16 @@ export function useWebGazer() {
       // el caso "cursor en el borde exterior del botón" sin falsa activación.
       let best: HTMLElement | null = null;
       let bestDist = Infinity;
-      document.querySelectorAll<HTMLElement>('[data-gaze-target="true"]').forEach(el => {
-        const r = el.getBoundingClientRect();
+      for (const t of getGazeTargetPoints('[data-gaze-target="true"]')) {
+        const r = t.rect;
         if (
           x >= r.left   - HIT_EXPANSION_PX && x <= r.right  + HIT_EXPANSION_PX &&
           y >= r.top    - HIT_EXPANSION_PX && y <= r.bottom + HIT_EXPANSION_PX
         ) {
-          const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
-          if (d < bestDist) { bestDist = d; best = el; }
+          const d = Math.hypot(x - t.cx, y - t.cy);
+          if (d < bestDist) { bestDist = d; best = t.el as HTMLElement; }
         }
-      });
+      }
       return best;
     }
 
@@ -1640,13 +1691,24 @@ export function useWebGazer() {
 // progresivo + glow inset, sincronizados con DWELL_MS=2000ms. Como fallback
 // también actualizan la barra legacy `.gaze-progress-bar` si el componente
 // la incluyera manualmente — la inmensa mayoría no la lleva y ya no hace falta.
+// Cachea la referencia a .gaze-progress-bar por elemento (WeakMap: se
+// libera sola cuando el elemento se desmonta) — evita repetir el
+// querySelector en cada frame de dwell mientras el paciente mantiene la
+// mirada sobre el mismo botón.
+const _progressBarCache = new WeakMap<HTMLElement, HTMLElement | null>();
+function getProgressBar(el: HTMLElement): HTMLElement | null {
+  if (_progressBarCache.has(el)) return _progressBarCache.get(el)!;
+  const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
+  _progressBarCache.set(el, bar);
+  return bar;
+}
 function resetProgress(el: HTMLElement) {
   el.style.setProperty('--gaze-progress', '0');
-  const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
+  const bar = getProgressBar(el);
   if (bar) bar.style.width = '0%';
 }
 function updateProgress(el: HTMLElement, progress: number) {
   el.style.setProperty('--gaze-progress', String(progress));
-  const bar = el.querySelector('.gaze-progress-bar') as HTMLElement | null;
+  const bar = getProgressBar(el);
   if (bar) bar.style.width = `${progress * 100}%`;
 }

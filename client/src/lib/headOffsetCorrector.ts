@@ -25,11 +25,13 @@
 // que NUNCA tapa los botones de mirada y se puede ocultar en caliente.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {
-  FaceLandmarker,
-  FilesetResolver,
-  type NormalizedLandmark,
-} from "@mediapipe/tasks-vision";
+// Import de solo-tipo: el valor real se importa de forma dinámica dentro de
+// start() para que Vite separe @mediapipe/tasks-vision en su propio chunk.
+// Este módulo se carga como side-effect antes de React (ver main.tsx) pero
+// start() es una herramienta manual de depuración que casi nunca se invoca
+// — un import estático aquí anclaría la librería al bundle inicial igual
+// que si nunca se hubiera hecho el mismo cambio en use-webgazer.ts.
+import type { FaceLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
 
 const WASM_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm";
 const MODEL_URL =
@@ -81,6 +83,7 @@ class HeadOffsetCorrector {
 
     try {
       if (!this.landmarker) {
+        const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
         const resolver = await FilesetResolver.forVisionTasks(WASM_PATH);
         // Intenta GPU primero. Si no hay WebGL disponible (Chromebooks muy
         // antiguos, navegadores headless, modo software-only), recae en CPU
