@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FullscreenLayout } from "@/components/FullscreenLayout";
 import { SpeakColor as Volume2, ClearColor as Trash2, BackspaceColor as Delete, SpaceColor as Space } from "@/components/icons/ColorIcons";
-import { Lock, ArrowLeftRight, ArrowLeft } from "lucide-react";
 import { useTTS } from "@/hooks/use-tts";
 
 // ── Constantes de dwell ───────────────────────────────────────────────────────
@@ -14,20 +13,6 @@ const QWERTY_ROWS = [
   ["A","S","D","F","G","H","J","K","L","Ñ"],
   ["Z","X","C","V","B","N","M"],
 ];
-
-// ── Modo GRUPOS: rangos de letras en fichas grandes ───────────────────────────
-// Nota: el grupo "O-T" incluye la O (si no, se quedaría sin grupo — el resto
-// de rangos ya reparten las 27 letras del alfabeto español sin huecos).
-type LetterGroup = { id: string; label: string; letters: string[] };
-const LETTER_GROUPS: LetterGroup[] = [
-  { id: "g1", label: "A-E", letters: ["A","B","C","D","E"] },
-  { id: "g2", label: "F-J", letters: ["F","G","H","I","J"] },
-  { id: "g3", label: "K-Ñ", letters: ["K","L","M","N","Ñ"] },
-  { id: "g4", label: "O-T", letters: ["O","P","Q","R","S","T"] },
-  { id: "g5", label: "U-Z", letters: ["U","V","W","X","Y","Z"] },
-];
-
-type KeyboardMode = "grupos" | "qwerty";
 
 // ── Hook: orientación ─────────────────────────────────────────────────────────
 function useIsLandscape() {
@@ -69,7 +54,7 @@ function useDwellProgress(
   return progress;
 }
 
-// ── Tecla de letra (modo QWERTY) ──────────────────────────────────────────────
+// ── Tecla de letra ─────────────────────────────────────────────────────────────
 interface KeyBtnProps {
   label:     string;
   isFocused: boolean;
@@ -144,96 +129,6 @@ function KeyBtn({
           width: isFocused && progress > 0 ? `${progress * 100}%` : "0%",
           background: "#F59E0B",
           borderRadius: "0 2px 0 0",
-          transition: "none",
-          pointerEvents: "none",
-        }}
-      />
-    </button>
-  );
-}
-
-// ── Ficha grande (modo GRUPOS): grupo, letra o "volver" ──────────────────────
-interface BigTileProps {
-  label:      string;
-  icon?:      React.ReactNode;
-  isFocused:  boolean;
-  progress:   number;
-  fontSize?:  string;
-  bg?:        string;
-  border?:    string;
-  textColor?: string;
-  onEnter:    () => void;
-  onLeave:    () => void;
-  onClick:    () => void;
-  testId:     string;
-}
-
-function BigTile({
-  label, icon, isFocused, progress,
-  fontSize = "clamp(1.4rem,5vw,2.6rem)",
-  bg = "#FFFFFF", border = "#E0E0E0", textColor = "#333333",
-  onEnter, onLeave, onClick, testId,
-}: BigTileProps) {
-  return (
-    <button
-      className="gaze-target"
-      data-gaze-target="true"
-      data-testid={testId}
-      onPointerEnter={onEnter}
-      onPointerLeave={onLeave}
-      onClick={onClick}
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        borderRadius: 16,
-        background: isFocused ? "#FEF9C3" : bg,
-        border: isFocused ? "3px solid #F59E0B" : `2px solid ${border}`,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        cursor: "default",
-        userSelect: "none",
-        overflow: "hidden",
-        touchAction: "manipulation",
-        transition: "background .12s, border-color .12s",
-        minWidth: 0,
-        minHeight: 0,
-        padding: 8,
-        boxSizing: "border-box",
-        boxShadow: isFocused ? "0 0 14px rgba(245,158,11,0.3)" : "0 1px 3px rgba(0,0,0,0.06)",
-        WebkitTapHighlightColor: "transparent",
-      }}
-    >
-      {icon && (
-        <span style={{ color: isFocused ? "#92400E" : textColor, display: "flex", pointerEvents: "none" }}>
-          {icon}
-        </span>
-      )}
-      <span style={{
-        fontFamily: "'Lexend',sans-serif",
-        fontWeight: 800,
-        fontSize,
-        color: isFocused ? "#92400E" : textColor,
-        lineHeight: 1.1,
-        textAlign: "center",
-        transition: "color .12s",
-        pointerEvents: "none",
-      }}>
-        {label}
-      </span>
-
-      <div
-        className="gaze-progress-bar"
-        style={{
-          position: "absolute",
-          bottom: 0, left: 0,
-          height: 5,
-          width: isFocused && progress > 0 ? `${progress * 100}%` : "0%",
-          background: "#F59E0B",
-          borderRadius: "0 3px 0 0",
           transition: "none",
           pointerEvents: "none",
         }}
@@ -320,68 +215,6 @@ function ActionBtn({
   );
 }
 
-// ── Selector de modo (control del cuidador, visible) ──────────────────────────
-// Sin data-gaze-target: el cursor de mirada jamás lo ve, así el paciente no
-// puede alcanzarlo. El estilo (candado + "CONTROL DEL CUIDADOR") lo marca
-// visualmente como un control ajeno a las teclas del paciente.
-function ModeToggleBar({ mode, onToggle }: { mode: KeyboardMode; onToggle: () => void }) {
-  return (
-    <button
-      data-testid="button-mode-toggle"
-      onClick={onToggle}
-      aria-label={mode === "grupos" ? "Cambiar a teclado QWERTY (control del cuidador)" : "Cambiar a teclado por grupos (control del cuidador)"}
-      style={{
-        flexShrink: 0,
-        width: "100%",
-        height: 44,
-        borderRadius: 10,
-        background: "#F1F5F9",
-        border: "1.5px dashed #94A3B8",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        padding: "0 14px",
-        boxSizing: "border-box",
-        cursor: "pointer",
-        touchAction: "manipulation",
-        WebkitTapHighlightColor: "transparent",
-      }}
-    >
-      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-        <Lock size={14} color="#64748B" style={{ flexShrink: 0 }} />
-        <span style={{
-          fontFamily: "'Lexend',sans-serif",
-          fontWeight: 700,
-          fontSize: ".62rem",
-          letterSpacing: ".08em",
-          textTransform: "uppercase",
-          color: "#64748B",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}>
-          Control del cuidador
-        </span>
-      </span>
-
-      <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <span style={{
-          fontFamily: "'Lexend',sans-serif",
-          fontWeight: 900,
-          fontSize: "clamp(.8rem,2.4vw,1rem)",
-          letterSpacing: ".03em",
-          color: "#334155",
-          whiteSpace: "nowrap",
-        }}>
-          {mode === "grupos" ? "MODO GRUPOS" : "MODO QWERTY"}
-        </span>
-        <ArrowLeftRight size={18} color="#475569" style={{ flexShrink: 0 }} />
-      </span>
-    </button>
-  );
-}
-
 // ── PÁGINA PRINCIPAL ──────────────────────────────────────────────────────────
 export default function Keyboard() {
   const isLandscape = useIsLandscape();
@@ -391,17 +224,13 @@ export default function Keyboard() {
 
   const { speak } = useTTS();
 
-  const [mode, setMode]             = useState<KeyboardMode>("grupos");
-  const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [message, setMessage]       = useState("");
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
-  const [focusedTile, setFocusedTile] = useState<string | null>(null);
-  const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | "space" | null>(null);
+  const [focusedAct, setFocusedAct] = useState<"speak" | "clear" | null>(null);
 
-  const justActivatedRef     = useRef<string | null>(null);
-  const justActivatedTileRef = useRef<string | null>(null);
+  const justActivatedRef = useRef<string | null>(null);
 
-  // ── Teclas (modo QWERTY y acciones compartidas) ──────────────────────────────
+  // ── Teclas ─────────────────────────────────────────────────────────────────
   const handleKeyPress = useCallback((key: string) => {
     if (key === "ESP") setMessage((m) => m + " ");
     else if (key === "⌫") setMessage((m) => m.slice(0, -1));
@@ -431,67 +260,23 @@ export default function Keyboard() {
     setFocusedKey((k) => (k === key ? null : k));
   }, []);
 
-  // ── Fichas grandes (modo GRUPOS): grupo, letra o volver ──────────────────────
-  const activateTile = useCallback((id: string) => {
-    if (id === "backspace-top") { handleKeyPress("⌫"); return; }
-    if (id === "back") { setActiveGroup(null); return; }
-    if (id.startsWith("letter:")) { handleKeyPress(id.slice(7)); setActiveGroup(null); return; }
-    setActiveGroup(id);
-  }, [handleKeyPress]);
-
-  const onTileComplete = useCallback((id: string) => {
-    justActivatedTileRef.current = id;
-    setFocusedTile(null);
-    activateTile(id);
-    setTimeout(() => { justActivatedTileRef.current = null; }, 600);
-  }, [activateTile]);
-
-  const tileProgress = useDwellProgress(focusedTile, KEY_DWELL_MS, onTileComplete);
-
-  const handleTileClick = useCallback((id: string) => {
-    if (justActivatedTileRef.current === id) return;
-    activateTile(id);
-  }, [activateTile]);
-
-  const handleTileEnter = useCallback((id: string) => {
-    if (justActivatedTileRef.current === id) return;
-    setFocusedTile(id);
-  }, []);
-
-  const handleTileLeave = useCallback((id: string) => {
-    setFocusedTile((t) => (t === id ? null : t));
-  }, []);
-
   // ── Acciones ─────────────────────────────────────────────────────────────────
   const onActionComplete = useCallback((act: string) => {
     setFocusedAct(null);
     if (act === "clear") setMessage("");
-    else if (act === "space") setMessage((m) => m + " ");
   }, []);
 
   const actionProgress = useDwellProgress(focusedAct, ACTION_DWELL_MS, onActionComplete);
 
-  const handleActionClick = useCallback((act: "speak" | "clear" | "space") => {
+  const handleActionClick = useCallback((act: "speak" | "clear") => {
     setFocusedAct(null);
     if (act === "speak") {
       if (!message.trim()) return;
       speak(message);
     } else if (act === "clear") {
       setMessage("");
-    } else if (act === "space") {
-      setMessage((m) => m + " ");
     }
   }, [message, speak]);
-
-  // ── Cambio de modo (solo cuidador) ────────────────────────────────────────────
-  const handleModeToggle = useCallback(() => {
-    setMode((m) => (m === "grupos" ? "qwerty" : "grupos"));
-    setActiveGroup(null);
-    setFocusedKey(null);
-    setFocusedTile(null);
-  }, []);
-
-  const currentGroup = activeGroup ? LETTER_GROUPS.find((g) => g.id === activeGroup) ?? null : null;
 
   return (
     <FullscreenLayout>
@@ -519,9 +304,6 @@ export default function Keyboard() {
         boxSizing: "border-box",
         background: "#FAFAFA",
       }}>
-
-        {/* Selector de modo — control visible del cuidador */}
-        <ModeToggleBar mode={mode} onToggle={handleModeToggle} />
 
         {/* Visor de mensaje */}
         <div
@@ -564,248 +346,84 @@ export default function Keyboard() {
           )}
         </div>
 
-        {mode === "qwerty" ? (
-          <>
-            {/* Teclado QWERTY */}
-            <div style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: isLandscape ? 5 : 7,
-            }}>
-              {QWERTY_ROWS.map((row, ri) => (
-                <div key={ri} style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
-                  {row.map((letter) => (
-                    <KeyBtn
-                      key={letter}
-                      label={letter}
-                      fontSize={keyFontSize}
-                      isFocused={focusedKey === letter}
-                      progress={focusedKey === letter ? keyProgress : 0}
-                      onEnter={() => handleKeyEnter(letter)}
-                      onLeave={() => handleKeyLeave(letter)}
-                      onClick={() => handleKeyClick(letter)}
-                    />
-                  ))}
-                </div>
+        {/* Teclado QWERTY */}
+        <div style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: isLandscape ? 5 : 7,
+        }}>
+          {QWERTY_ROWS.map((row, ri) => (
+            <div key={ri} style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
+              {row.map((letter) => (
+                <KeyBtn
+                  key={letter}
+                  label={letter}
+                  fontSize={keyFontSize}
+                  isFocused={focusedKey === letter}
+                  progress={focusedKey === letter ? keyProgress : 0}
+                  onEnter={() => handleKeyEnter(letter)}
+                  onLeave={() => handleKeyLeave(letter)}
+                  onClick={() => handleKeyClick(letter)}
+                />
               ))}
-
-              {/* Fila: Espacio + Borrar */}
-              <div style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
-                <KeyBtn
-                  label="ESP"
-                  wide
-                  fontSize={keyFontSize}
-                  icon={<Space size={isLandscape ? 20 : 24} />}
-                  isFocused={focusedKey === "ESP"}
-                  progress={focusedKey === "ESP" ? keyProgress : 0}
-                  onEnter={() => handleKeyEnter("ESP")}
-                  onLeave={() => handleKeyLeave("ESP")}
-                  onClick={() => handleKeyClick("ESP")}
-                />
-                <KeyBtn
-                  label="⌫"
-                  fontSize={keyFontSize}
-                  icon={<Delete size={isLandscape ? 20 : 24} />}
-                  isFocused={focusedKey === "⌫"}
-                  progress={focusedKey === "⌫" ? keyProgress : 0}
-                  onEnter={() => handleKeyEnter("⌫")}
-                  onLeave={() => handleKeyLeave("⌫")}
-                  onClick={() => handleKeyClick("⌫")}
-                />
-              </div>
             </div>
+          ))}
 
-            {/* Botones de acción */}
-            <div style={{ flexShrink: 0, height: isLandscape ? 60 : 72, display: "flex", gap: 8 }}>
-              <ActionBtn
-                label="Reproducir mensaje"
-                icon={<Volume2 size={isLandscape ? 20 : 24} />}
-                bg="#DDF5E0"
-                textColor="#1A5C2A"
-                isFocused={focusedAct === "speak"}
-                progress={focusedAct === "speak" ? actionProgress : 0}
-                onEnter={() => setFocusedAct("speak")}
-                onLeave={() => setFocusedAct((a) => (a === "speak" ? null : a))}
-                onClick={() => handleActionClick("speak")}
-                testId="button-speak"
-              />
-              <ActionBtn
-                label="Borrar todo"
-                icon={<Trash2 size={isLandscape ? 20 : 22} />}
-                bg="#FEE2E2"
-                textColor="#991B1B"
-                isFocused={focusedAct === "clear"}
-                progress={focusedAct === "clear" ? actionProgress : 0}
-                onEnter={() => setFocusedAct("clear")}
-                onLeave={() => setFocusedAct((a) => (a === "clear" ? null : a))}
-                onClick={() => handleActionClick("clear")}
-                testId="button-clear"
-              />
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Teclado por GRUPOS */}
-            {currentGroup ? (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{
-                  fontFamily: "'Lexend',sans-serif",
-                  fontWeight: 700,
-                  fontSize: ".7rem",
-                  letterSpacing: ".08em",
-                  textTransform: "uppercase",
-                  color: "#999999",
-                  textAlign: "center",
-                }}>
-                  Grupo {currentGroup.label}
-                </span>
-                {(() => {
-                  const cells: { id: string; label: string; icon?: React.ReactNode; bg?: string; border?: string; textColor?: string; fontSize?: string }[] = [
-                    ...currentGroup.letters.map((letter) => ({
-                      id: `letter:${letter}`,
-                      label: letter,
-                      fontSize: "clamp(2.2rem,9vw,4.5rem)",
-                    })),
-                    {
-                      id: "back",
-                      label: "VOLVER",
-                      icon: <ArrowLeft size={isLandscape ? 22 : 26} />,
-                      bg: "#E0E7FF",
-                      border: "#C7D2FE",
-                      textColor: "#3730A3",
-                      fontSize: "clamp(.85rem,3vw,1.15rem)",
-                    },
-                  ];
-                  const cols = isLandscape ? 4 : 3;
-                  const rows = Math.ceil(cells.length / cols);
-                  return (
-                    <div style={{
-                      flex: 1,
-                      minHeight: 0,
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                      gridTemplateRows: `repeat(${rows}, 1fr)`,
-                      gap: isLandscape ? 8 : 10,
-                    }}>
-                      {cells.map((cell) => (
-                        <BigTile
-                          key={cell.id}
-                          label={cell.label}
-                          icon={cell.icon}
-                          bg={cell.bg}
-                          border={cell.border}
-                          textColor={cell.textColor}
-                          fontSize={cell.fontSize}
-                          isFocused={focusedTile === cell.id}
-                          progress={focusedTile === cell.id ? tileProgress : 0}
-                          onEnter={() => handleTileEnter(cell.id)}
-                          onLeave={() => handleTileLeave(cell.id)}
-                          onClick={() => handleTileClick(cell.id)}
-                          testId={`tile-${cell.id.replace(":", "-").toLowerCase()}`}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              (() => {
-                const cells = [
-                  ...LETTER_GROUPS.map((g) => ({
-                    id: g.id,
-                    label: g.label,
-                    fontSize: "clamp(1.3rem,5vw,2.4rem)" as string,
-                    icon: undefined as React.ReactNode,
-                    bg: undefined as string | undefined,
-                    border: undefined as string | undefined,
-                    textColor: undefined as string | undefined,
-                  })),
-                  {
-                    id: "backspace-top",
-                    label: "BORRAR",
-                    fontSize: "clamp(.85rem,3vw,1.15rem)",
-                    icon: <Delete size={isLandscape ? 24 : 28} /> as React.ReactNode,
-                    bg: "#FEE2E2",
-                    border: "#FCA5A5",
-                    textColor: "#991B1B",
-                  },
-                ];
-                const cols = isLandscape ? 3 : 2;
-                const rows = Math.ceil(cells.length / cols);
-                return (
-                  <div style={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                    gridTemplateRows: `repeat(${rows}, 1fr)`,
-                    gap: isLandscape ? 8 : 10,
-                  }}>
-                    {cells.map((cell) => (
-                      <BigTile
-                        key={cell.id}
-                        label={cell.label}
-                        icon={cell.icon}
-                        bg={cell.bg}
-                        border={cell.border}
-                        textColor={cell.textColor}
-                        fontSize={cell.fontSize}
-                        isFocused={focusedTile === cell.id}
-                        progress={focusedTile === cell.id ? tileProgress : 0}
-                        onEnter={() => handleTileEnter(cell.id)}
-                        onLeave={() => handleTileLeave(cell.id)}
-                        onClick={() => handleTileClick(cell.id)}
-                        testId={`tile-${cell.id.toLowerCase()}`}
-                      />
-                    ))}
-                  </div>
-                );
-              })()
-            )}
+          {/* Fila: Espacio + Borrar */}
+          <div style={{ flex: 1, display: "flex", gap: isLandscape ? 5 : 7, minHeight: 0 }}>
+            <KeyBtn
+              label="ESP"
+              wide
+              fontSize={keyFontSize}
+              icon={<Space size={isLandscape ? 20 : 24} />}
+              isFocused={focusedKey === "ESP"}
+              progress={focusedKey === "ESP" ? keyProgress : 0}
+              onEnter={() => handleKeyEnter("ESP")}
+              onLeave={() => handleKeyLeave("ESP")}
+              onClick={() => handleKeyClick("ESP")}
+            />
+            <KeyBtn
+              label="⌫"
+              fontSize={keyFontSize}
+              icon={<Delete size={isLandscape ? 20 : 24} />}
+              isFocused={focusedKey === "⌫"}
+              progress={focusedKey === "⌫" ? keyProgress : 0}
+              onEnter={() => handleKeyEnter("⌫")}
+              onLeave={() => handleKeyLeave("⌫")}
+              onClick={() => handleKeyClick("⌫")}
+            />
+          </div>
+        </div>
 
-            {/* Botones de acción */}
-            <div style={{ flexShrink: 0, height: isLandscape ? 60 : 72, display: "flex", gap: 8 }}>
-              <ActionBtn
-                label="Espacio"
-                icon={<Space size={isLandscape ? 20 : 24} />}
-                bg="#E0E7FF"
-                textColor="#3730A3"
-                isFocused={focusedAct === "space"}
-                progress={focusedAct === "space" ? actionProgress : 0}
-                onEnter={() => setFocusedAct("space")}
-                onLeave={() => setFocusedAct((a) => (a === "space" ? null : a))}
-                onClick={() => handleActionClick("space")}
-                testId="button-space"
-              />
-              <ActionBtn
-                label="Reproducir mensaje"
-                icon={<Volume2 size={isLandscape ? 20 : 24} />}
-                bg="#DDF5E0"
-                textColor="#1A5C2A"
-                isFocused={focusedAct === "speak"}
-                progress={focusedAct === "speak" ? actionProgress : 0}
-                onEnter={() => setFocusedAct("speak")}
-                onLeave={() => setFocusedAct((a) => (a === "speak" ? null : a))}
-                onClick={() => handleActionClick("speak")}
-                testId="button-speak"
-              />
-              <ActionBtn
-                label="Borrar todo"
-                icon={<Trash2 size={isLandscape ? 20 : 22} />}
-                bg="#FEE2E2"
-                textColor="#991B1B"
-                isFocused={focusedAct === "clear"}
-                progress={focusedAct === "clear" ? actionProgress : 0}
-                onEnter={() => setFocusedAct("clear")}
-                onLeave={() => setFocusedAct((a) => (a === "clear" ? null : a))}
-                onClick={() => handleActionClick("clear")}
-                testId="button-clear"
-              />
-            </div>
-          </>
-        )}
+        {/* Botones de acción */}
+        <div style={{ flexShrink: 0, height: isLandscape ? 60 : 72, display: "flex", gap: 8 }}>
+          <ActionBtn
+            label="Reproducir mensaje"
+            icon={<Volume2 size={isLandscape ? 20 : 24} />}
+            bg="#DDF5E0"
+            textColor="#1A5C2A"
+            isFocused={focusedAct === "speak"}
+            progress={focusedAct === "speak" ? actionProgress : 0}
+            onEnter={() => setFocusedAct("speak")}
+            onLeave={() => setFocusedAct((a) => (a === "speak" ? null : a))}
+            onClick={() => handleActionClick("speak")}
+            testId="button-speak"
+          />
+          <ActionBtn
+            label="Borrar todo"
+            icon={<Trash2 size={isLandscape ? 20 : 22} />}
+            bg="#FEE2E2"
+            textColor="#991B1B"
+            isFocused={focusedAct === "clear"}
+            progress={focusedAct === "clear" ? actionProgress : 0}
+            onEnter={() => setFocusedAct("clear")}
+            onLeave={() => setFocusedAct((a) => (a === "clear" ? null : a))}
+            onClick={() => handleActionClick("clear")}
+            testId="button-clear"
+          />
+        </div>
       </div>
     </FullscreenLayout>
   );
