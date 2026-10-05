@@ -62,12 +62,18 @@ async function buildAll() {
   // según cómo interprete eso, termina en "Cannot find module" (imports
   // locales — server/app, server/routes, @shared/* — no bundleados, y la
   // resolución ESM nativa de Node exige extensión explícita que este repo
-  // no usa) o en "Failed to load the ES module" (si se fuerza CJS vía
-  // api/package.json pero el builder igual emite sintaxis ESM). Para evitar
-  // ambos, bundleamos aquí mismo con esbuild — mismo mecanismo que la rama
-  // de abajo usa para Railway/local — a un único .js CJS autocontenido, y
-  // sustituimos el .ts fuente por ese .js ya compilado ANTES de que
-  // @vercel/node vea el directorio api/: así no queda nada que transpilar
+  // no usa) o en "Failed to load the ES module" (el tracer de Vercel no
+  // garantiza incluir api/package.json en el bundle final porque nada lo
+  // "requiere" explícitamente, así que en runtime el único package.json
+  // visible es el de la raíz con "type":"module", y Vercel intenta cargar
+  // el .js con import() aunque su contenido sea CJS). Bundleamos aquí mismo
+  // con esbuild — mismo mecanismo que la rama de abajo usa para
+  // Railway/local — a un único archivo CJS autocontenido, y lo escribimos
+  // con extensión .cjs: a diferencia de .js, Node (y el runtime de Vercel)
+  // trata SIEMPRE un .cjs como CommonJS por la extensión en sí, sin mirar
+  // ningún package.json — elimina la ambigüedad de raíz, no solo sus
+  // síntomas. Sustituimos el .ts fuente por ese .cjs ya compilado ANTES de
+  // que @vercel/node vea el directorio api/: no queda nada que transpilar
   // ni ningún import local que resolver en tiempo de ejecución.
   if (process.env.VERCEL) {
     console.log("building vercel api function...");
@@ -76,7 +82,7 @@ async function buildAll() {
       platform: "node",
       bundle: true,
       format: "cjs",
-      outfile: "api/[...path].js",
+      outfile: "api/[...path].cjs",
       define: {
         "process.env.NODE_ENV": '"production"',
       },
