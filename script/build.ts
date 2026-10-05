@@ -49,17 +49,6 @@ async function buildAll() {
   await writeFile(swPath, swSrc.replace("__CACHE_VERSION__", cacheVersion), "utf-8");
   console.log(`service worker cache → ${cacheVersion}`);
 
-  // En Vercel el servidor no se ejecuta como proceso Node de larga duración:
-  // se despliega como función serverless (api/[...path].ts), que Vercel
-  // bundlea con su propio builder. Empaquetar aquí server/index.ts con
-  // esbuild sería trabajo perdido (y ni siquiera es el entrypoint que usa
-  // Vercel), así que lo omitimos cuando detectamos su entorno de build.
-  if (process.env.VERCEL) {
-    console.log("VERCEL detectado: omitiendo bundle esbuild del servidor (usa api/[...path].ts).");
-    return;
-  }
-
-  console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
     ...Object.keys(pkg.dependencies || {}),
@@ -67,6 +56,39 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
+  // En Vercel el servidor se despliega como función serverless a partir de
+  // api/[...path].ts. Dejar que @vercel/node transpile/bundlee ese archivo
+  // directamente es frágil porque el package.json raíz usa "type":"module":
+  // según cómo interprete eso, termina en "Cannot find module" (imports
+  // locales — server/app, server/routes, @shared/* — no bundleados, y la
+  // resolución ESM nativa de Node exige extensión explícita que este repo
+  // no usa) o en "Failed to load the ES module" (si se fuerza CJS vía
+  // api/package.json pero el builder igual emite sintaxis ESM). Para evitar
+  // ambos, bundleamos aquí mismo con esbuild — mismo mecanismo que la rama
+  // de abajo usa para Railway/local — a un único .js CJS autocontenido, y
+  // sustituimos el .ts fuente por ese .js ya compilado ANTES de que
+  // @vercel/node vea el directorio api/: así no queda nada que transpilar
+  // ni ningún import local que resolver en tiempo de ejecución.
+  if (process.env.VERCEL) {
+    console.log("building vercel api function...");
+    await esbuild({
+      entryPoints: ["api/[...path].ts"],
+      platform: "node",
+      bundle: true,
+      format: "cjs",
+      outfile: "api/[...path].js",
+      define: {
+        "process.env.NODE_ENV": '"production"',
+      },
+      minify: true,
+      external: externals,
+      logLevel: "info",
+    });
+    await rm("api/[...path].ts", { force: true });
+    return;
+  }
+
+  console.log("building server...");
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
