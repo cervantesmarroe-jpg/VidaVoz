@@ -5,21 +5,26 @@ import { useLocation } from "wouter";
 // Tarjeta no invasiva que invita al profesional que está probando la app a
 // dejar su valoración. Aparece cuando lleva TIME_THRESHOLD_MS navegando O ha
 // visitado al menos SCREENS_THRESHOLD pantallas distintas (lo que ocurra
-// primero). No usa data-gaze-target, así que el cursor de mirada/parpadeo
-// nunca puede "engancharse" ni hacer dwell sobre ella (mismo criterio que el
-// botón informativo de modo pulsador en FullscreenLayout). data-scan-panel
-// se mantiene por compatibilidad con el selector `[data-scan-panel="true"]`
-// que usaba el extinto modo GUIADO de escaneo secuencial (ver 24bddda); hoy
-// no tiene ningún consumidor activo, así que la exclusión real depende de no
+// primero). "Seguir probando" solo la posterga SNOOZE_MS: vuelve a aparecer
+// pasado ese tiempo, tantas veces como se pulse. Solo "Dar mi opinión
+// profesional" la descarta para el resto de la sesión. No usa
+// data-gaze-target, así que el cursor de mirada/parpadeo nunca puede
+// "engancharse" ni hacer dwell sobre ella (mismo criterio que el botón
+// informativo de modo pulsador en FullscreenLayout). data-scan-panel se
+// mantiene por compatibilidad con el selector `[data-scan-panel="true"]` que
+// usaba el extinto modo GUIADO de escaneo secuencial (ver 24bddda); hoy no
+// tiene ningún consumidor activo, así que la exclusión real depende de no
 // llevar data-gaze-target.
 
 const FORM_URL = "https://forms.gle/8kHpcDxxGxxG5ywo8";
 const TIME_THRESHOLD_MS = 10_000;
 const SCREENS_THRESHOLD = 2;
+const SNOOZE_MS = 7_000;
 
 const START_KEY = "vozuci-survey-start-ts";
 const SCREENS_KEY = "vozuci-survey-screens";
 const DISMISSED_KEY = "vozuci-survey-dismissed-v1";
+const SNOOZE_UNTIL_KEY = "vozuci-survey-snooze-until";
 
 function getStartTs(): number {
   const stored = sessionStorage.getItem(START_KEY);
@@ -50,14 +55,33 @@ export function FeedbackSurveyCard() {
   const [visible, setVisible] = useState(false);
 
   // FullscreenLayout se remonta en cada navegación (cada página lo envuelve
-  // por su cuenta), así que el "ya se mostró / ya se descartó" vive en
-  // sessionStorage, no en estado local de React.
+  // por su cuenta), así que el "ya se mostró / descartada / en snooze" vive
+  // en sessionStorage (timestamps absolutos), no en estado local de React.
   useEffect(() => {
     if (isDismissed()) return;
 
+    const snoozeUntil = Number(sessionStorage.getItem(SNOOZE_UNTIL_KEY) ?? "0");
+    const now = Date.now();
+
+    // Se pulsó "Seguir probando" y el snooze de SNOOZE_MS todavía no termina.
+    if (snoozeUntil > now) {
+      const timer = setTimeout(() => {
+        if (!isDismissed()) setVisible(true);
+      }, snoozeUntil - now);
+      return () => clearTimeout(timer);
+    }
+
+    // Ya hubo al menos un snooze y ya expiró (incluso si fue en una
+    // navegación anterior): reaparece sin volver a comprobar tiempo/pantallas.
+    if (snoozeUntil > 0) {
+      setVisible(true);
+      return;
+    }
+
+    // Primera aparición de la sesión: condición original de tiempo/pantallas.
     const startTs = getStartTs();
     const screenCount = recordScreen(location);
-    const elapsed = Date.now() - startTs;
+    const elapsed = now - startTs;
 
     if (elapsed >= TIME_THRESHOLD_MS || screenCount >= SCREENS_THRESHOLD) {
       setVisible(true);
@@ -73,14 +97,19 @@ export function FeedbackSurveyCard() {
 
   if (!visible) return null;
 
-  const dismiss = () => {
+  const dismissForever = () => {
     sessionStorage.setItem(DISMISSED_KEY, "1");
+    setVisible(false);
+  };
+
+  const snooze = () => {
+    sessionStorage.setItem(SNOOZE_UNTIL_KEY, String(Date.now() + SNOOZE_MS));
     setVisible(false);
   };
 
   const handleOpinionClick = () => {
     window.open(FORM_URL, "_blank", "noopener,noreferrer");
-    dismiss();
+    dismissForever();
   };
 
   return (
@@ -137,7 +166,7 @@ export function FeedbackSurveyCard() {
           Dar mi opinión profesional
         </button>
         <button
-          onClick={dismiss}
+          onClick={snooze}
           data-testid="button-survey-dismiss"
           style={{
             flex: "1 1 auto",
