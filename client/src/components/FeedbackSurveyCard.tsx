@@ -14,7 +14,7 @@ import { useLocation } from "wouter";
 // llevar data-gaze-target.
 
 const FORM_URL = "https://forms.gle/8kHpcDxxGxxG5ywo8";
-const TIME_THRESHOLD_MS = 90_000;
+const TIME_THRESHOLD_MS = 10_000;
 const SCREENS_THRESHOLD = 2;
 
 const START_KEY = "vozuci-survey-start-ts";
