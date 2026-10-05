@@ -317,11 +317,17 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Necesitamos inicializar (primera vez o tras parar cámara)
+    // Necesitamos inicializar (primera vez o tras parar cámara). Modelo y
+    // cámara son independientes entre sí, así que se lanzan en paralelo en
+    // vez de en serie — la espera pasa de init+cámara a max(init, cámara).
+    // En el caso normal (App.tsx ya precargó el modelo durante splash/perfil)
+    // esto ya no espera nada: solo queda startCamera().
     setLoading(true);
     try {
-      if (!gazeTracker.hasFaceModel) await gazeTracker.init();
-      if (!gazeTracker.hasCamera)    await gazeTracker.startCamera();
+      await Promise.all([
+        gazeTracker.hasFaceModel ? Promise.resolve() : gazeTracker.init(),
+        gazeTracker.hasCamera    ? Promise.resolve() : gazeTracker.startCamera(),
+      ]);
       activateFromProfile();
     } catch (err) {
       console.error('[VidaVoz] Error iniciando cámara/modelo:', err);

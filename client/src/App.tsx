@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { setCursorVisible } from "@/lib/globalCursor";
 import { loadAndApply } from "@/lib/irisWeightSync";
-import { setIrisWeight } from "@/hooks/use-webgazer";
+import { setIrisWeight, gazeTracker } from "@/hooks/use-webgazer";
 
 // Pages
 import Urgent from "./pages/Urgent";
@@ -82,6 +82,15 @@ function App() {
   // Descarga el peso iris óptimo calculado con todos los datos acumulados en
   // Supabase y lo aplica antes de que el usuario interactúe con el eye-tracking.
   useEffect(() => { void loadAndApply(setIrisWeight); }, []);
+
+  // Precarga el modelo FaceLandmarker (WASM + .task desde CDN) desde el
+  // arranque, en paralelo con la splash y la selección de perfil — NO toca
+  // la cámara ni el consentimiento, solo descarga el modelo de inferencia a
+  // memoria. Así, cuando el cuidador acepta el permiso de cámara en
+  // ConsentModal, gazeTracker.hasFaceModel ya es true y handleGazeToggle
+  // (FullscreenLayout) solo tiene que esperar a startCamera(), eliminando la
+  // descarga del modelo de la espera percibida antes de "Bienvenido a VidaVoz".
+  useEffect(() => { void gazeTracker.init(); }, []);
 
   const handleSplashDone  = useCallback(() => {
     setCursorVisible(true);   // cursor oculto durante la splash → visible ahora
