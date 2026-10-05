@@ -66,15 +66,26 @@ async function buildAll() {
   // garantiza incluir api/package.json en el bundle final porque nada lo
   // "requiere" explícitamente, así que en runtime el único package.json
   // visible es el de la raíz con "type":"module", y Vercel intenta cargar
-  // el .js con import() aunque su contenido sea CJS). Bundleamos aquí mismo
-  // con esbuild — mismo mecanismo que la rama de abajo usa para
-  // Railway/local — a un único archivo CJS autocontenido, y lo escribimos
-  // con extensión .cjs: a diferencia de .js, Node (y el runtime de Vercel)
-  // trata SIEMPRE un .cjs como CommonJS por la extensión en sí, sin mirar
-  // ningún package.json — elimina la ambigüedad de raíz, no solo sus
-  // síntomas. Sustituimos el .ts fuente por ese .cjs ya compilado ANTES de
-  // que @vercel/node vea el directorio api/: no queda nada que transpilar
-  // ni ningún import local que resolver en tiempo de ejecución.
+  // el .js con import() aunque su contenido sea CJS).
+  //
+  // Bundleamos aquí mismo con esbuild — mismo mecanismo que la rama de abajo
+  // usa para Railway/local — a un único archivo CJS autocontenido con
+  // extensión .cjs: a diferencia de .js, Node (y el runtime de Vercel) trata
+  // SIEMPRE un .cjs como CommonJS por la extensión en sí, sin mirar ningún
+  // package.json.
+  //
+  // IMPORTANTE: NO borramos ni dejamos vacío api/[...path].ts. Vercel
+  // detecta sus Serverless Functions recorriendo el árbol de api/ ANTES de
+  // ejecutar este Build Command, y vuelve a abrir esa misma ruta en una fase
+  // posterior — si para entonces el archivo no existe, el despliegue falla
+  // con ENOENT (ya nos pasó). En su lugar, sustituimos su CONTENIDO por un
+  // shim mínimo que reexporta el bundle real ya compilado (.cjs, importado
+  // con su extensión completa → Node lo trata como CJS sin ambigüedad). El
+  // shim en sí es solo "export { default } from ..." — sintaxis estándar
+  // sin requires/imports locales que resolver, así que no puede recaer en
+  // ninguno de los errores anteriores sea cual sea el formato que Vercel le
+  // aplique. api/_app.cjs no se expone como ruta propia: Vercel ignora
+  // cualquier archivo bajo api/ que empiece por "_".
   if (process.env.VERCEL) {
     console.log("building vercel api function...");
     await esbuild({
@@ -82,15 +93,25 @@ async function buildAll() {
       platform: "node",
       bundle: true,
       format: "cjs",
-      outfile: "api/[...path].cjs",
+      outfile: "api/_app.cjs",
       define: {
         "process.env.NODE_ENV": '"production"',
       },
       minify: true,
       external: externals,
       logLevel: "info",
+      // El entry usa "export default handler", así que esbuild emite
+      // exports.default = handler (con marca __esModule). Si el shim de
+      // abajo se reexporta vía interop (ESM nativo o el helper __toESM de
+      // esbuild en modo CJS), ese require()/import() añade SU PROPIA capa
+      // de ".default" — y como ambas capas se llaman igual, el resultado
+      // queda doblemente envuelto ({default: {default: handler}}) según
+      // qué formato elija el builder de Vercel para el shim. Aplanamos
+      // aquí mismo para que module.exports SEA la función: así solo queda
+      // una capa de ".default" (la que añade el shim), sea CJS o ESM.
+      footer: { js: "module.exports = module.exports.default;" },
     });
-    await rm("api/[...path].ts", { force: true });
+    await writeFile("api/[...path].ts", `export { default } from "./_app.cjs";\n`);
     return;
   }
 
