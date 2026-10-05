@@ -13,6 +13,7 @@ import { useWebGazer, gazeTracker } from "@/hooks/use-webgazer";
 import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
+import { FeedbackSurveyCard } from "@/components/FeedbackSurveyCard";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -434,6 +435,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
       {/* ── Overlay Entrenamiento Maestro ─────────────────────────────── */}
       {showTraining && <MasterTrainingOverlay onClose={() => setShowTraining(false)} />}
+
+      {/* Aviso flotante de encuesta de validación (evaluador profesional) */}
+      <FeedbackSurveyCard />
 
     </div>
   );
