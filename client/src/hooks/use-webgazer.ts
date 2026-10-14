@@ -322,7 +322,7 @@ function hasGazeTarget(x: number, y: number, radius: number): boolean {
 //     33=esquina exterior  133=esquina interior  159=párpado superior  145=párpado inferior
 //     468=centro iris
 //   Ojo derecho en imagen (= ojo izquierdo del paciente):
-//     362=esquina exterior  263=esquina interior  386=párpado superior  374=párpado inferior
+//     263=esquina exterior  362=esquina interior  386=párpado superior  374=párpado inferior
 //     473=centro iris
 //
 // Convención de signo alineada con blendshapes: eyeX>0 → mirar izquierda,
@@ -338,14 +338,14 @@ function computeIrisSignal(
   const lOuter = landmarks[33];  const lInner = landmarks[133];
   const lTop   = landmarks[159]; const lBot   = landmarks[145];
   // Ojo derecho (imagen)
-  const rOuter = landmarks[362]; const rInner = landmarks[263];
+  const rOuter = landmarks[263]; const rInner = landmarks[362];
   const rTop   = landmarks[386]; const rBot   = landmarks[374];
 
   if (!lOuter || !lInner || !lTop || !lBot || !rOuter || !rInner || !rTop || !rBot) return null;
 
   const lW = lInner.x - lOuter.x;  // diferencia x positiva (inner > outer en ojo izq)
   const lH = lBot.y   - lTop.y;
-  const rW = rOuter.x - rInner.x;  // diferencia x positiva (outer > inner en ojo dcho)
+  const rW = rOuter.x - rInner.x;  // diferencia x positiva (outer 263 > inner 362 en ojo dcho)
   const rH = rBot.y   - rTop.y;
 
   // Geometría degenerada: ojo cerrado o fuera de frame
