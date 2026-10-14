@@ -1142,13 +1142,20 @@ class GazeTracker {
   recordActivation(targetPxX: number, targetPxY: number): void {
     const model = this.regressionModel;
     const iris  = this.lastIrisSignal;
-    if (!model || !iris) return;
-    if (Math.abs(model.betaX) < 0.001 || Math.abs(model.betaY) < 0.001) return;
+    if (!model) { console.debug('[IrisSync] recordActivation descartada: sin regressionModel'); return; }
+    if (!iris)  { console.debug('[IrisSync] recordActivation descartada: sin señal iris en el último frame'); return; }
+    if (Math.abs(model.betaX) < 0.001 || Math.abs(model.betaY) < 0.001) {
+      console.debug(`[IrisSync] recordActivation descartada: β casi nulo (βX=${model.betaX}, βY=${model.betaY})`);
+      return;
+    }
 
     const eyeTargetX = (targetPxX - model.alphaX) / model.betaX;
     const eyeTargetY = (targetPxY - model.alphaY) / model.betaY;
     // Filtrar valores aberrantes (señal fuera del rango anatómico razonable)
-    if (Math.abs(eyeTargetX) > 5 || Math.abs(eyeTargetY) > 5) return;
+    if (Math.abs(eyeTargetX) > 5 || Math.abs(eyeTargetY) > 5) {
+      console.debug(`[IrisSync] recordActivation descartada: target fuera de ±5 (eyeTargetX=${eyeTargetX.toFixed(3)}, eyeTargetY=${eyeTargetY.toFixed(3)})`);
+      return;
+    }
 
     recordIrisActivation({
       deviceType: this.activeProfile.id,
@@ -1478,6 +1485,7 @@ export function useWebGazer() {
     // cursorX/Y son las coordenadas crudas del cursor en el momento de activar:
     // se usan para la Fase 2 (aprendizaje EMA del offset alpha).
     function activateTarget(el: HTMLElement, cursorX?: number, cursorY?: number) {
+      console.debug('[IrisSync] activateTarget', { target: el.dataset.testid ?? el.tagName, cursorX, cursorY });
       const rect = el.getBoundingClientRect();
       const tcx  = rect.left + rect.width  / 2;
       const tcy  = rect.top  + rect.height / 2;
