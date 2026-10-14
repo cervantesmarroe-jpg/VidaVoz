@@ -12,7 +12,7 @@
 //   El servidor calcula W_opt = Σ(target-bs)·(iris-bs) / Σ(iris-bs)²
 //   (mínimos cuadrados cerrados). Solo se aplica si hay ≥ MIN_SAMPLES registros.
 
-const BATCH_SIZE  = 30;   // activaciones por lote
+const BATCH_SIZE  = 10;   // activaciones por lote
 const MIN_SAMPLES = 50;   // mínimo para confiar en el peso calculado
 
 export interface ActivationRecord {
