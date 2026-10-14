@@ -29,6 +29,7 @@ const queue: ActivationRecord[] = [];
 
 export function record(r: ActivationRecord): void {
   queue.push(r);
+  console.debug(`[IrisSync] activación encolada (${queue.length}/${BATCH_SIZE})`);
   if (queue.length >= BATCH_SIZE) void flush();
 }
 
@@ -36,14 +37,17 @@ async function flush(): Promise<void> {
   if (queue.length === 0) return;
   const batch = queue.splice(0, queue.length);
   try {
-    await fetch('/api/iris-feedback', {
+    const res = await fetch('/api/iris-feedback', {
       method:    'POST',
       headers:   { 'Content-Type': 'application/json' },
       body:      JSON.stringify(batch),
       keepalive: true,   // el lote sobrevive al cierre de la pestaña
     });
-  } catch {
+    // Sin reintentos, pero el fallo queda visible en consola
+    if (!res.ok) console.warn(`[IrisSync] POST /api/iris-feedback ${res.status}: ${await res.text()}`);
+  } catch (err) {
     // fire-and-forget — sin reintentos para no bloquear la sesión clínica
+    console.warn('[IrisSync] POST /api/iris-feedback falló:', err);
   }
 }
 
