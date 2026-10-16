@@ -14,6 +14,7 @@ import { CalibrationScreen } from "@/components/CalibrationScreen";
 import { MasterTrainingOverlay } from "@/components/MasterTrainingOverlay";
 import WelcomePatient from "@/components/WelcomePatient";
 import { FeedbackSurveyCard } from "@/components/FeedbackSurveyCard";
+import { ActivationConfirmPrompt } from "@/components/ActivationConfirmPrompt";
 
 // ── Hook: portrait vs landscape en tiempo real ────────────────────────────────
 function useIsPortrait() {
@@ -444,6 +445,9 @@ export function FullscreenLayout({ children }: { children: ReactNode }) {
 
       {/* Aviso flotante de encuesta de validación (evaluador profesional) */}
       <FeedbackSurveyCard />
+
+      {/* Confirmación de cuidador tras activación por mirada (temporal) */}
+      <ActivationConfirmPrompt />
 
     </div>
   );

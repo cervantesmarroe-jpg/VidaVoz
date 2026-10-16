@@ -25,9 +25,59 @@ export interface ActivationRecord {
   eyeTargetY:  number;
 }
 
+// ── Confirmación de cuidador (TEMPORAL) ──────────────────────────────────────
+// Con CONFIRM_ACTIVATIONS = true, cada activación por mirada queda pendiente
+// y ActivationConfirmPrompt pregunta al cuidador "¿Era este el botón correcto?".
+// Solo "✓ Sí" la encola para Supabase; "✗ No" o CONFIRM_TIMEOUT_MS sin
+// respuesta la descartan. Así solo se guardan activaciones verificadas.
+// Poner a false para volver al envío directo sin confirmación.
+export const CONFIRM_ACTIVATIONS = true;
+const CONFIRM_TIMEOUT_MS = 5000;
+
 const queue: ActivationRecord[] = [];
 
+let pending: ActivationRecord | null = null;
+let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingListeners = new Set<(hasPending: boolean) => void>();
+
+function setPending(r: ActivationRecord | null): void {
+  if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+  pending = r;
+  if (r) {
+    pendingTimer = setTimeout(() => {
+      console.debug('[IrisSync] activación descartada: sin respuesta del cuidador');
+      setPending(null);
+    }, CONFIRM_TIMEOUT_MS);
+  }
+  pendingListeners.forEach(cb => cb(r !== null));
+}
+
+export function subscribePending(cb: (hasPending: boolean) => void): () => void {
+  pendingListeners.add(cb);
+  return () => { pendingListeners.delete(cb); };
+}
+
+// "✓ Sí" del cuidador → la activación pendiente pasa a la cola de envío
+export function confirmPending(): void {
+  const r = pending;
+  setPending(null);
+  if (r) enqueue(r);
+}
+
+// "✗ No" del cuidador → se descarta sin guardar
+export function rejectPending(): void {
+  if (pending) console.debug('[IrisSync] activación descartada por el cuidador');
+  setPending(null);
+}
+
 export function record(r: ActivationRecord): void {
+  // Una activación nueva sustituye a la anterior aún sin confirmar (que se
+  // descarta) y reinicia el plazo de 5 s.
+  if (CONFIRM_ACTIVATIONS) { setPending(r); return; }
+  enqueue(r);
+}
+
+function enqueue(r: ActivationRecord): void {
   queue.push(r);
   console.debug(`[IrisSync] activación encolada (${queue.length}/${BATCH_SIZE})`);
   if (queue.length >= BATCH_SIZE) void flush();
