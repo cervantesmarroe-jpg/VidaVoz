@@ -101,16 +101,28 @@ const BETA_SCALE_MIN_VARIANCE     = 0.05; // si rango < esto → no escalar
 const BETA_SCALE_MIN              = 0.5;  // recorte inferior global (anti-shrink); puede sobreescribirse por perfil
 const BETA_SCALE_MAX              = 2.0;  // recorte superior — reducido para evitar sobreamplificación hacia los extremos
 
-// ── Fusión iris + blendshapes (activa siempre) ────────────────────────────────
-// irisWeight se inicializa en 0.35 y se actualiza desde Supabase al arrancar
-// la app (vía irisWeightSync.loadAndApply → setIrisWeight).
+// ── Fusión iris + blendshapes ─────────────────────────────────────────────────
+// TEMPORAL: IRIS_WEIGHT_FORCED = 0 desactiva la fusión y vuelve al cursor solo
+// con blendshapes. Los modelos de calibrations_library.json se calcularon sin
+// iris, así que mezclar la señal iris los descuadra. La señal iris se sigue
+// calculando y enviando a Supabase (recordActivation) para poder recalibrar.
+// Para reactivar la fusión: poner IRIS_WEIGHT_FORCED = null → irisWeight vuelve
+// a 0.35 y se actualiza desde Supabase al arrancar (irisWeightSync.loadAndApply).
 // IRIS_SCALE_{X,Y}: escalan la posición normalizada del iris al rango eyeX/eyeY.
-let irisWeight     = 0.35;  // 35% iris + 65% blendshapes (sobrescrito por Supabase)
+const IRIS_WEIGHT_FORCED: number | null = 0;
+let irisWeight     = IRIS_WEIGHT_FORCED ?? 0.35;  // 35% iris + 65% blendshapes (sobrescrito por Supabase)
 const IRIS_SCALE_X = 0.60;
 const IRIS_SCALE_Y = 0.60;
-const IRIS_MODE_ENABLED = true;
+const IRIS_MODE_ENABLED = true;  // calcula la señal iris (necesaria para recopilar datos)
 
 export function setIrisWeight(w: number): void {
+  if (IRIS_WEIGHT_FORCED !== null) {
+    console.log(
+      `%c[GazeTracker] IRIS_WEIGHT de Supabase (${w.toFixed(3)}) ignorado — forzado a ${IRIS_WEIGHT_FORCED}`,
+      'color:#E0B050;font-weight:700',
+    );
+    return;
+  }
   irisWeight = Math.max(0, Math.min(1, w));
   console.log(
     `%c[GazeTracker] IRIS_WEIGHT actualizado desde Supabase → ${irisWeight.toFixed(3)}`,
