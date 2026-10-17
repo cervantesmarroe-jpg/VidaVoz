@@ -32,6 +32,13 @@ export const CALIBRATIONS_LIBRARY = calibrationsLibraryRaw as CalibrationLibrary
 // ─── MediaPipe ───────────────────────────────────────────────────────────────
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+// Confianzas de detección/presencia/tracking (por defecto MediaPipe usa 0.5).
+// Bajadas a 0.3 para tablets: cámara frontal gran angular a 60-90 cm → cara
+// pequeña en el encuadre, paciente acostado en ángulo, mascarilla/gafas nasales.
+const FACE_MIN_CONFIDENCE = 0.3;
+// Excepciones CONSECUTIVAS de detectForVideo antes de dar el GPU por roto y
+// recrear el landmarker en CPU (≈1 s a 30 fps).
+const DETECT_ERROR_LIMIT = 30;
 
 const DWELL_MS        = 2100;  // Fallback del tracker: 100 ms por encima del dwell de pantalla (2000 ms)
                                // para garantizar que el handler local gane la carrera y evitar doble activación.
@@ -394,6 +401,15 @@ class GazeTracker {
   private lastVideoTime: number = -1;
   private lastMpTs:      number = 0;
 
+  // ── Robustez / recuperación ─────────────────────────────────────────────────
+  private initPromise:     Promise<void> | null = null; // evita dos init() en paralelo
+  private delegate:        'GPU' | 'CPU' = 'GPU';
+  private gpuFailed        = false;  // una vez falla el GPU, el resto de la sesión va en CPU
+  private glCanvas:        HTMLCanvasElement | null = null; // canvas propio → webglcontextlost
+  private detectionWanted  = false;  // true mientras alguien quiere el loop activo
+  private recovering       = false;
+  private detectErrors     = 0;      // excepciones consecutivas de detectForVideo
+
   // ── Perfil Maestro activo (sensibilidades de fábrica para este dispositivo)
   private profileSensX:          number = SENSITIVITY_X;
   private profileSensY:          number = SENSITIVITY_Y;
@@ -451,25 +467,72 @@ class GazeTracker {
   onCameraReady: (() => void) | null = null;
   onCameraError: (() => void) | null = null;
 
-  async init() {
+  // init() puede llamarse desde varios sitios a la vez (App, FullscreenLayout,
+  // recuperación) — se comparte la misma promesa para no crear dos landmarkers.
+  init(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.createLandmarker().finally(() => { this.initPromise = null; });
+    }
+    return this.initPromise;
+  }
+
+  // Intenta GPU (con canvas propio para poder escuchar webglcontextlost) y, si
+  // falla o ya falló antes en esta sesión, cae a CPU.
+  private async createLandmarker() {
     try {
       const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
       const resolver = await FilesetResolver.forVisionTasks(WASM_PATH);
-      this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
-        baseOptions:   { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-        runningMode:   'VIDEO',
+      const common = {
+        runningMode:   'VIDEO' as const,
         numFaces:      1,
+        minFaceDetectionConfidence: FACE_MIN_CONFIDENCE,
+        minFacePresenceConfidence:  FACE_MIN_CONFIDENCE,
+        minTrackingConfidence:      FACE_MIN_CONFIDENCE,
         outputFaceBlendshapes: true,
         outputFacialTransformationMatrixes: false,
+      };
+      if (!this.gpuFailed) {
+        try {
+          this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
+            ...common,
+            baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
+            canvas:      this.createGlCanvas(),
+          });
+          this.delegate = 'GPU';
+          console.log('%c[GazeTracker] FaceLandmarker listo (GPU)', 'color:#7DD3A8;font-weight:800');
+          return;
+        } catch (err) {
+          console.warn('[GazeTracker] GPU delegate falló → usando CPU', err);
+          this.gpuFailed = true;
+        }
+      }
+      this.landmarker = await FaceLandmarker.createFromOptions(resolver, {
+        ...common,
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
       });
-      console.log(
-        '%c[GazeTracker] Fusión iris+blendshapes activa — iris 35% / blendshapes 65%',
-        'color:#7DD3A8;font-weight:800',
-      );
+      this.delegate = 'CPU';
+      console.log('%c[GazeTracker] FaceLandmarker listo (CPU)', 'color:#E0B050;font-weight:800');
     } catch (err) { console.warn('GazeTracker: init failed', err); }
   }
 
+  // Canvas nuevo en cada intento GPU: un canvas con el contexto perdido no se
+  // puede reutilizar. Si el navegador pierde el contexto WebGL (presión de
+  // memoria, temperatura, segundo plano en Android) se recrea en CPU.
+  private createGlCanvas(): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.addEventListener('webglcontextlost', () => {
+      if (canvas !== this.glCanvas) return;
+      console.warn('[GazeTracker] webglcontextlost → recreando landmarker en CPU');
+      this.gpuFailed = true;
+      void this.recover(3);
+    });
+    this.glCanvas = canvas;
+    return canvas;
+  }
+
   async startCamera() {
+    // Si quedaba un stream anterior (p.ej. pista muerta), liberarlo antes
+    this.stream?.getTracks().forEach(t => t.stop());
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         // frameRate: 30 evita que dispositivos que por defecto entregan 60fps
@@ -479,6 +542,15 @@ class GazeTracker {
         // cámara es menos CPU sin cambiar la respuesta percibida.
         video: { width: 640, height: 480, frameRate: { ideal: 30, max: 30 }, facingMode: 'user' },
         audio: false,
+      });
+      // 'ended' solo se dispara si la pista termina SIN llamar a stop(): la
+      // cámara se desconecta, otra app la toma, o el SO la corta al apagar la
+      // pantalla / pasar a segundo plano.
+      const track = this.stream.getVideoTracks()[0];
+      track?.addEventListener('ended', () => {
+        if (this.stream?.getVideoTracks()[0] !== track) return; // pista ya reemplazada
+        console.warn('[GazeTracker] Pista de cámara terminada (ended) → reabriendo cámara');
+        void this.recover(2);
       });
       this.video = this.getOrCreateVideo();
       this.video.srcObject = this.stream;
@@ -505,7 +577,8 @@ class GazeTracker {
   }
 
   startDetection() {
-    this.stopDetection();
+    this.cancelLoop();
+    this.detectionWanted = true;
     if (!this.landmarker || !this.video) return;
 
     const loop = (rafTs: number) => {
@@ -520,8 +593,11 @@ class GazeTracker {
         const mpTs = Math.max(rafTs, this.lastMpTs + 0.1);
         this.lastMpTs = mpTs;
 
+        let detected = false;
         try {
           const results   = this.landmarker!.detectForVideo(this.video!, mpTs);
+          detected = true;
+          this.detectErrors = 0;
           const cats      = results.faceBlendshapes?.[0]?.categories;
           const landmarks = results.faceLandmarks?.[0];
 
@@ -676,7 +752,15 @@ class GazeTracker {
             const emitY = (freezeActive && this.blinkFrozenY >= 0) ? this.blinkFrozenY : gy;
             this.gazeListeners.forEach(cb => cb(emitX, emitY));
           }
-        } catch (_) {}
+        } catch (err) {
+          // Solo cuentan los fallos del propio detectForVideo (no los del
+          // procesado posterior). Muchos seguidos = GPU/landmarker roto.
+          if (!detected && ++this.detectErrors === DETECT_ERROR_LIMIT) {
+            console.warn(`[GazeTracker] ${DETECT_ERROR_LIMIT} fallos seguidos de detectForVideo (${this.delegate})`, err);
+            if (this.delegate === 'GPU') this.gpuFailed = true;
+            void this.recover(3);
+          }
+        }
       }
 
       this.rafId = requestAnimationFrame(loop);
@@ -686,6 +770,11 @@ class GazeTracker {
   }
 
   stopDetection() {
+    this.detectionWanted = false;
+    this.cancelLoop();
+  }
+
+  private cancelLoop() {
     if (this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = 0; }
   }
 
@@ -707,7 +796,9 @@ class GazeTracker {
   // fuera de frame durante varios segundos). Resetea buffers de suavizado y
   // timestamps para que el próximo frame se procese como si fuera el primero.
   restartDetection() {
-    this.stopDetection();
+    if (!this.detectionWanted) return;
+    this.cancelLoop();
+    this.detectErrors  = 0;
     this.lastVideoTime = -1;
     this.lastMpTs      = 0;
     this.smoothFill    = 0;
@@ -721,6 +812,12 @@ class GazeTracker {
 
   stopCamera() {
     this.stopDetection();
+    this.releaseCamera();
+  }
+
+  // Libera cámara y buffers SIN cambiar detectionWanted (lo usa la recuperación).
+  private releaseCamera() {
+    this.cancelLoop();
     this.stream?.getTracks().forEach(t => t.stop());
     this.stream = null;
     document.getElementById('gaze-video')?.remove();
@@ -738,6 +835,52 @@ class GazeTracker {
     this.wasBlinking    = false;
     this.blinkStartTime = null;
     this.lastBlinkEnd   = 0;
+  }
+
+  private isCameraAlive(): boolean {
+    const track = this.stream?.getVideoTracks()[0];
+    return !!(this.video && track && track.readyState === 'live');
+  }
+
+  // ── Recuperación escalonada ────────────────────────────────────────────────
+  // La invoca el monitor de confianza del hook cuando el tracking está perdido
+  // (etapas crecientes), y los listeners ended / webglcontextlost / visibilidad.
+  //   1 → reiniciar el loop de detección (timestamps, buffers)
+  //   2 → reabrir la cámara (stopCamera + startCamera) y reiniciar el loop
+  //   3 → recrear el FaceLandmarker (CPU si el GPU falló); reabre la cámara
+  //       también si la pista ya no está viva
+  // Nunca toca el modelo de regresión ni la calibración.
+  async recover(stage: 1 | 2 | 3): Promise<void> {
+    if (this.recovering || !this.detectionWanted) return;
+    this.recovering = true;
+    console.warn(`[GazeTracker] Recuperación etapa ${stage}`);
+    try {
+      if (stage === 1) { this.restartDetection(); return; }
+      if (stage === 3) {
+        this.cancelLoop();
+        try { this.landmarker?.close(); } catch (_) {}
+        this.landmarker = null;
+        await this.init();
+      }
+      if (stage === 2 || !this.isCameraAlive()) {
+        this.releaseCamera();
+        await this.startCamera();
+        // Si se desactivó la mirada mientras reabríamos, no dejar la cámara encendida
+        if (!this.detectionWanted) { this.releaseCamera(); return; }
+      }
+      this.restartDetection();
+    } finally {
+      this.recovering = false;
+    }
+  }
+
+  // Al volver de segundo plano: la pista puede haber muerto o el vídeo quedar
+  // en pausa (iOS/Android pausan la cámara con la pestaña oculta).
+  onPageVisible() {
+    if (!this.detectionWanted) return;
+    if (!this.isCameraAlive()) { void this.recover(2); return; }
+    if (this.video?.paused) void this.video.play().catch(() => {});
+    this.restartDetection();
   }
 
   // ── Carga un Perfil de UI y arranca con un modelo de calibración ──────────
@@ -1325,10 +1468,16 @@ class GazeTracker {
   removeIntentionalBlinkListener(cb: BlinkCallback){ this.intentionalBlinkListeners.delete(cb); }
 
   get hasFaceModel() { return this.landmarker !== null; }
-  get hasCamera()    { return !!(this.video && this.video.readyState >= 2); }
+  get hasCamera()    { return !!(this.video && this.video.readyState >= 2 && this.isCameraAlive()); }
 }
 
 export const gazeTracker = new GazeTracker();
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') gazeTracker.onPageVisible();
+  });
+}
 
 // ─── Zustand store ────────────────────────────────────────────────────────────
 interface WebGazerState {
@@ -1428,11 +1577,17 @@ export function useWebGazer() {
     const LOST_AFTER_MS      = 1500;
     const RECOVERY_GRACE_MS  = 200;
 
+    // Recuperación escalonada mientras siga perdido (ms sin gaze → etapa):
+    //   3.5 s → 1 reiniciar loop · 6.5 s → 2 reabrir cámara · 11.5 s → 3 recrear
+    //   landmarker · después, etapa 3 cada 15 s hasta que vuelva la mirada.
+    const RECOVERY_AT_MS     = [LOST_AFTER_MS + 2000, LOST_AFTER_MS + 5000, LOST_AFTER_MS + 10000];
+    const RECOVERY_REPEAT_MS = 15000;
+
     let confState: 'stable' | 'uncertain' | 'lost' = 'stable';
     let lastGazeTime   = performance.now();
     let recoveryStart  = 0;
     let pausedAt       = 0;       // timestamp en que entramos en uncertain/lost
-    let restartTimeout: ReturnType<typeof setTimeout> | null = null;
+    let recoveryStage  = 0;       // etapas ya lanzadas desde la última mirada
 
     const banner = document.createElement('div');
     banner.id = 'gaze-status-banner';
@@ -1469,26 +1624,21 @@ export function useWebGazer() {
         if (confState !== 'lost') {
           confState = 'lost'; pauseProgress();
           setBanner('No se detecta mirada');
-          // Programa reinicio automático de detección a los 2 s de estar perdido.
-          // Si el tracking se recupera antes, el timeout se cancela en la rama
-          // de recuperación de onGaze.
-          if (!restartTimeout) {
-            restartTimeout = setTimeout(() => {
-              restartTimeout = null;
-              if (confState === 'lost') gazeTracker.restartDetection();
-            }, 2000);
-          }
+        }
+        // Siguiente etapa de recuperación. recoveryStage vuelve a 0 en cuanto
+        // llega una muestra de gaze (onGaze), así que no hace falta cancelar nada.
+        const nextAt = recoveryStage < RECOVERY_AT_MS.length
+          ? RECOVERY_AT_MS[recoveryStage]
+          : RECOVERY_AT_MS[RECOVERY_AT_MS.length - 1] + (recoveryStage - RECOVERY_AT_MS.length + 1) * RECOVERY_REPEAT_MS;
+        if (idle > nextAt) {
+          recoveryStage++;
+          void gazeTracker.recover(Math.min(recoveryStage, 3) as 1 | 2 | 3);
         }
       } else if (idle > UNCERTAIN_AFTER_MS) {
         if (confState === 'stable') {
           confState = 'uncertain'; pauseProgress();
           setBanner('Buscando mirada…');
         }
-        // Tracking parcialmente recuperado — cancelar restart pendiente
-        if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
-      } else {
-        // Idle < UNCERTAIN_AFTER_MS → gaze activo, cancelar restart si lo había
-        if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
       }
     }, 150);
     // touchLockUntil eliminado — ahora lo gestiona globalCursor.ts (isTouchLocked())
@@ -1565,7 +1715,8 @@ export function useWebGazer() {
       moveGlobalCursor(x, y);
 
       const now = performance.now();
-      lastGazeTime = now;
+      lastGazeTime  = now;
+      recoveryStage = 0;
 
       // ── Recuperación con grace period: 200 ms de gaze continuo para volver
       //    a stable. Mientras tanto, no procesamos lógica de interacción.
@@ -1690,7 +1841,6 @@ export function useWebGazer() {
       gazeTracker.removeIntentionalBlinkListener(onIntentionalBlink);
       setGazeTargetTouchCallback(null);
       clearInterval(confMonitor);
-      if (restartTimeout) { clearTimeout(restartTimeout); restartTimeout = null; }
       banner.remove();
     };
   }, [isActive]);
